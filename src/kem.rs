@@ -24,24 +24,12 @@ impl<Dh: DiffieHellman> Marshallable for EncappedKey<Dh> {
     }
 }
 
-/// Takes `SharedSecret::Unauthed(dh_res)` and returns dh_res. This is a helper function for
-/// `auth_encap` and `auth_decap`.
-///
-/// Panics: When its input is a `SharedSecret::Authed`
-fn extract_dh_res<Dh: DiffieHellman>(ss: SharedSecret<Dh>) -> Dh::DhResult {
-    // Unpack the value into the DH result
-    if let SharedSecret::Unauthed(res) = ss {
-        res
-    } else {
-        // decap() is guaranteed to return a SharedSecret::Unauthed variant
-        panic!("misused extract_dh_res");
-    }
-}
-
 /// Derives a shared secret and an ephemeral pubkey that the owner of the reciepint's pubkey can
-/// use to derive the same shared secret
+/// use to derive the same shared secret. If `sk_sender_id` is given, the sender's identity will be
+/// tied to the shared secret.
 pub(crate) fn encap<Dh, R>(
     pk_recip: &Dh::PublicKey,
+    sk_sender_id: Option<&Dh::PrivateKey>,
     csprng: &mut R,
 ) -> (SharedSecret<Dh>, EncappedKey<Dh>)
 where
@@ -50,101 +38,116 @@ where
 {
     // Generate a new ephemeral keypair
     let (sk_eph, pk_eph) = Dh::gen_keypair(csprng);
-    // Compute the shared secret
-    let dh_res = Dh::dh(&sk_eph, pk_recip);
 
-    (SharedSecret::Unauthed(dh_res), EncappedKey(pk_eph))
+    // Compute the shared secret from the ephemeral inputs
+    let dh_res_eph = Dh::dh(&sk_eph, pk_recip);
+
+    // The shared secret is either gonna be dh_res_eph, or that along with another shared secret
+    // that's tied to the sender's identity.
+    let shared_secret = if let Some(sk_sender_id) = sk_sender_id {
+        // We want to do an authed encap. Do DH between the sender identity secret key and the
+        // recipient's pubkey
+        let dh_res_identity = Dh::dh(sk_sender_id, pk_recip);
+        // "authed shared secret" is the concatenation of the two shared secrets
+        SharedSecret::Authed(dh_res_eph, dh_res_identity)
+    } else {
+        // The "unauthed shared secret" is just the DH of the ephemeral inputs
+        SharedSecret::Unauthed(dh_res_eph)
+    };
+
+    (shared_secret, EncappedKey(pk_eph))
 }
 
-/// Same idea as `encap`, except an extra DH step is done between the sender's identity privkey and
-/// the recipients public key. This ties the sender identity to the shared secret.
-fn auth_encap<Dh, R>(
-    sk_sender_id: &Dh::PrivateKey,
-    pk_recip: &Dh::PublicKey,
-    csprng: &mut R,
-) -> (SharedSecret<Dh>, EncappedKey<Dh>)
-where
-    Dh: DiffieHellman,
-    R: CryptoRng + RngCore,
-{
-    // Do a normal encap first
-    let (single_shared_secret, encapped_key) = encap::<Dh, _>(pk_recip, csprng);
-    // Unwrap the enum
-    let dh_res_eph = extract_dh_res(single_shared_secret);
-
-    // Now do a DH between the sender identity secret key and the recipient's pubkey
-    let dh_res_identity = Dh::dh(sk_sender_id, pk_recip);
-
-    // The "authed shared secret" is the concatenation of the two
-    let authed_shared_secret = SharedSecret::Authed(dh_res_eph, dh_res_identity);
-
-    (authed_shared_secret, encapped_key)
-}
-
-/// Derives a shared secret given the encapsulated key and the recipients secret key
+/// Derives a shared secret given the encapsulated key and the recipients secret key. If
+/// `pk_sender_id` is given, the sender's identity will be tied to the shared secret.
 pub(crate) fn decap<Dh: DiffieHellman>(
     sk_recip: &Dh::PrivateKey,
+    pk_sender_id: Option<&Dh::PublicKey>,
     encapped_key: &EncappedKey<Dh>,
 ) -> SharedSecret<Dh> {
-    // Do a DH with my secret key
-    let dh_res = Dh::dh(&sk_recip, &encapped_key.0);
+    // Compute teh shared secret from the ephemeral inputs
+    let dh_res_eph = Dh::dh(&sk_recip, &encapped_key.0);
 
-    SharedSecret::Unauthed(dh_res)
-}
+    // The shared secret is either gonna be dh_res_eph, or that along with another shared secret
+    // that's tied to the sender's identity.
+    let shared_secret = if let Some(pk_sender_id) = pk_sender_id {
+        // We want to do an authed decap. Do DH between the sender identity pubkey and the
+        // recipient's secret key
+        let dh_res_identity = Dh::dh(sk_recip, pk_sender_id);
+        // "authed shared secret" is the concatenation of the two shared secrets
+        SharedSecret::Authed(dh_res_eph, dh_res_identity)
+    } else {
+        // The "unauthed shared secret" is just the DH of the ephemeral inputs
+        SharedSecret::Unauthed(dh_res_eph)
+    };
 
-/// Same idea as `decap`, except an extra DH step is done between the sender's identity pubkey and
-/// the recipient's privkey. This ties the sender identity to the shared secret.
-fn auth_decap<Dh: DiffieHellman>(
-    sk_recip: &Dh::PrivateKey,
-    encapped_key: &EncappedKey<Dh>,
-    pk_sender_id: &Dh::PublicKey,
-) -> SharedSecret<Dh> {
-    // Do a normal decap first
-    let single_shared_secret = decap::<Dh>(sk_recip, encapped_key);
-    // Unwrap the enum
-    let dh_res_eph = extract_dh_res(single_shared_secret);
-
-    // Do a DH between the sender's identity pubkey and my secret key
-    let dh_res_identity = Dh::dh(sk_recip, pk_sender_id);
-
-    // The "authed shared secret" is the concatenation of the two
-    SharedSecret::Authed(dh_res_eph, dh_res_identity)
+    shared_secret
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{auth_decap, auth_encap, decap, encap};
+    use super::{decap, encap, Marshallable};
     use crate::dh::{x25519::X25519Impl, DiffieHellman};
 
-    #[test]
+    use digest::generic_array::GenericArray;
+    use rand::RngCore;
+
     /// Tests that encap and decap produce the same shared secret when composed
+    #[test]
     fn encap_correctness() {
         let mut csprng = rand::thread_rng();
         let (sk_recip, pk_recip) = X25519Impl::gen_keypair(&mut csprng);
 
         // Encapsulate a random shared secret
-        let (shared_secret, public_share) = encap::<X25519Impl, _>(&pk_recip, &mut csprng);
-
-        // Ensure that the encapsulated secret is what decap() derives
-        assert_eq!(shared_secret, decap::<X25519Impl>(&sk_recip, &public_share));
-    }
-
-    #[test]
-    /// Tests that auth_encap and auth_decap produce the same shared secret when composed
-    fn auth_encap_correctness() {
-        let mut csprng = rand::thread_rng();
-        let (sk_sender_id, pk_sender_id) = X25519Impl::gen_keypair(&mut csprng);
-        let (sk_recip, pk_recip) = X25519Impl::gen_keypair(&mut csprng);
-
-        // Encapsulate a random shared secret
-        let (auth_shared_secret, pk_sender_eph) =
-            auth_encap::<X25519Impl, _>(&sk_sender_id, &pk_recip, &mut csprng);
+        let (auth_shared_secret, encapped_key) =
+            encap::<X25519Impl, _>(&pk_recip, None, &mut csprng);
 
         // Decap it
-        let decapped_auth_shared_secret =
-            auth_decap::<X25519Impl>(&sk_recip, &pk_sender_eph, &pk_sender_id);
+        let decapped_auth_shared_secret = decap::<X25519Impl>(&sk_recip, None, &encapped_key);
 
         // Ensure that the encapsulated secret is what decap() derives
         assert_eq!(auth_shared_secret, decapped_auth_shared_secret);
+
+        //
+        // Now do it with the auth, i.e., using the sender's identity keys
+        //
+
+        // Make a sender identity keypair
+        let (sk_sender_id, pk_sender_id) = X25519Impl::gen_keypair(&mut csprng);
+
+        // Encapsulate a random shared secret
+        let (auth_shared_secret, encapped_key) =
+            encap::<X25519Impl, _>(&pk_recip, Some(&sk_sender_id), &mut csprng);
+
+        // Decap it
+        let decapped_auth_shared_secret =
+            decap::<X25519Impl>(&sk_recip, Some(&pk_sender_id), &encapped_key);
+
+        // Ensure that the encapsulated secret is what decap() derives
+        assert_eq!(auth_shared_secret, decapped_auth_shared_secret);
+    }
+
+    // Convenience type. What a mouthful
+    type MarshalledPubkey<Dh> =
+        GenericArray<u8, <<Dh as DiffieHellman>::PublicKey as Marshallable>::OutputSize>;
+
+    /// Tests that a marshal-unmarshal round-trip ends up at the same value
+    #[test]
+    fn marshal_correctness() {
+        let mut csprng = rand::thread_rng();
+        // Fill a buffer with randomness
+        let orig_bytes = {
+            let mut buf = <MarshalledPubkey<X25519Impl> as Default>::default();
+            csprng.fill_bytes(buf.as_mut_slice());
+            buf
+        };
+
+        // Make a pubkey with those random points. Note, that unmarshal does not clamp the input
+        // bytes. This is why this test passes.
+        let pk = <<X25519Impl as DiffieHellman>::PublicKey as Marshallable>::unmarshal(orig_bytes);
+        let pk_bytes = pk.marshal();
+
+        // See if the re-marshalled bytes are the same as the input
+        assert_eq!(orig_bytes, pk_bytes);
     }
 }

@@ -1,5 +1,5 @@
 /// Describes things that can go wrong when trying to seal or open a ciphertext
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum HpkeError {
     /// The nonce sequence counter has already overflowed
     SeqOverflow,
@@ -13,6 +13,7 @@ pub mod aead;
 pub mod dh;
 pub mod kdf;
 pub mod kem;
+pub mod op_mode;
 pub mod setup;
 
 #[doc(inline)]
@@ -24,4 +25,6 @@ pub use kdf::Kdf;
 #[doc(inline)]
 pub use kem::EncappedKey;
 #[doc(inline)]
-pub use setup::{setup_receiver, setup_sender, OpMode, PskBundle};
+pub use op_mode::{OpModeR, OpModeS, Psk, PskBundle};
+#[doc(inline)]
+pub use setup::{setup_receiver, setup_sender};

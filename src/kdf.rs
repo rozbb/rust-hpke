@@ -1,6 +1,8 @@
 use digest::{BlockInput, Digest, FixedOutput, Input, Reset};
 use sha2::Sha256;
 
+// Pretty much all the KDF functionality is covered by the hkdf crate
+
 /// Represents key derivation functionality
 pub trait Kdf {
     /// The underlying hash function
