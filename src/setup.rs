@@ -7,7 +7,7 @@ use crate::{
 };
 
 use byteorder::{BigEndian, WriteBytesExt};
-use digest::Digest;
+use digest::{generic_array::GenericArray, Digest};
 use rand::{CryptoRng, RngCore};
 
 /* From draft02 §6.1
@@ -31,6 +31,9 @@ use rand::{CryptoRng, RngCore};
     } HPKEContext;
 */
 
+/// Secret generated in `derive_enc_ctx` and stored in `AeadCtx`
+pub(crate) type ExporterSecret<K> = GenericArray<u8, <<K as Kdf>::HashImpl as Digest>::OutputSize>;
+
 // This is the KeySchedule function defined in draft02 §5.1. It runs a KDF over all the parameters,
 // inputs, and secrets, and spits out a key-nonce pair to be used for symmetric encryption
 fn derive_enc_ctx<A: Aead, Dh: DiffieHellman, K: Kdf, O: OpMode<Dh, K>>(
@@ -39,7 +42,7 @@ fn derive_enc_ctx<A: Aead, Dh: DiffieHellman, K: Kdf, O: OpMode<Dh, K>>(
     shared_secret: SharedSecret<Dh>,
     encapped_key: &EncappedKey<Dh>,
     info: &[u8],
-) -> AeadCtx<A> {
+) -> AeadCtx<A, K> {
     // In KeySchedule(),
     //     pkRm = Marshal(pkR)
     //     ciphersuite = concat(encode_big_endian(kem_id, 2),
@@ -77,7 +80,8 @@ fn derive_enc_ctx<A: Aead, Dh: DiffieHellman, K: Kdf, O: OpMode<Dh, K>>(
     //     secret = Extract(psk, zz)
     //     key = Expand(secret, concat("hpke key", context), Nk)
     //     nonce = Expand(secret, concat("hpke nonce", context), Nn)
-    //     return Context(key, nonce)
+    //     exporter_secret = Expand(secret, concat("exp", context), Nh)
+    //     return Context(key, nonce, exporter_secret)
     //
     // Instead of `secret` we derive an HKDF context which we run .expand() on to derive the
     // key-nonce pair.
@@ -89,22 +93,26 @@ fn derive_enc_ctx<A: Aead, Dh: DiffieHellman, K: Kdf, O: OpMode<Dh, K>>(
     // The info strings for HKDF::expand
     let key_info = [&b"hpke key"[..], &context_bytes].concat();
     let nonce_info = [&b"hpke nonce"[..], &context_bytes].concat();
+    let exporter_info = [&b"exp"[..], &context_bytes].concat();
 
     // Empty fixed-size buffers
     let mut key = crate::aead::AeadKey::<A>::default();
     let mut nonce = crate::aead::AeadNonce::<A>::default();
+    let mut exporter_secret = <ExporterSecret<K> as Default>::default();
 
-    // Fill the key and nonce. This only errors if the key and nonce values are 255x the digest
-    // size of the hash function. Since these values are fixed at compile time, we don't worry
-    // about it.
+    // Fill the key and nonce. This only errors if the output values are 255x the digest size of
+    // the hash function. Since these values are fixed at compile time, we don't worry about it.
     hkdf_ctx
         .expand(&key_info, key.as_mut_slice())
         .expect("aead key len is way too big");
     hkdf_ctx
         .expand(&nonce_info, nonce.as_mut_slice())
         .expect("aead nonce len is way too big");
+    hkdf_ctx
+        .expand(&exporter_info, exporter_secret.as_mut_slice())
+        .expect("exporter secret len is way too big");
 
-    AeadCtx::new(key, nonce)
+    AeadCtx::new(key, nonce, exporter_secret)
 }
 
 // From draft02 §5.1.4:
@@ -125,7 +133,7 @@ pub fn setup_sender<A, Dh, K, R>(
     pk_recip: &Dh::PublicKey,
     info: &[u8],
     csprng: &mut R,
-) -> (EncappedKey<Dh>, AeadCtx<A>)
+) -> (EncappedKey<Dh>, AeadCtx<A, K>)
 where
     A: Aead,
     Dh: DiffieHellman,
@@ -159,7 +167,7 @@ pub fn setup_receiver<A, Dh, K, R>(
     sk_recip: &Dh::PrivateKey,
     encapped_key: &EncappedKey<Dh>,
     info: &[u8],
-) -> AeadCtx<A>
+) -> AeadCtx<A, K>
 where
     A: Aead,
     Dh: DiffieHellman,

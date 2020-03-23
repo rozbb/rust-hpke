@@ -1,8 +1,9 @@
-use crate::HpkeError;
+use crate::{kdf::Kdf, setup::ExporterSecret, HpkeError};
 use aead::{Aead as BaseAead, NewAead as BaseNewAead};
 use core::u8;
 
 use digest::generic_array::GenericArray;
+use hkdf::Hkdf;
 
 /// Represents authenticated encryption functionality
 pub trait Aead {
@@ -102,13 +103,15 @@ impl<A: Aead> Default for Seq<A> {
 pub type Tag<A> = GenericArray<u8, <<A as Aead>::AeadImpl as BaseAead>::TagSize>;
 
 /// The HPKE encryption context. This is what you use to `seal` plaintexts and `open` ciphertexts.
-pub struct AeadCtx<A: Aead> {
+pub struct AeadCtx<A: Aead, K: Kdf> {
     /// Records whether the nonce sequence counter has overflowed
     overflowed: bool,
     /// The underlying AEAD instance. This also does decryption.
     encryptor: A::AeadImpl,
     /// The base nonce which we XOR with sequence numbers
     nonce: AeadNonce<A>,
+    /// The exporter secret, used in the `export()` method
+    exporter_secret: ExporterSecret<K>,
     /// The running sequence number
     seq: Seq<A>,
 }
@@ -119,13 +122,18 @@ pub struct AeadCtx<A: Aead> {
 pub struct AssociatedData<'a>(pub &'a [u8]);
 
 // These are the methods defined for Context in draft02 §5.2.
-impl<A: Aead> AeadCtx<A> {
+impl<A: Aead, K: Kdf> AeadCtx<A, K> {
     /// Makes an AeadCtx from a raw key and nonce
-    pub(crate) fn new(key: AeadKey<A>, nonce: AeadNonce<A>) -> AeadCtx<A> {
+    pub(crate) fn new(
+        key: AeadKey<A>,
+        nonce: AeadNonce<A>,
+        exporter_secret: ExporterSecret<K>,
+    ) -> AeadCtx<A, K> {
         AeadCtx {
             overflowed: false,
             encryptor: <A::AeadImpl as aead::NewAead>::new(key),
             nonce: nonce,
+            exporter_secret: exporter_secret,
             seq: <Seq<A> as Default>::default(),
         }
     }
@@ -219,11 +227,30 @@ impl<A: Aead> AeadCtx<A> {
             Ok(())
         }
     }
+
+    // def Context.Export(exporter_context, L):
+    //     return Expand(self.exporter_secret, exporter_context, L)
+    /// Fills a given buffer with secret bytes derived from this encryption context. This value
+    /// does not depend on sequence number, so it is constant for the lifetime of this context.
+    ///
+    /// Return Value
+    /// ============
+    /// Returns `Ok(())` on success. If the buffer length is more than 255x the digest size of the
+    /// underlying hash function, returns an `Err(InvalidLength)`.
+    pub fn export(&self, info: &[u8], out_buf: &mut [u8]) -> Result<(), hkdf::InvalidLength> {
+        // Use our exporter secret as the PRK for an HKDF-Expand op. The only time this fails is
+        // when the length of the PRK is not the the underlying hash function's digest size. But
+        // that's guaranteed by the type system, so we can unwrap().
+        let hkdf_ctx = Hkdf::<K::HashImpl>::from_prk(self.exporter_secret.as_slice()).unwrap();
+
+        hkdf_ctx.expand(info, out_buf)
+    }
 }
 
 #[cfg(test)]
 mod test {
     use super::{Aead, AesGcm128, AesGcm256, AssociatedData, ChaCha20Poly1305, Seq, Tag};
+    use crate::kdf::HkdfSha256;
     use crate::test_util::gen_ctx_simple_pair;
 
     use core::u8;
@@ -233,6 +260,34 @@ mod test {
         fn clone(&self) -> Seq<A> {
             Seq(self.0.clone())
         }
+    }
+
+    /// Tests that encryption context secret export does not change behavior based on the
+    /// underlying sequence number
+    #[test]
+    fn test_export_idempotence() {
+        // Set up a context. Logic is algorithm-independent, so we don't care about the types here
+        let (mut aead_ctx, _) = gen_ctx_simple_pair::<ChaCha20Poly1305, HkdfSha256>();
+
+        // Get an initial export secret
+        let mut secret1 = [0u8; 16];
+        aead_ctx
+            .export(b"test_export_idempotence", &mut secret1)
+            .unwrap();
+
+        // Modify the context by encrypting something
+        let mut plaintext = *b"back hand";
+        aead_ctx
+            .seal(&mut plaintext[..], &AssociatedData(b""))
+            .expect("seal() failed");
+
+        // Get a second export secret
+        let mut secret2 = [0u8; 16];
+        aead_ctx
+            .export(b"test_export_idempotence", &mut secret2)
+            .unwrap();
+
+        assert_eq!(secret1, secret2);
     }
 
     /// Tests that sequence overflowing causes an error. This logic is cipher-agnostic, so we don't
@@ -249,7 +304,7 @@ mod test {
             buf
         };
 
-        let (mut aead_ctx1, mut aead_ctx2) = gen_ctx_simple_pair::<ChaCha20Poly1305>();
+        let (mut aead_ctx1, mut aead_ctx2) = gen_ctx_simple_pair::<ChaCha20Poly1305, HkdfSha256>();
         aead_ctx1.seq = big_seq.clone();
         aead_ctx2.seq = big_seq.clone();
 
@@ -300,10 +355,10 @@ mod test {
 
     /// Tests that `open()` can decrypt things properly encrypted with `seal()`
     macro_rules! test_correctness {
-        ($test_name:ident, $aead_ty:ty) => {
+        ($test_name:ident, $aead_ty:ty, $kdf_ty:ty) => {
             #[test]
             fn $test_name() {
-                let (mut ctx1, mut ctx2) = gen_ctx_simple_pair::<$aead_ty>();
+                let (mut ctx1, mut ctx2) = gen_ctx_simple_pair::<$aead_ty, $kdf_ty>();
 
                 let msg = b"Love it or leave it, you better gain way";
                 let aad = AssociatedData(b"You better hit bull's eye, the kid don't play");
@@ -325,7 +380,7 @@ mod test {
         };
     }
 
-    test_correctness!(test_aes128_correctness, AesGcm128);
-    test_correctness!(test_aes256_correctness, AesGcm256);
-    test_correctness!(test_chacha_correctness, ChaCha20Poly1305);
+    test_correctness!(test_aes128_correctness, AesGcm128, HkdfSha256);
+    test_correctness!(test_aes256_correctness, AesGcm256, HkdfSha256);
+    test_correctness!(test_chacha_correctness, ChaCha20Poly1305, HkdfSha256);
 }
