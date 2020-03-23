@@ -98,7 +98,7 @@ impl<Dh: DiffieHellman, K: Kdf> OpMode<Dh, K> for OpModeR<Dh, K> {
     // Returns the sender's identity key if it's set in the mode, otherwise returns
     // [0u8; Dh::PublicKey::OutputSize]
     fn get_marshalled_sender_pk(&self) -> MarshalledPubkey<Dh> {
-        // draft02 §5.1: default_pkIm = zero(Npk)
+        // draft02 §6.1: default_pkIm = zero(Npk)
         match self {
             OpModeR::Auth(pk) => pk.marshal(),
             OpModeR::PskAuth(_, pk) => pk.marshal(),
@@ -109,7 +109,7 @@ impl<Dh: DiffieHellman, K: Kdf> OpMode<Dh, K> for OpModeR<Dh, K> {
     // Returns the preshared key if it's set in the mode, otherwise returns
     // [0u8; Kdf::Hashfunction::OutputSize]
     fn get_psk(&self) -> Psk<K> {
-        // draft02 §5.1: default_psk = zero(Nh)
+        // draft02 §6.1: default_psk = zero(Nh)
         match self {
             OpModeR::Psk(p) => p.psk.clone(),
             OpModeR::PskAuth(p, _) => p.psk.clone(),
@@ -119,7 +119,7 @@ impl<Dh: DiffieHellman, K: Kdf> OpMode<Dh, K> for OpModeR<Dh, K> {
 
     // Returns the preshared key ID if it's set in the mode, otherwise returns the emtpy string
     fn get_psk_id(&self) -> &[u8] {
-        // draft02 §5.1: default_pskID = zero(0)
+        // draft02 §6.1: default_pskID = zero(0)
         match self {
             OpModeR::Psk(p) => &p.psk_id,
             OpModeR::PskAuth(p, _) => &p.psk_id,
@@ -144,7 +144,7 @@ impl<Dh: DiffieHellman, K: Kdf> OpMode<Dh, K> for OpModeS<Dh, K> {
     // Returns the sender's identity key if it's set in the mode, otherwise returns
     // [0u8; Dh::PublicKey::OutputSize]
     fn get_marshalled_sender_pk(&self) -> MarshalledPubkey<Dh> {
-        // draft02 §5.1: default_pkIm = zero(Npk)
+        // draft02 §6.1: default_pkIm = zero(Npk)
         // Since this OpMode stores just the secret key, we have to convert it to a pubkey before
         // returning it.
         match self {
@@ -163,7 +163,7 @@ impl<Dh: DiffieHellman, K: Kdf> OpMode<Dh, K> for OpModeS<Dh, K> {
     // Returns the preshared key if it's set in the mode, otherwise returns
     // [0u8; Kdf::Hashfunction::OutputSize]
     fn get_psk(&self) -> Psk<K> {
-        // draft02 §5.1: default_psk = zero(Nh)
+        // draft02 §6.1: default_psk = zero(Nh)
         match self {
             OpModeS::Psk(p) => p.psk.clone(),
             OpModeS::PskAuth(p, _) => p.psk.clone(),
@@ -173,7 +173,7 @@ impl<Dh: DiffieHellman, K: Kdf> OpMode<Dh, K> for OpModeS<Dh, K> {
 
     // Returns the preshared key ID if it's set in the mode, otherwise returns the emtpy string
     fn get_psk_id(&self) -> &[u8] {
-        // draft02 §5.1: default_pskID = zero(0)
+        // draft02 §6.1: default_pskID = zero(0)
         match self {
             OpModeS::Psk(p) => &p.psk_id,
             OpModeS::PskAuth(p, _) => &p.psk_id,

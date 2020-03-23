@@ -20,7 +20,7 @@ pub struct AesGcm128 {}
 impl Aead for AesGcm128 {
     type AeadImpl = aes_gcm::Aes128Gcm;
 
-    // draft02 §7.3: AES-GCM-128
+    // draft02 §8.3: AES-GCM-128
     const AEAD_ID: u16 = 0x0001;
 }
 
@@ -30,7 +30,7 @@ pub struct AesGcm256 {}
 impl Aead for AesGcm256 {
     type AeadImpl = aes_gcm::Aes256Gcm;
 
-    // draft02 §7.3: AES-GCM-256
+    // draft02 §8.3: AES-GCM-256
     const AEAD_ID: u16 = 0x0002;
 }
 
@@ -40,7 +40,7 @@ pub struct ChaCha20Poly1305 {}
 impl Aead for ChaCha20Poly1305 {
     type AeadImpl = chacha20poly1305::ChaCha20Poly1305;
 
-    // draft02 §7.3: ChaCha20Poly1305
+    // draft02 §8.3: ChaCha20Poly1305
     const AEAD_ID: u16 = 0x0003;
 }
 
@@ -67,7 +67,7 @@ fn increment_seq<A: Aead>(arr: &mut Seq<A>) -> Result<(), ()> {
     Err(())
 }
 
-// From draft02 §5.2
+// From draft02 §6.6
 //     def Context.Nonce(seq):
 //       encSeq = encode_big_endian(seq, len(self.nonce))
 //       return xor(self.nonce, encSeq)
@@ -121,7 +121,7 @@ pub struct AeadCtx<A: Aead, K: Kdf> {
 /// bytestrings is asking for trouble.
 pub struct AssociatedData<'a>(pub &'a [u8]);
 
-// These are the methods defined for Context in draft02 §5.2.
+// These are the methods defined for Context in draft02 §6.6. export() is newer than that, though
 impl<A: Aead, K: Kdf> AeadCtx<A, K> {
     /// Makes an AeadCtx from a raw key and nonce
     pub(crate) fn new(

@@ -34,7 +34,7 @@ use rand::{CryptoRng, RngCore};
 /// Secret generated in `derive_enc_ctx` and stored in `AeadCtx`
 pub(crate) type ExporterSecret<K> = GenericArray<u8, <<K as Kdf>::HashImpl as Digest>::OutputSize>;
 
-// This is the KeySchedule function defined in draft02 §5.1. It runs a KDF over all the parameters,
+// This is the KeySchedule function defined in draft02 §6.1. It runs a KDF over all the parameters,
 // inputs, and secrets, and spits out a key-nonce pair to be used for symmetric encryption
 fn derive_enc_ctx<A: Aead, Dh: DiffieHellman, K: Kdf, O: OpMode<Dh, K>>(
     mode: &O,
@@ -115,12 +115,12 @@ fn derive_enc_ctx<A: Aead, Dh: DiffieHellman, K: Kdf, O: OpMode<Dh, K>>(
     AeadCtx::new(key, nonce, exporter_secret)
 }
 
-// From draft02 §5.1.4:
-//     def SetupAuthPSKS(pkR, info, psk, pskID, skS):
-//       zz, enc = AuthEncap(pkR, skS)
-//       pkSm = Marshal(pk(skS))
-//       return enc, KeySchedule(mode_auth_psk, pkR, zz, enc, info,
-//                               psk, pskID, pkSm)
+// From draft02 §6.5:
+//     def SetupAuthPSKI(pkR, info, psk, pskID, skI):
+//       zz, enc = AuthEncap(pkR, skI)
+//       pkIm = Marshal(pk(skI))
+//       return enc, KeySchedule(mode_psk_auth, pkR, zz, enc, info,
+//                               psk, pskID, pkIm)
 /// Initiates an encryption context to the given recipient. Does an "authenticated" encapsulation
 /// if `sk_sender_id` is set. This ties the sender identity to the shared secret.
 ///
@@ -150,12 +150,12 @@ where
     (encapped_key, enc_ctx)
 }
 
-//  From draft02 §5.1.4:
-//     def SetupAuthPSKR(enc, skR, info, psk, pskID, pkS):
-//       zz = AuthDecap(enc, skR, pkS)
-//       pkSm = Marshal(pkS)
-//       return KeySchedule(mode_auth_psk, pk(skR), zz, enc, info,
-//                          psk, pskID, pkSm)
+//  From draft02 §6.5:
+//     def SetupAuthPSKR(enc, skR, info, psk, pskID, pkI):
+//       zz = AuthDecap(enc, skR, pkI)
+//       pkIm = Marshal(pkI)
+//       return KeySchedule(mode_psk_auth, pk(skR), zz, enc, info,
+//                          psk, pskID, pkIm)
 /// Initiates an encryption context given a private key sk and a encapsulated key which was
 /// encapsulated to `sk`'s corresponding public key
 ///
