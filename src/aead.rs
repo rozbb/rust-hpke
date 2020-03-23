@@ -44,7 +44,10 @@ impl Aead for ChaCha20Poly1305 {
 }
 
 /// Treats the given seq (which is a bytestring) as a big-endian integer, and increments it
-/// Returns: Ok(()) if successful. Returns Err(()) if an overflow occured.
+///
+/// Return Value
+/// ============
+/// Returns Ok(()) if successful. Returns Err(()) if an overflow occured.
 fn increment_seq<A: Aead>(arr: &mut Seq<A>) -> Result<(), ()> {
     let arr = arr.0.as_mut_slice();
     for byte in arr.iter_mut().rev() {
@@ -69,7 +72,7 @@ fn increment_seq<A: Aead>(arr: &mut Seq<A>) -> Result<(), ()> {
 //       return xor(self.nonce, encSeq)
 /// Derives a nonce from the given nonce and a "sequence number". The sequence number is treated as
 /// a big-endian integer with length equal to the nonce length.
-fn mix_nonce<A: Aead>(base_nonce: &Nonce<A>, seq: &Seq<A>) -> Nonce<A> {
+fn mix_nonce<A: Aead>(base_nonce: &AeadNonce<A>, seq: &Seq<A>) -> AeadNonce<A> {
     // `seq` is already a byte string in big-endian order, so no conversion is necessary.
 
     // XOR the base nonce bytes with the sequence bytes
@@ -83,15 +86,15 @@ fn mix_nonce<A: Aead>(base_nonce: &Nonce<A>, seq: &Seq<A>) -> Nonce<A> {
 }
 
 // A nonce is the same thing as a sequence counter. But you never increment a nonce.
-pub(crate) type Nonce<A> = GenericArray<u8, <<A as Aead>::AeadImpl as BaseAead>::NonceSize>;
-pub(crate) type Key<A> = GenericArray<u8, <<A as Aead>::AeadImpl as aead::NewAead>::KeySize>;
+pub(crate) type AeadNonce<A> = GenericArray<u8, <<A as Aead>::AeadImpl as BaseAead>::NonceSize>;
+pub(crate) type AeadKey<A> = GenericArray<u8, <<A as Aead>::AeadImpl as aead::NewAead>::KeySize>;
 
-struct Seq<A: Aead>(Nonce<A>);
+struct Seq<A: Aead>(AeadNonce<A>);
 
 /// The default sequence counter is all zeros
 impl<A: Aead> Default for Seq<A> {
     fn default() -> Seq<A> {
-        Seq(<Nonce<A> as Default>::default())
+        Seq(<AeadNonce<A> as Default>::default())
     }
 }
 
@@ -105,7 +108,7 @@ pub struct AeadCtx<A: Aead> {
     /// The underlying AEAD instance. This also does decryption.
     encryptor: A::AeadImpl,
     /// The base nonce which we XOR with sequence numbers
-    nonce: Nonce<A>,
+    nonce: AeadNonce<A>,
     /// The running sequence number
     seq: Seq<A>,
 }
@@ -118,7 +121,7 @@ pub struct AssociatedData<'a>(pub &'a [u8]);
 // These are the methods defined for Context in draft02 §5.2.
 impl<A: Aead> AeadCtx<A> {
     /// Makes an AeadCtx from a raw key and nonce
-    pub(crate) fn new(key: Key<A>, nonce: Nonce<A>) -> AeadCtx<A> {
+    pub(crate) fn new(key: AeadKey<A>, nonce: AeadNonce<A>) -> AeadCtx<A> {
         AeadCtx {
             overflowed: false,
             encryptor: <A::AeadImpl as aead::NewAead>::new(key),
@@ -133,7 +136,9 @@ impl<A: Aead> AeadCtx<A> {
     /// Does a "detached seal in place", meaning it overwrites `plaintext` with the resulting
     /// ciphertext, and returns the resulting authentication tag
     ///
-    /// Returns: `Ok(tag)` on success.  If this context has been used for so many encryptions that
+    /// Return Value
+    /// ============
+    /// Returns `Ok(tag)` on success.  If this context has been used for so many encryptions that
     /// the sequence number overflowed, returns `Err(Hpkeerror::SeqOverflow)`. If this happens,
     /// `plaintext` will be unmodified. If an unspecified error happened during encryption, returns
     /// `Err(HpkeError::Encryption)`. If this happens, the contents of `plaintext` is undefined.
@@ -177,7 +182,9 @@ impl<A: Aead> AeadCtx<A> {
     /// Does a "detached open in place", meaning it overwrites `ciphertext` with the resulting
     /// plaintext, and takes the tag as a separate input.
     ///
-    /// Returns: `Ok(())` on success.  If this context has been used for so many encryptions that
+    /// Return Value
+    /// ============
+    /// Returns `Ok(())` on success.  If this context has been used for so many encryptions that
     /// the sequence number overflowed, returns `Err(HpkeError::SeqOverflow)`. If this happens,
     /// `plaintext` will be unmodified. If the tag fails to validate, returns
     /// `Err(HpkeError::InvalidTag)`. If this happens, `plaintext` is in an undefined state.
@@ -216,36 +223,90 @@ impl<A: Aead> AeadCtx<A> {
 
 #[cfg(test)]
 mod test {
-    use super::{
-        AeadCtx, AesGcm128, AesGcm256, AssociatedData, ChaCha20Poly1305, Key as AeadKey,
-        Nonce as AeadNonce,
-    };
+    use super::{Aead, AesGcm128, AesGcm256, AssociatedData, ChaCha20Poly1305, Seq, Tag};
+    use crate::test_util::gen_ctx_simple_pair;
 
-    use rand::RngCore;
+    use core::u8;
 
+    // Necessary for test_overflow
+    impl<A: Aead> Clone for Seq<A> {
+        fn clone(&self) -> Seq<A> {
+            Seq(self.0.clone())
+        }
+    }
+
+    /// Tests that sequence overflowing causes an error. This logic is cipher-agnostic, so we don't
+    /// bother making this a macro
+    #[test]
+    fn test_overflow() {
+        // Make a sequence number that's at the max
+        let big_seq = {
+            let mut buf = <Seq<ChaCha20Poly1305> as Default>::default();
+            // Set all the values to the max
+            for byte in buf.0.iter_mut() {
+                *byte = u8::MAX;
+            }
+            buf
+        };
+
+        let (mut aead_ctx1, mut aead_ctx2) = gen_ctx_simple_pair::<ChaCha20Poly1305>();
+        aead_ctx1.seq = big_seq.clone();
+        aead_ctx2.seq = big_seq.clone();
+
+        // These should support precisely one more encryption before it registers an overflow
+
+        let msg = b"draxx them sklounst";
+        let aad = AssociatedData(b"with my prayers");
+
+        // Do one round trip and ensure it works
+        {
+            let mut plaintext = *msg;
+            // Encrypt the plaintext
+            let tag = aead_ctx1
+                .seal(&mut plaintext[..], &aad)
+                .expect("seal() failed");
+            // Rename for clarity
+            let mut ciphertext = plaintext;
+
+            // Now to decrypt on the other side
+            aead_ctx2
+                .open(&mut ciphertext[..], &aad, &tag)
+                .expect("open() failed");
+            // Rename for clarity
+            let roundtrip_plaintext = ciphertext;
+
+            // Make sure the output message was the same as the input message
+            assert_eq!(msg, &roundtrip_plaintext);
+        }
+
+        // Try another round trip and ensure that we've overflowed
+        {
+            let mut plaintext = *msg;
+            // Try to encrypt the plaintext
+            aead_ctx1
+                .seal(&mut plaintext[..], &aad)
+                .expect_err("seal() succeeded");
+            // Rename for clarity
+            let mut ciphertext = plaintext;
+
+            // Now try to decrypt the ciphertext. This isn't a valid ciphertext, but the overflow
+            // should fail before the tag check fails.
+            let dummy_tag = <Tag<ChaCha20Poly1305> as Default>::default();
+            aead_ctx2
+                .open(&mut ciphertext[..], &aad, &dummy_tag)
+                .expect_err("open() succeeded");
+        }
+    }
+
+    /// Tests that `open()` can decrypt things properly encrypted with `seal()`
     macro_rules! test_correctness {
         ($test_name:ident, $aead_ty:ty) => {
             #[test]
-            /// Tests that `open()` can decrypt things properly encrypted with `seal()`
             fn $test_name() {
-                let mut csprng = rand::thread_rng();
+                let (mut ctx1, mut ctx2) = gen_ctx_simple_pair::<$aead_ty>();
+
                 let msg = b"Love it or leave it, you better gain way";
                 let aad = AssociatedData(b"You better hit bull's eye, the kid don't play");
-
-                // Initialize the key and nonce
-                let key = {
-                    let mut buf = AeadKey::<$aead_ty>::default();
-                    csprng.fill_bytes(buf.as_mut_slice());
-                    buf
-                };
-                let nonce = {
-                    let mut buf = AeadNonce::<ChaCha20Poly1305>::default();
-                    csprng.fill_bytes(buf.as_mut_slice());
-                    buf
-                };
-
-                let mut ctx1 = AeadCtx::<$aead_ty>::new(key, nonce);
-                let mut ctx2 = AeadCtx::<$aead_ty>::new(key, nonce);
 
                 // Encrypt with the first context
                 let mut ciphertext = msg.clone();

@@ -13,8 +13,8 @@ pub trait Marshallable {
 /// This trait captures the requirements of a DH-based KEM (draft02 §5.1). It must have a way to
 /// generate keypairs, perform the DH computation, and marshall/umarshall DH pubkeys
 pub trait DiffieHellman {
-    type PublicKey: Marshallable;
-    type PrivateKey;
+    type PublicKey: Clone + Marshallable;
+    type PrivateKey: Clone + Marshallable;
     type DhResult: Into<Vec<u8>>;
 
     const KEM_ID: u16;
@@ -53,8 +53,10 @@ pub mod x25519 {
     // We wrap the types in order to abstract away the dalek dep
 
     /// An X25519 public key
+    #[derive(Clone)]
     pub struct PublicKey(x25519_dalek::PublicKey);
     /// An X25519 private key key
+    #[derive(Clone)]
     pub struct PrivateKey(x25519_dalek::StaticSecret);
 
     // A bare DH computation result. This can be used to make either a SharedSecret::Unauthed (if
@@ -70,10 +72,25 @@ pub mod x25519 {
             GenericArray::clone_from_slice(self.0.as_bytes())
         }
 
-        // Dalek also lets us [u8; 32] to pubkeys
+        // Dalek also lets us convert [u8; 32] to pubkeys
         fn unmarshal(encoded: GenericArray<u8, typenum::U32>) -> Self {
             let arr: [u8; 32] = encoded.into();
             PublicKey(x25519_dalek::PublicKey::from(arr))
+        }
+    }
+
+    impl Marshallable for PrivateKey {
+        type OutputSize = typenum::U32;
+
+        // Dalek lets us convert scalars to [u8; 32]
+        fn marshal(&self) -> GenericArray<u8, typenum::U32> {
+            GenericArray::clone_from_slice(&self.0.to_bytes())
+        }
+
+        // Dalek also lets us convert [u8; 32] to scalars
+        fn unmarshal(encoded: GenericArray<u8, typenum::U32>) -> Self {
+            let arr: [u8; 32] = encoded.into();
+            PrivateKey(x25519_dalek::StaticSecret::from(arr))
         }
     }
 

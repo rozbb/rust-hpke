@@ -33,7 +33,7 @@ use rand::{CryptoRng, RngCore};
 
 // This is the KeySchedule function defined in draft02 §5.1. It runs a KDF over all the parameters,
 // inputs, and secrets, and spits out a key-nonce pair to be used for symmetric encryption
-fn derive_enc_ctx<'a, A: Aead, Dh: DiffieHellman, K: Kdf, O: OpMode<'a, Dh, K>>(
+fn derive_enc_ctx<A: Aead, Dh: DiffieHellman, K: Kdf, O: OpMode<Dh, K>>(
     mode: &O,
     pk_recip: &Dh::PublicKey,
     shared_secret: SharedSecret<Dh>,
@@ -91,8 +91,8 @@ fn derive_enc_ctx<'a, A: Aead, Dh: DiffieHellman, K: Kdf, O: OpMode<'a, Dh, K>>(
     let nonce_info = [&b"hpke nonce"[..], &context_bytes].concat();
 
     // Empty fixed-size buffers
-    let mut key = crate::aead::Key::<A>::default();
-    let mut nonce = crate::aead::Nonce::<A>::default();
+    let mut key = crate::aead::AeadKey::<A>::default();
+    let mut nonce = crate::aead::AeadNonce::<A>::default();
 
     // Fill the key and nonce. This only errors if the key and nonce values are 255x the digest
     // size of the hash function. Since these values are fixed at compile time, we don't worry
@@ -116,7 +116,9 @@ fn derive_enc_ctx<'a, A: Aead, Dh: DiffieHellman, K: Kdf, O: OpMode<'a, Dh, K>>(
 /// Initiates an encryption context to the given recipient. Does an "authenticated" encapsulation
 /// if `sk_sender_id` is set. This ties the sender identity to the shared secret.
 ///
-/// Returns: An encapsulated public key (intended to be sent to the recipient), and an encryption
+/// Return Value
+/// ============
+/// Returns an encapsulated public key (intended to be sent to the recipient), and an encryption
 /// context.
 pub fn setup_sender<A, Dh, K, R>(
     mode: &OpModeS<Dh, K>,
@@ -149,7 +151,9 @@ where
 /// Initiates an encryption context given a private key sk and a encapsulated key which was
 /// encapsulated to `sk`'s corresponding public key
 ///
-/// Returns: An encryption context
+/// Return Value
+/// ============
+/// Returns an encryption context
 pub fn setup_receiver<A, Dh, K, R>(
     mode: &OpModeR<Dh, K>,
     sk_recip: &Dh::PrivateKey,
@@ -175,78 +179,47 @@ where
 
 #[cfg(test)]
 mod test {
-    use super::{setup_receiver, setup_sender};
+    use crate::test_util::{assert_aead_ctx_eq, gen_ctx_kem_pair};
     use crate::{
-        aead::{AssociatedData, ChaCha20Poly1305},
-        dh::{x25519::X25519Impl, DiffieHellman},
-        kdf::HkdfSha256,
-        op_mode::{OpModeS, Psk, PskBundle},
+        aead::ChaCha20Poly1305,
+        dh::x25519::X25519Impl,
+        kdf::{HkdfSha256, Kdf},
+        op_mode::PskBundle,
     };
 
-    use rand::{rngs::ThreadRng, RngCore};
-
-    /// This tests that `setup_sender` and `setup_receiver` derive the same context
-    #[test]
-    fn test_psk_auth_correctness() {
-        let mut csprng = rand::thread_rng();
-        let info = b"why would you think in a million years that that would actually work";
-        let psk = {
-            let mut buf = <Psk<HkdfSha256> as Default>::default();
-            csprng.fill_bytes(buf.as_mut_slice());
-            buf
-        };
-        let psk_id = b"this is the war room";
-        let psk_bundle = PskBundle::<HkdfSha256> {
-            psk: &psk,
-            psk_id: &psk_id[..],
-        };
-
-        let (sk_sender_id, pk_sender_id) = X25519Impl::gen_keypair(&mut csprng);
-        let (sk_recip, pk_recip) = X25519Impl::gen_keypair(&mut csprng);
-
-        let mode = OpModeS::<X25519Impl, _>::PskAuth(psk_bundle, &sk_sender_id);
-        let (encapped_key, mut aead_ctx1) =
-            setup_sender::<ChaCha20Poly1305, _, _, _>(&mode, &pk_recip, &info[..], &mut csprng);
-
-        let mode_r = mode.to_op_mode_r();
-        let mut aead_ctx2 = setup_receiver::<ChaCha20Poly1305, X25519Impl, HkdfSha256, ThreadRng>(
-            &mode_r,
-            &sk_recip,
-            &encapped_key,
-            &info[..],
-        );
-
-        //
-        // Test the encryption
-        //
-
-        let msg = b"I'll have what I'm having";
-        let aad = AssociatedData(b"diced onion, red pepper, grilled meat");
-
-        // Do 100 iterations of encryption-decryption. The underlying sequence number increments
-        // each time.
-        for _ in 0..100 {
-            let mut plaintext = *msg;
-            // Encrypt the plaintext
-            let tag = aead_ctx1
-                .seal(&mut plaintext[..], &aad)
-                .expect("first seal() failed");
-            // Rename for clarity
-            let mut ciphertext = plaintext;
-
-            // Now to decrypt on the other side
-            aead_ctx2
-                .open(&mut ciphertext[..], &aad, &tag)
-                .expect("first open() failed");
-            // Rename for clarity
-            let roundtrip_plaintext = ciphertext;
-
-            // Make sure the output message was the same as the input message
-            assert_eq!(msg, &roundtrip_plaintext);
+    // For testing purposes, we need PskBundle to be copyable. We can't use #[derive(Clone)]
+    // because it thinks that K has to be Clone.
+    impl<K: Kdf> Clone for PskBundle<K> {
+        fn clone(&self) -> Self {
+            // Do the obvious thing
+            PskBundle {
+                psk: self.psk.clone(),
+                psk_id: self.psk_id.clone(),
+            }
         }
     }
 
-    // Test that making an OpModeR and using to_mode_r do the same thing
+    /// This tests that `setup_sender` and `setup_receiver` derive the same context. We do this by
+    /// testing that `gen_ctx_kem_pair` returns identical encryption contexts
+    #[test]
+    fn test_psk_auth_correctness() {
+        // Make two random identical contexts
+        let (mut aead_ctx1, mut aead_ctx2) =
+            gen_ctx_kem_pair::<ChaCha20Poly1305, X25519Impl, HkdfSha256>();
+        assert_aead_ctx_eq(&mut aead_ctx1, &mut aead_ctx2);
+    }
+
+    /// Makes sure that using different data gives you different encryption contexts
+    #[test]
+    #[should_panic]
+    fn test_bad_setup() {
+        // Make two random contexts which are not identical
+        let (mut aead_ctx1, _) = gen_ctx_kem_pair::<ChaCha20Poly1305, X25519Impl, HkdfSha256>();
+        let (mut aead_ctx2, _) = gen_ctx_kem_pair::<ChaCha20Poly1305, X25519Impl, HkdfSha256>();
+
+        // Make sure the contexts don't line up
+        assert_aead_ctx_eq(&mut aead_ctx1, &mut aead_ctx2);
+    }
 
     // Test overflow by setting seq to something very high
 }

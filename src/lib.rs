@@ -16,6 +16,9 @@ pub mod kem;
 pub mod op_mode;
 pub mod setup;
 
+#[cfg(test)]
+mod test_util;
+
 #[doc(inline)]
 pub use crate::aead::AeadCtx;
 #[doc(inline)]
