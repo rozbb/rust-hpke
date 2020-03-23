@@ -17,7 +17,7 @@ Not many algorithms are currently supported. Here's what we have:
     * AES-GCM-256
     * ChaCha20Poly1305
 
-**THIS IMPLEMENTATION IS NOT KNOWN TO COMPLY WITH ANY STANDARDS...YET***
+**THIS IMPLEMENTATION IS NOT KNOWN TO COMPLY WITH ANY STANDARDS...YET**
 
 # What's next
 

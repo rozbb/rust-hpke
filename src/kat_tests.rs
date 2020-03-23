@@ -112,6 +112,7 @@ fn kat_test() {
     let tvs: Vec<MainTestVector> = serde_json::from_reader(file).unwrap();
 
     for tv in tvs.into_iter() {
+        // Ignore pretty much all but one test vector for now
         if tv.aead_id != ChaCha20Poly1305::AEAD_ID
             || tv.kdf_id != HkdfSha256::KDF_ID
             || tv.kem_id != X25519Impl::KEM_ID

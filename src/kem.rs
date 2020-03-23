@@ -89,7 +89,6 @@ mod tests {
     use super::{decap, encap, Marshallable};
     use crate::dh::{x25519::X25519Impl, DiffieHellman, MarshalledPubkey};
 
-    use digest::generic_array::GenericArray;
     use rand::RngCore;
 
     /// Tests that encap and decap produce the same shared secret when composed
