@@ -11,7 +11,9 @@ pub type Psk<K> = GenericArray<u8, <<K as Kdf>::HashImpl as Digest>::OutputSize>
 
 /// Contains preshared key bytes as well as well as an identifier
 pub struct PskBundle<K: Kdf> {
+    /// The preshared key
     pub psk: Psk<K>,
+    /// An bytestring that's supposed to uniquely identify this PSK
     pub psk_id: Vec<u8>,
 }
 

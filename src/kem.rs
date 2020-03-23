@@ -24,21 +24,18 @@ impl<Dh: DiffieHellman> Marshallable for EncappedKey<Dh> {
     }
 }
 
-/// Derives a shared secret and an ephemeral pubkey that the owner of the reciepint's pubkey can
-/// use to derive the same shared secret. If `sk_sender_id` is given, the sender's identity will be
-/// tied to the shared secret.
-pub(crate) fn encap<Dh, R>(
+/// Derives a shared secret that the owner of the reciepint's pubkey can use to derive the same
+/// shared secret. If `sk_sender_id` is given, the sender's identity will be tied to the shared
+/// secret.
+pub(crate) fn encap_with_eph<Dh>(
     pk_recip: &Dh::PublicKey,
     sk_sender_id: Option<&Dh::PrivateKey>,
-    csprng: &mut R,
+    sk_eph: Dh::PrivateKey,
+    pk_eph: Dh::PublicKey,
 ) -> (SharedSecret<Dh>, EncappedKey<Dh>)
 where
     Dh: DiffieHellman,
-    R: CryptoRng + RngCore,
 {
-    // Generate a new ephemeral keypair
-    let (sk_eph, pk_eph) = Dh::gen_keypair(csprng);
-
     // Compute the shared secret from the ephemeral inputs
     let dh_res_eph = Dh::dh(&sk_eph, pk_recip);
 
@@ -56,6 +53,25 @@ where
     };
 
     (shared_secret, EncappedKey(pk_eph))
+}
+
+/// Derives a shared secret and an ephemeral pubkey that the owner of the reciepint's pubkey can
+/// use to derive the same shared secret. If `sk_sender_id` is given, the sender's identity will be
+/// tied to the shared secret.
+/// All this does is generate an ephemeral keypair and pass to `encap_with_eph`.
+pub(crate) fn encap<Dh, R>(
+    pk_recip: &Dh::PublicKey,
+    sk_sender_id: Option<&Dh::PrivateKey>,
+    csprng: &mut R,
+) -> (SharedSecret<Dh>, EncappedKey<Dh>)
+where
+    Dh: DiffieHellman,
+    R: CryptoRng + RngCore,
+{
+    // Generate a new ephemeral keypair
+    let (sk_eph, pk_eph) = Dh::gen_keypair(csprng);
+    // Now pass to encap_with_eph
+    encap_with_eph(pk_recip, sk_sender_id, sk_eph, pk_eph)
 }
 
 /// Derives a shared secret given the encapsulated key and the recipients secret key. If

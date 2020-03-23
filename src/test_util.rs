@@ -6,7 +6,7 @@ use crate::{
     setup::{setup_receiver, setup_sender, ExporterSecret},
 };
 
-use rand::{rngs::ThreadRng, Rng, RngCore};
+use rand::{Rng, RngCore};
 
 /// Makes an random PSK bundle
 pub(crate) fn gen_psk_bundle<K: Kdf>() -> PskBundle<K> {
@@ -71,8 +71,7 @@ pub(crate) fn gen_ctx_kem_pair<A: Aead, Dh: DiffieHellman, K: Kdf>(
 
     // Use the encapped key to derive the reciever's encryption context
     let receiver_mode = OpModeR::<Dh, _>::PskAuth(psk_bundle, pk_sender_id);
-    let aead_ctx2 =
-        setup_receiver::<_, _, _, ThreadRng>(&receiver_mode, &sk_recip, &encapped_key, &info[..]);
+    let aead_ctx2 = setup_receiver(&receiver_mode, &sk_recip, &encapped_key, &info[..]);
 
     (aead_ctx1, aead_ctx2)
 }
@@ -112,7 +111,7 @@ pub(crate) fn assert_aead_ctx_eq<A: Aead, K: Kdf>(
         let mut ciphertext = plaintext;
 
         // Now to decrypt on the other side
-        ctx2.open(&mut ciphertext[..], &aad, &tag)
+        ctx2.open(&mut ciphertext[..], aad, &tag)
             .expect(&format!("open() #{} failed", i));
         // Rename for clarity
         let roundtrip_plaintext = ciphertext;

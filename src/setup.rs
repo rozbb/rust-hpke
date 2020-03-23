@@ -93,7 +93,7 @@ fn derive_enc_ctx<A: Aead, Dh: DiffieHellman, K: Kdf, O: OpMode<Dh, K>>(
     // The info strings for HKDF::expand
     let key_info = [&b"hpke key"[..], &context_bytes].concat();
     let nonce_info = [&b"hpke nonce"[..], &context_bytes].concat();
-    let exporter_info = [&b"exp"[..], &context_bytes].concat();
+    let exporter_info = [&b"hpke exp"[..], &context_bytes].concat();
 
     // Empty fixed-size buffers
     let mut key = crate::aead::AeadKey::<A>::default();
@@ -162,7 +162,7 @@ where
 /// Return Value
 /// ============
 /// Returns an encryption context
-pub fn setup_receiver<A, Dh, K, R>(
+pub fn setup_receiver<A, Dh, K>(
     mode: &OpModeR<Dh, K>,
     sk_recip: &Dh::PrivateKey,
     encapped_key: &EncappedKey<Dh>,
@@ -172,7 +172,6 @@ where
     A: Aead,
     Dh: DiffieHellman,
     K: Kdf,
-    R: CryptoRng + RngCore,
 {
     // If the identity key is set, use it
     let pk_sender_id: Option<&Dh::PublicKey> = mode.get_pk_sender_id();

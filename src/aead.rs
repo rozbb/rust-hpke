@@ -100,7 +100,7 @@ impl<A: Aead> Default for Seq<A> {
 }
 
 /// A convenience type for authenticated encryption tags
-pub type Tag<A> = GenericArray<u8, <<A as Aead>::AeadImpl as BaseAead>::TagSize>;
+pub type AeadTag<A> = GenericArray<u8, <<A as Aead>::AeadImpl as BaseAead>::TagSize>;
 
 /// The HPKE encryption context. This is what you use to `seal` plaintexts and `open` ciphertexts.
 pub struct AeadCtx<A: Aead, K: Kdf> {
@@ -119,6 +119,7 @@ pub struct AeadCtx<A: Aead, K: Kdf> {
 /// Associated data for encryption. This is wrapped in order to distinguish it from the `plaintext`
 /// input to `seal()` and `ciphertext` input to `open()`. Relying on argument order for two
 /// bytestrings is asking for trouble.
+#[derive(Clone, Copy)]
 pub struct AssociatedData<'a>(pub &'a [u8]);
 
 // These are the methods defined for Context in draft02 §6.6. export() is newer than that, though
@@ -154,7 +155,7 @@ impl<A: Aead, K: Kdf> AeadCtx<A, K> {
         &mut self,
         plaintext: &mut [u8],
         aad: &AssociatedData<'a>,
-    ) -> Result<Tag<A>, HpkeError> {
+    ) -> Result<AeadTag<A>, HpkeError> {
         if self.overflowed {
             // If the sequence counter overflowed, we've been used for far too long. Shut down.
             Err(HpkeError::SeqOverflow)
@@ -199,8 +200,8 @@ impl<A: Aead, K: Kdf> AeadCtx<A, K> {
     pub fn open<'a>(
         &mut self,
         ciphertext: &mut [u8],
-        aad: &AssociatedData<'a>,
-        tag: &Tag<A>,
+        aad: AssociatedData<'a>,
+        tag: &AeadTag<A>,
     ) -> Result<(), HpkeError> {
         if self.overflowed {
             // If the sequence counter overflowed, we've been used for far too long. Shut down.
@@ -249,7 +250,7 @@ impl<A: Aead, K: Kdf> AeadCtx<A, K> {
 
 #[cfg(test)]
 mod test {
-    use super::{Aead, AesGcm128, AesGcm256, AssociatedData, ChaCha20Poly1305, Seq, Tag};
+    use super::{Aead, AeadTag, AesGcm128, AesGcm256, AssociatedData, ChaCha20Poly1305, Seq};
     use crate::kdf::HkdfSha256;
     use crate::test_util::gen_ctx_simple_pair;
 
@@ -325,7 +326,7 @@ mod test {
 
             // Now to decrypt on the other side
             aead_ctx2
-                .open(&mut ciphertext[..], &aad, &tag)
+                .open(&mut ciphertext[..], aad, &tag)
                 .expect("open() failed");
             // Rename for clarity
             let roundtrip_plaintext = ciphertext;
@@ -346,9 +347,9 @@ mod test {
 
             // Now try to decrypt the ciphertext. This isn't a valid ciphertext, but the overflow
             // should fail before the tag check fails.
-            let dummy_tag = <Tag<ChaCha20Poly1305> as Default>::default();
+            let dummy_tag = <AeadTag<ChaCha20Poly1305> as Default>::default();
             aead_ctx2
-                .open(&mut ciphertext[..], &aad, &dummy_tag)
+                .open(&mut ciphertext[..], aad, &dummy_tag)
                 .expect_err("open() succeeded");
         }
     }
@@ -371,7 +372,7 @@ mod test {
                 assert!(&ciphertext[..] != &msg[..]);
 
                 // Decrypt with the second context
-                ctx2.open(&mut ciphertext[..], &aad, &tag)
+                ctx2.open(&mut ciphertext[..], aad, &tag)
                     .expect("open() failed");
                 // Change name for clarity
                 let decrypted = ciphertext;
