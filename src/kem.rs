@@ -87,7 +87,7 @@ pub(crate) fn decap<Dh: DiffieHellman>(
 #[cfg(test)]
 mod tests {
     use super::{decap, encap, Marshallable};
-    use crate::dh::{x25519::X25519Impl, DiffieHellman};
+    use crate::dh::{x25519::X25519Impl, DiffieHellman, MarshalledPubkey};
 
     use digest::generic_array::GenericArray;
     use rand::RngCore;
@@ -126,10 +126,6 @@ mod tests {
         // Ensure that the encapsulated secret is what decap() derives
         assert_eq!(auth_shared_secret, decapped_auth_shared_secret);
     }
-
-    // Convenience type. What a mouthful
-    type MarshalledPubkey<Dh> =
-        GenericArray<u8, <<Dh as DiffieHellman>::PublicKey as Marshallable>::OutputSize>;
 
     /// Tests that a marshal-unmarshal round-trip ends up at the same value
     #[test]

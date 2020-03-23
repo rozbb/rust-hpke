@@ -17,7 +17,13 @@ pub mod op_mode;
 pub mod setup;
 
 #[cfg(test)]
+mod kat_tests;
+#[cfg(test)]
 mod test_util;
+
+#[cfg(test)]
+#[macro_use]
+extern crate serde_derive;
 
 #[doc(inline)]
 pub use crate::aead::AeadCtx;

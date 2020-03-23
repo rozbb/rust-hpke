@@ -10,6 +10,15 @@ pub trait Marshallable {
     fn unmarshal(encoded: GenericArray<u8, Self::OutputSize>) -> Self;
 }
 
+/// A convenience type representing the fixed-size byte array that a DH pubkey gets serialized
+/// to/from.
+pub type MarshalledPubkey<Dh> =
+    GenericArray<u8, <<Dh as DiffieHellman>::PublicKey as Marshallable>::OutputSize>;
+/// A convenience type representing the fixed-size byte array that a DH privkey gets serialized
+/// to/from.
+pub type MarshalledPrivkey<Dh> =
+    GenericArray<u8, <<Dh as DiffieHellman>::PrivateKey as Marshallable>::OutputSize>;
+
 /// This trait captures the requirements of a DH-based KEM (draft02 §5.1). It must have a way to
 /// generate keypairs, perform the DH computation, and marshall/umarshall DH pubkeys
 pub trait DiffieHellman {
