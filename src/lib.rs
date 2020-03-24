@@ -7,6 +7,7 @@
 extern crate std;
 
 #[cfg(not(feature = "std"))]
+#[allow(unused_imports)]
 #[macro_use]
 extern crate alloc;
 
