@@ -24,8 +24,8 @@ Not many algorithms are currently supported. Here's what we have:
 What's next
 -----------
 
-[ ] Implement one-shot API
-[ ] Add support for more KEMs and KDFs
+- [ ] Implement one-shot API
+- [ ] Add support for more KEMs and KDFs
 
 License
 -------
