@@ -1,7 +1,7 @@
 rust-hpke
 =========
 
-This is an work-in-progress implementation of the [HPKE](https://datatracker.ietf.org/doc/draft-irtf-cfrg-hpke/) hybrid encryption standard. Once this is passing known-answer tests, I'll publish it as a crate.
+This is an work-in-progress implementation of the [HPKE](https://datatracker.ietf.org/doc/draft-irtf-cfrg-hpke/) hybrid encryption standard. Once this is passing official known-answer tests, I'll publish it as a crate.
 
 What it implements
 ------------------
@@ -20,6 +20,20 @@ Not many algorithms are currently supported. Here's what we have:
     * ChaCha20Poly1305
 
 **THIS IMPLEMENTATION IS NOT KNOWN TO COMPLY WITH ANY STANDARDS...YET**
+
+Crate Features
+--------------
+
+* This crate does support `no_std`. However, the `std` feature is enabled by default.
+
+For info on how to omit or include feature flags, see the [cargo docs on features](https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html#choosing-features).
+
+Tests
+-----
+
+To run tests, execute `cargo test`. This includes known-answer tests, which test against `test-vector-COMMIT_ID.json`,where `COMMIT_ID` is the short commit of the [reference implementation](https://github.com/bifurcation/hpke) version that created that test vector. Please see the reference implementation for information on how to generate a test vector.
+
+Currently, file `test-vector-modified.json` is derived from a modified version of the reference implementation. Once the necessary changes are made upstream, the file will be updated.
 
 What's next
 -----------
