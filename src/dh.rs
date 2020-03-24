@@ -1,3 +1,5 @@
+use crate::prelude::*;
+
 use digest::generic_array::{ArrayLength, GenericArray};
 use rand::{CryptoRng, RngCore};
 
@@ -56,6 +58,8 @@ impl<Dh: DiffieHellman> Into<Vec<u8>> for SharedSecret<Dh> {
 
 pub mod x25519 {
     use super::{DiffieHellman, Marshallable};
+    use crate::prelude::*;
+
     use digest::generic_array::{typenum, GenericArray};
     use rand::{CryptoRng, RngCore};
 
@@ -167,8 +171,8 @@ pub mod x25519 {
 
     // We need Debug in order to be able to assert_eq! shared secrets
     #[cfg(test)]
-    impl std::fmt::Debug for SharedSecret<X25519> {
-        fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+    impl core::fmt::Debug for SharedSecret<X25519> {
+        fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
             match self {
                 SharedSecret::Authed(x1, x2) => {
                     write!(f, "{:0x?}\n{:0x?}", x1.0.as_bytes(), x2.0.as_bytes())

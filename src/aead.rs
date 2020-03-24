@@ -1,7 +1,8 @@
 use crate::{kdf::Kdf, setup::ExporterSecret, HpkeError};
-use aead::{Aead as BaseAead, NewAead as BaseNewAead};
+
 use core::u8;
 
+use aead::{Aead as BaseAead, NewAead as BaseNewAead};
 use digest::generic_array::GenericArray;
 use hkdf::Hkdf;
 
