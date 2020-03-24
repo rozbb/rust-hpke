@@ -1,6 +1,6 @@
 use crate::{
     aead::{Aead, AeadTag, AesGcm128, AesGcm256, AssociatedData, ChaCha20Poly1305},
-    dh::{x25519::X25519Impl, DiffieHellman, Marshallable, MarshalledPrivkey, MarshalledPubkey},
+    dh::{x25519::X25519, DiffieHellman, Marshallable, MarshalledPrivkey, MarshalledPubkey},
     kdf::{HkdfSha256, Kdf},
     kem::encap_with_eph,
     op_mode::{OpModeR, Psk, PskBundle},
@@ -174,7 +174,7 @@ fn make_op_mode_r<Dh: DiffieHellman, K: Kdf>(
 macro_rules! test_case {
     ($tv:ident, $aead_ty:ty) => {{
         type A = $aead_ty;
-        type Dh = X25519Impl;
+        type Dh = X25519;
         type K = HkdfSha256;
 
         // First, unmarshall all the relevant keys so we can reconstruct the encapped key
@@ -252,7 +252,7 @@ fn kat_test() {
 
     for tv in tvs.into_iter() {
         // Ignore pretty much all but one test vector for now
-        if tv.kdf_id != HkdfSha256::KDF_ID || tv.kem_id != X25519Impl::KEM_ID {
+        if tv.kdf_id != HkdfSha256::KDF_ID || tv.kem_id != X25519::KEM_ID {
             continue;
         }
 

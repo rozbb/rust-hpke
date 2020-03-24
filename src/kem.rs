@@ -103,7 +103,7 @@ pub(crate) fn decap<Dh: DiffieHellman>(
 #[cfg(test)]
 mod tests {
     use super::{decap, encap, Marshallable};
-    use crate::dh::{x25519::X25519Impl, DiffieHellman, MarshalledPubkey};
+    use crate::dh::{x25519::X25519, DiffieHellman, MarshalledPubkey};
 
     use rand::RngCore;
 
@@ -111,14 +111,13 @@ mod tests {
     #[test]
     fn encap_correctness() {
         let mut csprng = rand::thread_rng();
-        let (sk_recip, pk_recip) = X25519Impl::gen_keypair(&mut csprng);
+        let (sk_recip, pk_recip) = X25519::gen_keypair(&mut csprng);
 
         // Encapsulate a random shared secret
-        let (auth_shared_secret, encapped_key) =
-            encap::<X25519Impl, _>(&pk_recip, None, &mut csprng);
+        let (auth_shared_secret, encapped_key) = encap::<X25519, _>(&pk_recip, None, &mut csprng);
 
         // Decap it
-        let decapped_auth_shared_secret = decap::<X25519Impl>(&sk_recip, None, &encapped_key);
+        let decapped_auth_shared_secret = decap::<X25519>(&sk_recip, None, &encapped_key);
 
         // Ensure that the encapsulated secret is what decap() derives
         assert_eq!(auth_shared_secret, decapped_auth_shared_secret);
@@ -128,15 +127,15 @@ mod tests {
         //
 
         // Make a sender identity keypair
-        let (sk_sender_id, pk_sender_id) = X25519Impl::gen_keypair(&mut csprng);
+        let (sk_sender_id, pk_sender_id) = X25519::gen_keypair(&mut csprng);
 
         // Encapsulate a random shared secret
         let (auth_shared_secret, encapped_key) =
-            encap::<X25519Impl, _>(&pk_recip, Some(&sk_sender_id), &mut csprng);
+            encap::<X25519, _>(&pk_recip, Some(&sk_sender_id), &mut csprng);
 
         // Decap it
         let decapped_auth_shared_secret =
-            decap::<X25519Impl>(&sk_recip, Some(&pk_sender_id), &encapped_key);
+            decap::<X25519>(&sk_recip, Some(&pk_sender_id), &encapped_key);
 
         // Ensure that the encapsulated secret is what decap() derives
         assert_eq!(auth_shared_secret, decapped_auth_shared_secret);
@@ -148,14 +147,14 @@ mod tests {
         let mut csprng = rand::thread_rng();
         // Fill a buffer with randomness
         let orig_bytes = {
-            let mut buf = <MarshalledPubkey<X25519Impl> as Default>::default();
+            let mut buf = <MarshalledPubkey<X25519> as Default>::default();
             csprng.fill_bytes(buf.as_mut_slice());
             buf
         };
 
         // Make a pubkey with those random points. Note, that unmarshal does not clamp the input
         // bytes. This is why this test passes.
-        let pk = <<X25519Impl as DiffieHellman>::PublicKey as Marshallable>::unmarshal(orig_bytes);
+        let pk = <<X25519 as DiffieHellman>::PublicKey as Marshallable>::unmarshal(orig_bytes);
         let pk_bytes = pk.marshal();
 
         // See if the re-marshalled bytes are the same as the input

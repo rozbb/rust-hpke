@@ -111,9 +111,9 @@ pub mod x25519 {
     }
 
     /// Dummy type which implements the `DiffieHellman` trait
-    pub struct X25519Impl {}
+    pub struct X25519 {}
 
-    impl DiffieHellman for X25519Impl {
+    impl DiffieHellman for X25519 {
         type PublicKey = PublicKey;
         type PrivateKey = PrivateKey;
         type DhResult = DhResult;
@@ -148,8 +148,8 @@ pub mod x25519 {
     // We need to be able to compare shared secrets in order to make sure that encap* and decap*
     // produce the same output
     #[cfg(test)]
-    impl PartialEq for SharedSecret<X25519Impl> {
-        fn eq(&self, other: &SharedSecret<X25519Impl>) -> bool {
+    impl PartialEq for SharedSecret<X25519> {
+        fn eq(&self, other: &SharedSecret<X25519>) -> bool {
             match (self, other) {
                 (SharedSecret::Authed(x1, y1), SharedSecret::Authed(x2, y2)) => {
                     x1.0.as_bytes() == x2.0.as_bytes() && y1.0.as_bytes() == y2.0.as_bytes()
@@ -163,11 +163,11 @@ pub mod x25519 {
     }
 
     #[cfg(test)]
-    impl Eq for SharedSecret<X25519Impl> {}
+    impl Eq for SharedSecret<X25519> {}
 
     // We need Debug in order to be able to assert_eq! shared secrets
     #[cfg(test)]
-    impl std::fmt::Debug for SharedSecret<X25519Impl> {
+    impl std::fmt::Debug for SharedSecret<X25519> {
         fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
             match self {
                 SharedSecret::Authed(x1, x2) => {

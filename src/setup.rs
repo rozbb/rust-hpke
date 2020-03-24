@@ -189,7 +189,7 @@ mod test {
     use crate::test_util::{assert_aead_ctx_eq, gen_ctx_kem_pair};
     use crate::{
         aead::ChaCha20Poly1305,
-        dh::x25519::X25519Impl,
+        dh::x25519::X25519,
         kdf::{HkdfSha256, Kdf},
         op_mode::PskBundle,
     };
@@ -212,7 +212,7 @@ mod test {
     fn test_psk_auth_correctness() {
         // Make two random identical contexts
         let (mut aead_ctx1, mut aead_ctx2) =
-            gen_ctx_kem_pair::<ChaCha20Poly1305, X25519Impl, HkdfSha256>();
+            gen_ctx_kem_pair::<ChaCha20Poly1305, X25519, HkdfSha256>();
         assert_aead_ctx_eq(&mut aead_ctx1, &mut aead_ctx2);
     }
 
@@ -221,8 +221,8 @@ mod test {
     #[should_panic]
     fn test_bad_setup() {
         // Make two random contexts which are not identical
-        let (mut aead_ctx1, _) = gen_ctx_kem_pair::<ChaCha20Poly1305, X25519Impl, HkdfSha256>();
-        let (mut aead_ctx2, _) = gen_ctx_kem_pair::<ChaCha20Poly1305, X25519Impl, HkdfSha256>();
+        let (mut aead_ctx1, _) = gen_ctx_kem_pair::<ChaCha20Poly1305, X25519, HkdfSha256>();
+        let (mut aead_ctx2, _) = gen_ctx_kem_pair::<ChaCha20Poly1305, X25519, HkdfSha256>();
 
         // Make sure the contexts don't line up
         assert_aead_ctx_eq(&mut aead_ctx1, &mut aead_ctx2);
