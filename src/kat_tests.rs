@@ -152,13 +152,9 @@ fn make_op_mode_r<Dh: DiffieHellman, K: Kdf>(
         <Dh as DiffieHellman>::PublicKey::unmarshal(buf)
     });
     // Unmarshal the optinoal bundle
-    let bundle = psk.map(|bytes| {
-        let mut buf = <Psk<K> as Default>::default();
-        buf.copy_from_slice(&bytes);
-        PskBundle::<K> {
-            psk: buf,
-            psk_id: psk_id.unwrap(),
-        }
+    let bundle = psk.map(|bytes| PskBundle::<K> {
+        psk: Psk::<K>::from_bytes(bytes),
+        psk_id: psk_id.unwrap(),
     });
 
     // These better be set if the mode ID calls for them

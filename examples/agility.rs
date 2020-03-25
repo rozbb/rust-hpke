@@ -522,18 +522,10 @@ struct AgilePskBundle {
 
 impl AgilePskBundle {
     fn try_lift<K: Kdf>(self) -> Result<PskBundle<K>, AgileHpkeError> {
-        let mut psk = <Psk<K> as Default>::default();
-        if psk.len() != self.psk_bytes.len() {
-            return Err(AgileHpkeError::LengthMismatch(
-                "AgilePskBundle",
-                psk.len(),
-                self.psk_bytes.len(),
-            ));
-        }
-        psk.clone_from_slice(&self.psk_bytes);
+        let psk = Psk::<K>::from_bytes(self.psk_bytes);
 
         Ok(PskBundle {
-            psk: psk,
+            psk,
             psk_id: self.psk_id,
         })
     }

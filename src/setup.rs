@@ -87,9 +87,9 @@ fn derive_enc_ctx<A: Aead, Dh: DiffieHellman, K: Kdf, O: OpMode<Dh, K>>(
     // Instead of `secret` we derive an HKDF context which we run .expand() on to derive the
     // key-nonce pair.
     let (_, hkdf_ctx) = {
-        let psk = mode.get_psk();
+        let psk_bytes = mode.get_psk_bytes();
         let shared_secret_bytes: Vec<u8> = shared_secret.into();
-        hkdf::Hkdf::<K::HashImpl>::extract(Some(&psk), &shared_secret_bytes)
+        hkdf::Hkdf::<K::HashImpl>::extract(Some(&psk_bytes), &shared_secret_bytes)
     };
     // The info strings for HKDF::expand
     let key_info = [&b"hpke key"[..], &context_bytes].concat();
@@ -188,24 +188,7 @@ where
 #[cfg(test)]
 mod test {
     use crate::test_util::{assert_aead_ctx_eq, gen_ctx_kem_pair};
-    use crate::{
-        aead::ChaCha20Poly1305,
-        dh::x25519::X25519,
-        kdf::{HkdfSha256, Kdf},
-        op_mode::PskBundle,
-    };
-
-    // For testing purposes, we need PskBundle to be copyable. We can't use #[derive(Clone)]
-    // because it thinks that K has to be Clone.
-    impl<K: Kdf> Clone for PskBundle<K> {
-        fn clone(&self) -> Self {
-            // Do the obvious thing
-            PskBundle {
-                psk: self.psk.clone(),
-                psk_id: self.psk_id.clone(),
-            }
-        }
-    }
+    use crate::{aead::ChaCha20Poly1305, dh::x25519::X25519, kdf::HkdfSha256};
 
     /// This tests that `setup_sender` and `setup_receiver` derive the same context. We do this by
     /// testing that `gen_ctx_kem_pair` returns identical encryption contexts

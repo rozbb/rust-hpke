@@ -13,9 +13,9 @@ pub(crate) fn gen_psk_bundle<K: Kdf>() -> PskBundle<K> {
     let mut csprng = rand::thread_rng();
 
     let psk = {
-        let mut buf = <Psk<K> as Default>::default();
+        let mut buf = vec![0u8; 32];
         csprng.fill_bytes(buf.as_mut_slice());
-        buf
+        Psk::<K>::from_bytes(buf)
     };
     let psk_id = {
         let mut buf = [0u8; 32];

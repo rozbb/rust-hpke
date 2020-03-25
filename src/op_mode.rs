@@ -4,11 +4,55 @@ use crate::{
     kdf::Kdf,
 };
 
-use digest::{generic_array::GenericArray, Digest};
+use core::marker::PhantomData;
 
-/// This is a hairy type signature, but it's just a fixed-size array of bytes whose length is the
-/// digest size of the underlying hash function
-pub type Psk<K> = GenericArray<u8, <<K as Kdf>::HashImpl as Digest>::OutputSize>;
+use digest::{
+    generic_array::{typenum::Unsigned, GenericArray},
+    Digest,
+};
+
+/// For use with `static_zeros`. This only needs to be as long as the longest hash function digest.
+/// 128 bytes should be enough for anybody.
+const ZEROS: &'static [u8] = &[0u8; 128];
+
+/// Returns an immutable slice into a static array of zeros. This is so we don't have to keep
+/// allocated for the default value of a `Psk` (which is [0u8; HashImpl::OutputSize])
+fn static_zeros<K: Kdf>() -> &'static [u8] {
+    &ZEROS[..<<K as Kdf>::HashImpl as Digest>::OutputSize::to_usize()]
+}
+
+/// A preshared key, i.e., a secret that the sender and recipient both know before any exchange has
+/// happened
+pub struct Psk<K: Kdf> {
+    bytes: Vec<u8>,
+    marker: PhantomData<K>,
+}
+
+impl<K: Kdf> Psk<K> {
+    /// Constructs a preshared key from bytes
+    pub fn from_bytes(bytes: Vec<u8>) -> Psk<K> {
+        Psk {
+            bytes,
+            marker: PhantomData,
+        }
+    }
+
+    /// Deconstructs this preshared key to bytes
+    pub fn to_bytes(self) -> Vec<u8> {
+        self.bytes
+    }
+}
+
+// We can't use #[derive(Clone)] because the compiler thinks that K has to be Clone.
+impl<K: Kdf> Clone for Psk<K> {
+    fn clone(&self) -> Self {
+        // Do the obvious thing
+        Psk {
+            bytes: self.bytes.clone(),
+            marker: self.marker,
+        }
+    }
+}
 
 /// Contains preshared key bytes as well as well as an identifier
 pub struct PskBundle<K: Kdf> {
@@ -16,6 +60,17 @@ pub struct PskBundle<K: Kdf> {
     pub psk: Psk<K>,
     /// An bytestring that's supposed to uniquely identify this PSK
     pub psk_id: Vec<u8>,
+}
+
+// We can't use #[derive(Clone)] because the compiler thinks that K has to be Clone.
+impl<K: Kdf> Clone for PskBundle<K> {
+    fn clone(&self) -> Self {
+        // Do the obvious thing
+        PskBundle {
+            psk: self.psk.clone(),
+            psk_id: self.psk_id.clone(),
+        }
+    }
 }
 
 /// The operation mode of the receiver's side of HPKE. This determines what information is folded
@@ -82,7 +137,7 @@ pub(crate) trait OpMode<Dh: DiffieHellman, K: Kdf> {
     /// If this is an auth mode, returns the sender's pubkey. Otherwise returns zeros.
     fn get_marshalled_sender_pk(&self) -> MarshalledPubkey<Dh>;
     /// If this is a PSK mode, returns the PSK. Otherwise returns zeros.
-    fn get_psk(&self) -> Psk<K>;
+    fn get_psk_bytes(&self) -> &[u8];
     /// If this is a PSK mode, returns the PSK ID. Otherwise returns the empty string.
     fn get_psk_id(&self) -> &[u8];
 }
@@ -109,14 +164,14 @@ impl<Dh: DiffieHellman, K: Kdf> OpMode<Dh, K> for OpModeR<Dh, K> {
         }
     }
 
-    // Returns the preshared key if it's set in the mode, otherwise returns
-    // [0u8; Kdf::Hashfunction::OutputSize]
-    fn get_psk(&self) -> Psk<K> {
+    // Returns the preshared key bytes if it's set in the mode, otherwise returns
+    // [0u8; Kdf::HashImpl::OutputSize]
+    fn get_psk_bytes(&self) -> &[u8] {
         // draft02 §6.1: default_psk = zero(Nh)
         match self {
-            OpModeR::Psk(p) => p.psk.clone(),
-            OpModeR::AuthPsk(_, p) => p.psk.clone(),
-            _ => Psk::<K>::default(),
+            OpModeR::Psk(bundle) => &bundle.psk.bytes,
+            OpModeR::AuthPsk(_, bundle) => &bundle.psk.bytes,
+            _ => static_zeros::<K>(),
         }
     }
 
@@ -163,14 +218,14 @@ impl<Dh: DiffieHellman, K: Kdf> OpMode<Dh, K> for OpModeS<Dh, K> {
         }
     }
 
-    // Returns the preshared key if it's set in the mode, otherwise returns
+    // Returns the preshared key bytes if it's set in the mode, otherwise returns
     // [0u8; Kdf::Hashfunction::OutputSize]
-    fn get_psk(&self) -> Psk<K> {
+    fn get_psk_bytes(&self) -> &[u8] {
         // draft02 §6.1: default_psk = zero(Nh)
         match self {
-            OpModeS::Psk(p) => p.psk.clone(),
-            OpModeS::AuthPsk(_, p) => p.psk.clone(),
-            _ => Psk::<K>::default(),
+            OpModeS::Psk(bundle) => &bundle.psk.bytes,
+            OpModeS::AuthPsk(_, bundle) => &bundle.psk.bytes,
+            _ => static_zeros::<K>(),
         }
     }
 
