@@ -155,7 +155,7 @@ impl<A: Aead, K: Kdf> AeadCtx<A, K> {
     pub fn seal<'a>(
         &mut self,
         plaintext: &mut [u8],
-        aad: &AssociatedData<'a>,
+        aad: AssociatedData<'a>,
     ) -> Result<AeadTag<A>, HpkeError> {
         if self.overflowed {
             // If the sequence counter overflowed, we've been used for far too long. Shut down.
@@ -280,7 +280,7 @@ mod test {
         // Modify the context by encrypting something
         let mut plaintext = *b"back hand";
         aead_ctx
-            .seal(&mut plaintext[..], &AssociatedData(b""))
+            .seal(&mut plaintext[..], AssociatedData(b""))
             .expect("seal() failed");
 
         // Get a second export secret
@@ -320,7 +320,7 @@ mod test {
             let mut plaintext = *msg;
             // Encrypt the plaintext
             let tag = aead_ctx1
-                .seal(&mut plaintext[..], &aad)
+                .seal(&mut plaintext[..], aad)
                 .expect("seal() failed");
             // Rename for clarity
             let mut ciphertext = plaintext;
@@ -341,7 +341,7 @@ mod test {
             let mut plaintext = *msg;
             // Try to encrypt the plaintext
             aead_ctx1
-                .seal(&mut plaintext[..], &aad)
+                .seal(&mut plaintext[..], aad)
                 .expect_err("seal() succeeded");
             // Rename for clarity
             let mut ciphertext = plaintext;
@@ -367,7 +367,7 @@ mod test {
 
                 // Encrypt with the first context
                 let mut ciphertext = msg.clone();
-                let tag = ctx1.seal(&mut ciphertext[..], &aad).expect("seal() failed");
+                let tag = ctx1.seal(&mut ciphertext[..], aad).expect("seal() failed");
 
                 // Make sure seal() isn't a no-op
                 assert!(&ciphertext[..] != &msg[..]);

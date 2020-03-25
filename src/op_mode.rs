@@ -29,7 +29,7 @@ pub enum OpModeR<Dh: DiffieHellman, K: Kdf> {
     /// The identity public key of the sender
     Auth(Dh::PublicKey),
     /// Both of the above
-    PskAuth(PskBundle<K>, Dh::PublicKey),
+    AuthPsk(Dh::PublicKey, PskBundle<K>),
 }
 
 // Helper function for setup_receiver
@@ -38,7 +38,7 @@ impl<'a, Dh: DiffieHellman, K: Kdf> OpModeR<Dh, K> {
     pub(crate) fn get_pk_sender_id(&self) -> Option<&Dh::PublicKey> {
         match self {
             OpModeR::Auth(pk) => Some(pk),
-            OpModeR::PskAuth(_, pk) => Some(pk),
+            OpModeR::AuthPsk(pk, _) => Some(pk),
             _ => None,
         }
     }
@@ -55,7 +55,7 @@ pub enum OpModeS<Dh: DiffieHellman, K: Kdf> {
     /// The identity public key of the sender
     Auth(Dh::PrivateKey),
     /// Both of the above
-    PskAuth(PskBundle<K>, Dh::PrivateKey),
+    AuthPsk(Dh::PrivateKey, PskBundle<K>),
 }
 
 // Helpers functions for setup_sender and testing
@@ -64,7 +64,7 @@ impl<Dh: DiffieHellman, K: Kdf> OpModeS<Dh, K> {
     pub(crate) fn get_sk_sender_id(&self) -> Option<&Dh::PrivateKey> {
         match self {
             OpModeS::Auth(sk) => Some(sk),
-            OpModeS::PskAuth(_, sk) => Some(sk),
+            OpModeS::AuthPsk(sk, _) => Some(sk),
             _ => None,
         }
     }
@@ -94,7 +94,7 @@ impl<Dh: DiffieHellman, K: Kdf> OpMode<Dh, K> for OpModeR<Dh, K> {
             OpModeR::Base => 0x00,
             OpModeR::Psk(..) => 0x01,
             OpModeR::Auth(..) => 0x02,
-            OpModeR::PskAuth(..) => 0x03,
+            OpModeR::AuthPsk(..) => 0x03,
         }
     }
 
@@ -104,7 +104,7 @@ impl<Dh: DiffieHellman, K: Kdf> OpMode<Dh, K> for OpModeR<Dh, K> {
         // draft02 §6.1: default_pkIm = zero(Npk)
         match self {
             OpModeR::Auth(pk) => pk.marshal(),
-            OpModeR::PskAuth(_, pk) => pk.marshal(),
+            OpModeR::AuthPsk(pk, _) => pk.marshal(),
             _ => <MarshalledPubkey<Dh> as Default>::default(),
         }
     }
@@ -115,7 +115,7 @@ impl<Dh: DiffieHellman, K: Kdf> OpMode<Dh, K> for OpModeR<Dh, K> {
         // draft02 §6.1: default_psk = zero(Nh)
         match self {
             OpModeR::Psk(p) => p.psk.clone(),
-            OpModeR::PskAuth(p, _) => p.psk.clone(),
+            OpModeR::AuthPsk(_, p) => p.psk.clone(),
             _ => Psk::<K>::default(),
         }
     }
@@ -125,7 +125,7 @@ impl<Dh: DiffieHellman, K: Kdf> OpMode<Dh, K> for OpModeR<Dh, K> {
         // draft02 §6.1: default_pskID = zero(0)
         match self {
             OpModeR::Psk(p) => &p.psk_id,
-            OpModeR::PskAuth(p, _) => &p.psk_id,
+            OpModeR::AuthPsk(_, p) => &p.psk_id,
             _ => b"",
         }
     }
@@ -140,7 +140,7 @@ impl<Dh: DiffieHellman, K: Kdf> OpMode<Dh, K> for OpModeS<Dh, K> {
             OpModeS::Base => 0x00,
             OpModeS::Psk(..) => 0x01,
             OpModeS::Auth(..) => 0x02,
-            OpModeS::PskAuth(..) => 0x03,
+            OpModeS::AuthPsk(..) => 0x03,
         }
     }
 
@@ -155,7 +155,7 @@ impl<Dh: DiffieHellman, K: Kdf> OpMode<Dh, K> for OpModeS<Dh, K> {
                 let pk = Dh::sk_to_pk(sk);
                 pk.marshal()
             }
-            OpModeS::PskAuth(_, sk) => {
+            OpModeS::AuthPsk(sk, _) => {
                 let pk = Dh::sk_to_pk(sk);
                 pk.marshal()
             }
@@ -169,7 +169,7 @@ impl<Dh: DiffieHellman, K: Kdf> OpMode<Dh, K> for OpModeS<Dh, K> {
         // draft02 §6.1: default_psk = zero(Nh)
         match self {
             OpModeS::Psk(p) => p.psk.clone(),
-            OpModeS::PskAuth(p, _) => p.psk.clone(),
+            OpModeS::AuthPsk(_, p) => p.psk.clone(),
             _ => Psk::<K>::default(),
         }
     }
@@ -179,7 +179,7 @@ impl<Dh: DiffieHellman, K: Kdf> OpMode<Dh, K> for OpModeS<Dh, K> {
         // draft02 §6.1: default_pskID = zero(0)
         match self {
             OpModeS::Psk(p) => &p.psk_id,
-            OpModeS::PskAuth(p, _) => &p.psk_id,
+            OpModeS::AuthPsk(_, p) => &p.psk_id,
             _ => b"",
         }
     }

@@ -14,11 +14,11 @@ pub trait Marshallable {
 
 /// A convenience type representing the fixed-size byte array that a DH pubkey gets serialized
 /// to/from.
-pub type MarshalledPubkey<Dh> =
+pub type MarshalledPublicKey<Dh> =
     GenericArray<u8, <<Dh as DiffieHellman>::PublicKey as Marshallable>::OutputSize>;
 /// A convenience type representing the fixed-size byte array that a DH privkey gets serialized
 /// to/from.
-pub type MarshalledPrivkey<Dh> =
+pub type MarshalledPrivateKey<Dh> =
     GenericArray<u8, <<Dh as DiffieHellman>::PrivateKey as Marshallable>::OutputSize>;
 
 /// This trait captures the requirements of a DH-based KEM (draft02 §5.1). It must have a way to
@@ -56,6 +56,7 @@ impl<Dh: DiffieHellman> Into<Vec<u8>> for SharedSecret<Dh> {
     }
 }
 
+pub use x25519::X25519;
 pub mod x25519 {
     use super::{DiffieHellman, Marshallable};
     use crate::prelude::*;

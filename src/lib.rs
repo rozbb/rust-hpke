@@ -41,11 +41,11 @@ pub mod setup;
 #[doc(inline)]
 pub use crate::aead::AeadCtx;
 #[doc(inline)]
-pub use dh::{DiffieHellman, Marshallable};
+pub use dh::{DiffieHellman, Marshallable, MarshalledPrivateKey, MarshalledPublicKey};
 #[doc(inline)]
 pub use kdf::Kdf;
 #[doc(inline)]
-pub use kem::EncappedKey;
+pub use kem::{EncappedKey, MarshalledEncappedKey};
 #[doc(inline)]
 pub use op_mode::{OpModeR, OpModeS, Psk, PskBundle};
 #[doc(inline)]

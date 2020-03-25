@@ -1,7 +1,7 @@
 use crate::prelude::*;
 use crate::{
     aead::{Aead, AeadTag, AesGcm128, AesGcm256, AssociatedData, ChaCha20Poly1305},
-    dh::{x25519::X25519, DiffieHellman, Marshallable, MarshalledPrivkey, MarshalledPubkey},
+    dh::{x25519::X25519, DiffieHellman, Marshallable, MarshalledPrivateKey, MarshalledPublicKey},
     kdf::{HkdfSha256, Kdf},
     kem::encap_with_eph,
     op_mode::{OpModeR, Psk, PskBundle},
@@ -119,13 +119,13 @@ fn get_and_assert_keypair<Dh: DiffieHellman>(
 ) -> (Dh::PrivateKey, Dh::PublicKey) {
     // Unmarshall the secret key
     let sk = {
-        let mut buf = <MarshalledPrivkey<Dh> as Default>::default();
+        let mut buf = <MarshalledPrivateKey<Dh> as Default>::default();
         buf.copy_from_slice(sk_bytes);
         <Dh as DiffieHellman>::PrivateKey::unmarshal(buf)
     };
     // Unmarshall the pubkey
     let pk = {
-        let mut buf = <MarshalledPubkey<Dh> as Default>::default();
+        let mut buf = <MarshalledPublicKey<Dh> as Default>::default();
         buf.copy_from_slice(pk_bytes);
         <Dh as DiffieHellman>::PublicKey::unmarshal(buf)
     };
@@ -147,7 +147,7 @@ fn make_op_mode_r<Dh: DiffieHellman, K: Kdf>(
 ) -> OpModeR<Dh, K> {
     // Unmarshal the optional pubkey
     let pk = pk_sender_bytes.map(|bytes| {
-        let mut buf = <MarshalledPubkey<Dh> as Default>::default();
+        let mut buf = <MarshalledPublicKey<Dh> as Default>::default();
         buf.copy_from_slice(&bytes);
         <Dh as DiffieHellman>::PublicKey::unmarshal(buf)
     });
@@ -166,7 +166,7 @@ fn make_op_mode_r<Dh: DiffieHellman, K: Kdf>(
         0 => OpModeR::Base,
         1 => OpModeR::Psk(bundle.unwrap()),
         2 => OpModeR::Auth(pk.unwrap()),
-        3 => OpModeR::PskAuth(bundle.unwrap(), pk.unwrap()),
+        3 => OpModeR::AuthPsk(pk.unwrap(), bundle.unwrap()),
         _ => panic!("Invalid mode ID: {}", mode_id),
     }
 }
@@ -182,7 +182,7 @@ macro_rules! test_case {
         let (sk_recip, pk_recip) = get_and_assert_keypair::<Dh>(&$tv.sk_recip, &$tv.pk_recip);
         let (sk_eph, pk_eph) = get_and_assert_keypair::<Dh>(&$tv.sk_eph, &$tv.pk_eph);
         let sk_sender = $tv.sk_sender.map(|bytes| {
-            let mut buf = <MarshalledPubkey<Dh> as Default>::default();
+            let mut buf = <MarshalledPublicKey<Dh> as Default>::default();
             buf.copy_from_slice(&bytes);
             <Dh as DiffieHellman>::PrivateKey::unmarshal(buf)
         });

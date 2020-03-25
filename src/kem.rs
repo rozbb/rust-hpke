@@ -24,6 +24,11 @@ impl<Dh: DiffieHellman> Marshallable for EncappedKey<Dh> {
     }
 }
 
+/// A convenience type representing the fixed-size byte array that an encapped key gets serialized
+/// to/from.
+pub type MarshalledEncappedKey<Dh> =
+    GenericArray<u8, <EncappedKey<Dh> as Marshallable>::OutputSize>;
+
 /// Derives a shared secret that the owner of the reciepint's pubkey can use to derive the same
 /// shared secret. If `sk_sender_id` is given, the sender's identity will be tied to the shared
 /// secret.
@@ -103,7 +108,7 @@ pub(crate) fn decap<Dh: DiffieHellman>(
 #[cfg(test)]
 mod tests {
     use super::{decap, encap, Marshallable};
-    use crate::dh::{x25519::X25519, DiffieHellman, MarshalledPubkey};
+    use crate::dh::{x25519::X25519, DiffieHellman, MarshalledPublicKey};
 
     use rand::RngCore;
 
@@ -147,7 +152,7 @@ mod tests {
         let mut csprng = rand::thread_rng();
         // Fill a buffer with randomness
         let orig_bytes = {
-            let mut buf = <MarshalledPubkey<X25519> as Default>::default();
+            let mut buf = <MarshalledPublicKey<X25519> as Default>::default();
             csprng.fill_bytes(buf.as_mut_slice());
             buf
         };

@@ -35,6 +35,13 @@ To run tests, execute `cargo test`. This includes known-answer tests, which test
 
 Currently, file `test-vector-modified.json` is derived from a modified version of the reference implementation. Once the necessary changes are made upstream, the file will be updated.
 
+Agility
+-------
+
+A definition: *crypto agility* refers to the ability of a cryptosystem or protocol to vary its underlying primitives. For example, TLS has "crypto agility" in that you can run the protocol with many different ciphersuites.
+
+This crate does not support crypto agility out of the box. This is because the cryptographic primitives are encoded as types satisfying certain constraints, and types need to be determined at compile time (broadly speaking). That said, there is nothing preventing you from implementing agility yourself. There is a [sample implementation](examples/agility.rs) in the examples folder. The sample implementation is messy because agility is messy.
+
 What's next
 -----------
 

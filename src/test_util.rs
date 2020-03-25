@@ -66,11 +66,11 @@ pub(crate) fn gen_ctx_kem_pair<A: Aead, Dh: DiffieHellman, K: Kdf>(
     let (sk_recip, pk_recip) = Dh::gen_keypair(&mut csprng);
 
     // Construct the sender's encryption context, and get an encapped key
-    let sender_mode = OpModeS::<Dh, _>::PskAuth(psk_bundle.clone(), sk_sender_id);
+    let sender_mode = OpModeS::<Dh, _>::AuthPsk(sk_sender_id, psk_bundle.clone());
     let (encapped_key, aead_ctx1) = setup_sender(&sender_mode, &pk_recip, &info[..], &mut csprng);
 
     // Use the encapped key to derive the reciever's encryption context
-    let receiver_mode = OpModeR::<Dh, _>::PskAuth(psk_bundle, pk_sender_id);
+    let receiver_mode = OpModeR::<Dh, _>::AuthPsk(pk_sender_id, psk_bundle);
     let aead_ctx2 = setup_receiver(&receiver_mode, &sk_recip, &encapped_key, &info[..]);
 
     (aead_ctx1, aead_ctx2)
@@ -105,7 +105,7 @@ pub(crate) fn assert_aead_ctx_eq<A: Aead, K: Kdf>(
         let mut plaintext = msg.clone();
         // Encrypt the plaintext
         let tag = ctx1
-            .seal(&mut plaintext[..], &aad)
+            .seal(&mut plaintext[..], aad)
             .expect(&format!("seal() #{} failed", i));
         // Rename for clarity
         let mut ciphertext = plaintext;
