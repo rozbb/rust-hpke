@@ -1,5 +1,7 @@
 rust-hpke
 =========
+[![Build Status](https://travis-ci.com/rozbb/rust-hpke.svg?branch=master)](https://travis-ci.com/rozbb/rust-hpke)
+[![Coverage](https://codecov.io/gh/rozbb/rust-hpke/branch/master/graph/badge.svg)](https://codecov.io/gh/rozbb/rust-hpke)
 
 This is an work-in-progress implementation of the [HPKE](https://datatracker.ietf.org/doc/draft-irtf-cfrg-hpke/) hybrid encryption standard. Once this is passing official known-answer tests, I'll publish it as a crate.
 
@@ -24,7 +26,7 @@ Not many algorithms are currently supported. Here's what we have:
 Crate Features
 --------------
 
-* This crate does support `no_std`. However, the `std` feature is enabled by default.
+This crate supports `no_std`. However, the `std` feature is enabled by default.
 
 For info on how to omit or include feature flags, see the [cargo docs on features](https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html#choosing-features).
 
@@ -47,6 +49,7 @@ What's next
 
 - [ ] Implement one-shot API
 - [ ] Add support for more KEMs and KDFs
+- [ ] Make feature flags for primitives, so you don't have bloat from algorithms you don't need
 
 License
 -------
