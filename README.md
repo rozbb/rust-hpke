@@ -1,6 +1,6 @@
 rust-hpke
 =========
-[![Build Status](https://travis-ci.com/rozbb/rust-hpke.svg?branch=master)](https://travis-ci.com/rozbb/rust-hpke)
+![CI](https://github.com/rozbb/rust-hpke/workflows/CI/badge.svg)
 [![Coverage](https://codecov.io/gh/rozbb/rust-hpke/branch/master/graph/badge.svg)](https://codecov.io/gh/rozbb/rust-hpke)
 
 This is an work-in-progress implementation of the [HPKE](https://datatracker.ietf.org/doc/draft-irtf-cfrg-hpke/) hybrid encryption standard. Once this is passing official known-answer tests, I'll publish it as a crate.
