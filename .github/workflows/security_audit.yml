@@ -1,10 +1,11 @@
 name: Security Audit
 on:
   pull_request:
-    paths: Cargo.toml
+    paths:
+      - '**/Cargo.toml'
   push:
-    paths: Cargo.toml
-
+    paths:
+      - '**/Cargo.toml'
 jobs:
   security_audit:
     runs-on: ubuntu-latest
