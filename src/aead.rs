@@ -134,8 +134,8 @@ impl<A: Aead, K: Kdf> AeadCtx<A, K> {
         AeadCtx {
             overflowed: false,
             encryptor: <A::AeadImpl as aead::NewAead>::new(key),
-            nonce: nonce,
-            exporter_secret: exporter_secret,
+            nonce,
+            exporter_secret,
             seq: <Seq<A> as Default>::default(),
         }
     }

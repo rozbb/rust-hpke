@@ -91,7 +91,7 @@ pub(crate) fn decap<Dh: DiffieHellman>(
 
     // The shared secret is either gonna be dh_res_eph, or that along with another shared secret
     // that's tied to the sender's identity.
-    let shared_secret = if let Some(pk_sender_id) = pk_sender_id {
+    if let Some(pk_sender_id) = pk_sender_id {
         // We want to do an authed decap. Do DH between the sender identity pubkey and the
         // recipient's secret key
         let dh_res_identity = Dh::dh(sk_recip, pk_sender_id);
@@ -100,9 +100,7 @@ pub(crate) fn decap<Dh: DiffieHellman>(
     } else {
         // The "unauthed shared secret" is just the DH of the ephemeral inputs
         SharedSecret::Unauthed(dh_res_eph)
-    };
-
-    shared_secret
+    }
 }
 
 #[cfg(test)]
