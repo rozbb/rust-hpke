@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 //! Here's the gist of this file: Instead of doing things at the type level, you can use zero-sized
 //! types and runtime validity checks to do all of HPKE. This file is a rough idea of how one would
 //! go about implementing that. There isn't too much repetition. The main part where you have to
