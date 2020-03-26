@@ -13,7 +13,7 @@ use digest::{
 
 /// For use with `static_zeros`. This only needs to be as long as the longest hash function digest.
 /// 128 bytes should be enough for anybody.
-const ZEROS: &'static [u8] = &[0u8; 128];
+const ZEROS: &[u8] = &[0u8; 128];
 
 /// Returns an immutable slice into a static array of zeros. This is so we don't have to keep
 /// allocated for the default value of a `Psk` (which is [0u8; HashImpl::OutputSize])
@@ -38,7 +38,7 @@ impl<K: Kdf> Psk<K> {
     }
 
     /// Deconstructs this preshared key to bytes
-    pub fn to_bytes(self) -> Vec<u8> {
+    pub fn into_bytes(self) -> Vec<u8> {
         self.bytes
     }
 }
