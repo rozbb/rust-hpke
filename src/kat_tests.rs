@@ -2,7 +2,7 @@ use crate::prelude::*;
 use crate::{
     aead::{Aead, AeadTag, AesGcm128, AesGcm256, AssociatedData, ChaCha20Poly1305},
     dh::{x25519::X25519, DiffieHellman, Marshallable, MarshalledPrivateKey, MarshalledPublicKey},
-    kdf::{HkdfSha256, Kdf},
+    kdf::{HkdfSha256, HkdfSha384, HkdfSha512, Kdf},
     kem::encap_with_eph,
     op_mode::{OpModeR, Psk, PskBundle},
     setup::setup_receiver,
@@ -169,10 +169,10 @@ fn make_op_mode_r<Dh: DiffieHellman, K: Kdf>(
 
 // Implements a test case for a given AEAD implementation
 macro_rules! test_case {
-    ($tv:ident, $aead_ty:ty) => {{
+    ($tv:ident, $aead_ty:ty, $kdf_ty:ty) => {{
         type A = $aead_ty;
         type Dh = X25519;
-        type K = HkdfSha256;
+        type K = $kdf_ty;
 
         // First, unmarshall all the relevant keys so we can reconstruct the encapped key
         let (sk_recip, pk_recip) = get_and_assert_keypair::<Dh>(&$tv.sk_recip, &$tv.pk_recip);
@@ -248,16 +248,31 @@ fn kat_test() {
     let tvs: Vec<MainTestVector> = serde_json::from_reader(file).unwrap();
 
     for tv in tvs.into_iter() {
-        // Ignore pretty much all but one test vector for now
-        if tv.kdf_id != HkdfSha256::KDF_ID || tv.kem_id != X25519::KEM_ID {
+        // Ignore everything that doesn't use X25519
+        if tv.kem_id != X25519::KEM_ID {
             continue;
         }
 
-        match tv.aead_id {
-            AesGcm128::AEAD_ID => test_case!(tv, AesGcm128),
-            AesGcm256::AEAD_ID => test_case!(tv, AesGcm256),
-            ChaCha20Poly1305::AEAD_ID => test_case!(tv, ChaCha20Poly1305),
-            _ => panic!("Invalid AEAD ID: {}", tv.aead_id),
+        match (tv.aead_id, tv.kdf_id) {
+            (AesGcm128::AEAD_ID, HkdfSha256::KDF_ID) => test_case!(tv, AesGcm128, HkdfSha256),
+            (AesGcm128::AEAD_ID, HkdfSha384::KDF_ID) => test_case!(tv, AesGcm128, HkdfSha384),
+            (AesGcm128::AEAD_ID, HkdfSha512::KDF_ID) => test_case!(tv, AesGcm128, HkdfSha512),
+            (AesGcm256::AEAD_ID, HkdfSha256::KDF_ID) => test_case!(tv, AesGcm256, HkdfSha256),
+            (AesGcm256::AEAD_ID, HkdfSha384::KDF_ID) => test_case!(tv, AesGcm256, HkdfSha384),
+            (AesGcm256::AEAD_ID, HkdfSha512::KDF_ID) => test_case!(tv, AesGcm256, HkdfSha512),
+            (ChaCha20Poly1305::AEAD_ID, HkdfSha256::KDF_ID) => {
+                test_case!(tv, ChaCha20Poly1305, HkdfSha256)
+            }
+            (ChaCha20Poly1305::AEAD_ID, HkdfSha384::KDF_ID) => {
+                test_case!(tv, ChaCha20Poly1305, HkdfSha384)
+            }
+            (ChaCha20Poly1305::AEAD_ID, HkdfSha512::KDF_ID) => {
+                test_case!(tv, ChaCha20Poly1305, HkdfSha512)
+            }
+            _ => panic!(
+                "Invalid (AEAD ID, KDF ID) combo: ({}, {})",
+                tv.aead_id, tv.kdf_id
+            ),
         };
     }
 }
