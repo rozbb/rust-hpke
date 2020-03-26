@@ -16,6 +16,8 @@ Not many algorithms are currently supported. Here's what we have:
     * DHKEM(Curve25519)
 * KDFs
     * HKDF-SHA256
+    * HKDF-SHA384
+    * HKDF-SHA512
 * AEADs
     * AES-GCM-128
     * AES-GCM-256
@@ -47,8 +49,8 @@ This crate does not support crypto agility out of the box. This is because the c
 What's next
 -----------
 
-- [ ] Implement one-shot API
-- [ ] Add support for more KEMs and KDFs
+- [ ] Implement the single-shot API
+- [ ] Add support for more KEMs
 - [ ] Make feature flags for primitives, so you don't have bloat from algorithms you don't need
 
 License
