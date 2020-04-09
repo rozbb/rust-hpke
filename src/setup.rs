@@ -157,7 +157,7 @@ where
 //       pkIm = Marshal(pkI)
 //       return KeySchedule(mode_psk_auth, pk(skR), zz, enc, info,
 //                          psk, pskID, pkIm)
-/// Initiates an encryption context given a private key sk and a encapsulated key which was
+/// Initiates an encryption context given a private key `sk` and an encapsulated key which was
 /// encapsulated to `sk`'s corresponding public key
 ///
 /// Return Value
@@ -187,30 +187,157 @@ where
 
 #[cfg(test)]
 mod test {
-    use crate::test_util::{assert_aead_ctx_eq, gen_ctx_kem_pair};
-    use crate::{aead::ChaCha20Poly1305, dh::x25519::X25519, kdf::HkdfSha256};
+    use super::{setup_receiver, setup_sender};
+    use crate::test_util::{aead_ctx_eq, gen_op_mode_pair, OpModeKind};
+    use crate::{
+        aead::{AesGcm128, AesGcm256, ChaCha20Poly1305},
+        dh::{x25519::X25519, DiffieHellman},
+        kdf::{HkdfSha256, HkdfSha384, HkdfSha512},
+    };
 
     /// This tests that `setup_sender` and `setup_receiver` derive the same context. We do this by
     /// testing that `gen_ctx_kem_pair` returns identical encryption contexts
-    #[test]
-    fn test_psk_auth_correctness() {
-        // Make two random identical contexts
-        let (mut aead_ctx1, mut aead_ctx2) =
-            gen_ctx_kem_pair::<ChaCha20Poly1305, X25519, HkdfSha256>();
-        assert_aead_ctx_eq(&mut aead_ctx1, &mut aead_ctx2);
+    macro_rules! test_setup_correctness {
+        ($test_name:ident, $aead_ty:ty, $dh_ty:ty, $kdf_ty:ty) => {
+            #[test]
+            fn $test_name() {
+                type A = $aead_ty;
+                type Dh = $dh_ty;
+                type K = $kdf_ty;
+
+                let mut csprng = rand::thread_rng();
+
+                let info = b"why would you think in a million years that that would actually work";
+
+                // Generate the receiver's long-term keypair
+                let (sk_recip, pk_recip) = <Dh as DiffieHellman>::gen_keypair(&mut csprng);
+
+                // Try a full setup for all the op modes
+                for op_mode_kind in &[
+                    OpModeKind::Base,
+                    OpModeKind::Auth,
+                    OpModeKind::Psk,
+                    OpModeKind::AuthPsk,
+                ] {
+                    // Generate a mutually agreeing op mode pair
+                    let (sender_mode, receiver_mode) = gen_op_mode_pair::<Dh, K>(*op_mode_kind);
+
+                    // Construct the sender's encryption context, and get an encapped key
+                    let (encapped_key, mut aead_ctx1) = setup_sender::<A, Dh, _, _>(
+                        &sender_mode,
+                        &pk_recip,
+                        &info[..],
+                        &mut csprng,
+                    );
+
+                    // Use the encapped key to derive the reciever's encryption context
+                    let mut aead_ctx2 =
+                        setup_receiver(&receiver_mode, &sk_recip, &encapped_key, &info[..]);
+
+                    // Ensure that the two derived contexts are equivalent
+                    assert!(aead_ctx_eq(&mut aead_ctx1, &mut aead_ctx2));
+                }
+            }
+        };
     }
 
-    /// Makes sure that using different data gives you different encryption contexts
+    test_setup_correctness!(
+        test_setup_correctness_chacha_sha256,
+        ChaCha20Poly1305,
+        X25519,
+        HkdfSha256
+    );
+    test_setup_correctness!(
+        test_setup_correctness_aes128_sha256,
+        AesGcm128,
+        X25519,
+        HkdfSha256
+    );
+    test_setup_correctness!(
+        test_setup_correctness_aes256_sha256,
+        AesGcm256,
+        X25519,
+        HkdfSha256
+    );
+    test_setup_correctness!(
+        test_setup_correctness_chacha_sha384,
+        ChaCha20Poly1305,
+        X25519,
+        HkdfSha384
+    );
+    test_setup_correctness!(
+        test_setup_correctness_aes128_sha384,
+        AesGcm128,
+        X25519,
+        HkdfSha384
+    );
+    test_setup_correctness!(
+        test_setup_correctness_aes256_sha384,
+        AesGcm256,
+        X25519,
+        HkdfSha384
+    );
+    test_setup_correctness!(
+        test_setup_correctness_chacha_sha512,
+        ChaCha20Poly1305,
+        X25519,
+        HkdfSha512
+    );
+    test_setup_correctness!(
+        test_setup_correctness_aes128_sha512,
+        AesGcm128,
+        X25519,
+        HkdfSha512
+    );
+    test_setup_correctness!(
+        test_setup_correctness_aes256_sha512,
+        AesGcm256,
+        X25519,
+        HkdfSha512
+    );
+
+    /// Tests that using different input data gives you different encryption contexts
     #[test]
-    #[should_panic]
-    fn test_bad_setup() {
-        // Make two random contexts which are not identical
-        let (mut aead_ctx1, _) = gen_ctx_kem_pair::<ChaCha20Poly1305, X25519, HkdfSha256>();
-        let (mut aead_ctx2, _) = gen_ctx_kem_pair::<ChaCha20Poly1305, X25519, HkdfSha256>();
+    fn test_setup_soundness() {
+        type A = ChaCha20Poly1305;
+        type Dh = X25519;
+        type K = HkdfSha256;
 
-        // Make sure the contexts don't line up
-        assert_aead_ctx_eq(&mut aead_ctx1, &mut aead_ctx2);
+        let mut csprng = rand::thread_rng();
+
+        let info = b"why would you think in a million years that that would actually work";
+
+        // Generate the receiver's long-term keypair
+        let (sk_recip, pk_recip) = <Dh as DiffieHellman>::gen_keypair(&mut csprng);
+
+        // Generate a mutually agreeing op mode pair
+        let (sender_mode, receiver_mode) = gen_op_mode_pair::<Dh, K>(OpModeKind::Base);
+
+        // Construct the sender's encryption context normally
+        let (encapped_key, aead_ctx1) =
+            setup_sender::<A, Dh, _, _>(&sender_mode, &pk_recip, &info[..], &mut csprng);
+
+        // Now make a receiver with the wrong info string and ensure it doesn't match the sender
+        let bad_info = b"something else";
+        let mut aead_ctx2 = setup_receiver(&receiver_mode, &sk_recip, &encapped_key, &bad_info[..]);
+        assert!(!aead_ctx_eq(&mut aead_ctx1.clone(), &mut aead_ctx2));
+
+        // Now make a receiver with the wrong secret key and ensure it doesn't match the sender
+        let (bad_sk, _) = <Dh as DiffieHellman>::gen_keypair(&mut csprng);
+        let mut aead_ctx2 = setup_receiver(&receiver_mode, &bad_sk, &encapped_key, &info[..]);
+        assert!(!aead_ctx_eq(&mut aead_ctx1.clone(), &mut aead_ctx2));
+
+        // Now make a receiver with the wrong encapped key and ensure it doesn't match the sender.
+        // The reason `bad_encapped_key` is bad is because its underlying key is uniformly random,
+        // and therefore different from the key that the sender sent.
+        let (bad_encapped_key, _) =
+            setup_sender::<A, Dh, _, _>(&sender_mode, &pk_recip, &info[..], &mut csprng);
+        let mut aead_ctx2 = setup_receiver(&receiver_mode, &sk_recip, &bad_encapped_key, &info[..]);
+        assert!(!aead_ctx_eq(&mut aead_ctx1.clone(), &mut aead_ctx2));
+
+        // Now make sure that this test was a valid test by ensuring that doing everything the
+        // right way makes it pass
+        let mut aead_ctx2 = setup_receiver(&receiver_mode, &sk_recip, &encapped_key, &info[..]);
+        assert!(aead_ctx_eq(&mut aead_ctx1.clone(), &mut aead_ctx2));
     }
-
-    // Test overflow by setting seq to something very high
 }

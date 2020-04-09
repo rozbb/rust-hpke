@@ -113,14 +113,16 @@ mod tests {
     /// Tests that encap and decap produce the same shared secret when composed
     #[test]
     fn encap_correctness() {
+        type Dh = X25519;
+
         let mut csprng = rand::thread_rng();
-        let (sk_recip, pk_recip) = X25519::gen_keypair(&mut csprng);
+        let (sk_recip, pk_recip) = Dh::gen_keypair(&mut csprng);
 
         // Encapsulate a random shared secret
-        let (auth_shared_secret, encapped_key) = encap::<X25519, _>(&pk_recip, None, &mut csprng);
+        let (auth_shared_secret, encapped_key) = encap::<Dh, _>(&pk_recip, None, &mut csprng);
 
         // Decap it
-        let decapped_auth_shared_secret = decap::<X25519>(&sk_recip, None, &encapped_key);
+        let decapped_auth_shared_secret = decap::<Dh>(&sk_recip, None, &encapped_key);
 
         // Ensure that the encapsulated secret is what decap() derives
         assert_eq!(auth_shared_secret, decapped_auth_shared_secret);
@@ -130,15 +132,15 @@ mod tests {
         //
 
         // Make a sender identity keypair
-        let (sk_sender_id, pk_sender_id) = X25519::gen_keypair(&mut csprng);
+        let (sk_sender_id, pk_sender_id) = Dh::gen_keypair(&mut csprng);
 
         // Encapsulate a random shared secret
         let (auth_shared_secret, encapped_key) =
-            encap::<X25519, _>(&pk_recip, Some(&sk_sender_id), &mut csprng);
+            encap::<Dh, _>(&pk_recip, Some(&sk_sender_id), &mut csprng);
 
         // Decap it
         let decapped_auth_shared_secret =
-            decap::<X25519>(&sk_recip, Some(&pk_sender_id), &encapped_key);
+            decap::<Dh>(&sk_recip, Some(&pk_sender_id), &encapped_key);
 
         // Ensure that the encapsulated secret is what decap() derives
         assert_eq!(auth_shared_secret, decapped_auth_shared_secret);
@@ -147,17 +149,19 @@ mod tests {
     /// Tests that a marshal-unmarshal round-trip ends up at the same value
     #[test]
     fn marshal_correctness() {
+        type Dh = X25519;
+
         let mut csprng = rand::thread_rng();
         // Fill a buffer with randomness
         let orig_bytes = {
-            let mut buf = <MarshalledPublicKey<X25519> as Default>::default();
+            let mut buf = <MarshalledPublicKey<Dh> as Default>::default();
             csprng.fill_bytes(buf.as_mut_slice());
             buf
         };
 
         // Make a pubkey with those random points. Note, that unmarshal does not clamp the input
         // bytes. This is why this test passes.
-        let pk = <<X25519 as DiffieHellman>::PublicKey as Marshallable>::unmarshal(orig_bytes);
+        let pk = <<Dh as DiffieHellman>::PublicKey as Marshallable>::unmarshal(orig_bytes);
         let pk_bytes = pk.marshal();
 
         // See if the re-marshalled bytes are the same as the input

@@ -37,6 +37,7 @@ pub mod kem;
 pub mod op_mode;
 mod prelude;
 pub mod setup;
+pub mod single_shot;
 
 #[doc(inline)]
 pub use crate::aead::AeadCtx;
@@ -50,6 +51,8 @@ pub use kem::{EncappedKey, MarshalledEncappedKey};
 pub use op_mode::{OpModeR, OpModeS, Psk, PskBundle};
 #[doc(inline)]
 pub use setup::{setup_receiver, setup_sender};
+#[doc(inline)]
+pub use single_shot::{single_shot_open, single_shot_seal};
 
 //-------- Top-level types --------//
 

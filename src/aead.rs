@@ -9,7 +9,7 @@ use hkdf::Hkdf;
 /// Represents authenticated encryption functionality
 pub trait Aead {
     /// The underlying AEAD implementation
-    type AeadImpl: BaseAead + BaseNewAead;
+    type AeadImpl: BaseAead + BaseNewAead + Clone;
 
     /// The algorithm identifier for an AEAD implementation
     const AEAD_ID: u16;
@@ -100,6 +100,14 @@ impl<A: Aead> Default for Seq<A> {
     }
 }
 
+// Necessary for test_overflow
+#[cfg(test)]
+impl<A: Aead> Clone for Seq<A> {
+    fn clone(&self) -> Seq<A> {
+        Seq(self.0.clone())
+    }
+}
+
 /// A convenience type for authenticated encryption tags
 pub type AeadTag<A> = GenericArray<u8, <<A as Aead>::AeadImpl as BaseAead>::TagSize>;
 
@@ -115,6 +123,20 @@ pub struct AeadCtx<A: Aead, K: Kdf> {
     exporter_secret: ExporterSecret<K>,
     /// The running sequence number
     seq: Seq<A>,
+}
+
+// Necessary for test_setup_soundness
+#[cfg(test)]
+impl<A: Aead, K: Kdf> Clone for AeadCtx<A, K> {
+    fn clone(&self) -> AeadCtx<A, K> {
+        AeadCtx {
+            overflowed: self.overflowed,
+            encryptor: self.encryptor.clone(),
+            nonce: self.nonce.clone(),
+            exporter_secret: self.exporter_secret.clone(),
+            seq: self.seq.clone(),
+        }
+    }
 }
 
 /// Associated data for encryption. This is wrapped in order to distinguish it from the `plaintext`
@@ -251,18 +273,11 @@ impl<A: Aead, K: Kdf> AeadCtx<A, K> {
 
 #[cfg(test)]
 mod test {
-    use super::{Aead, AeadTag, AesGcm128, AesGcm256, AssociatedData, ChaCha20Poly1305, Seq};
+    use super::{AeadTag, AesGcm128, AesGcm256, AssociatedData, ChaCha20Poly1305, Seq};
     use crate::kdf::HkdfSha256;
     use crate::test_util::gen_ctx_simple_pair;
 
     use core::u8;
-
-    // Necessary for test_overflow
-    impl<A: Aead> Clone for Seq<A> {
-        fn clone(&self) -> Seq<A> {
-            Seq(self.0.clone())
-        }
-    }
 
     /// Tests that encryption context secret export does not change behavior based on the
     /// underlying sequence number
@@ -356,11 +371,14 @@ mod test {
     }
 
     /// Tests that `open()` can decrypt things properly encrypted with `seal()`
-    macro_rules! test_correctness {
-        ($test_name:ident, $aead_ty:ty, $kdf_ty:ty) => {
+    macro_rules! test_ctx_correctness {
+        ($test_name:ident, $aead_ty:ty) => {
             #[test]
             fn $test_name() {
-                let (mut ctx1, mut ctx2) = gen_ctx_simple_pair::<$aead_ty, $kdf_ty>();
+                type A = $aead_ty;
+                type K = HkdfSha256;
+
+                let (mut ctx1, mut ctx2) = gen_ctx_simple_pair::<A, K>();
 
                 let msg = b"Love it or leave it, you better gain way";
                 let aad = AssociatedData(b"You better hit bull's eye, the kid don't play");
@@ -382,7 +400,8 @@ mod test {
         };
     }
 
-    test_correctness!(test_aes128_correctness, AesGcm128, HkdfSha256);
-    test_correctness!(test_aes256_correctness, AesGcm256, HkdfSha256);
-    test_correctness!(test_chacha_correctness, ChaCha20Poly1305, HkdfSha256);
+    // The hash function and DH impl shouldn't really matter
+    test_ctx_correctness!(test_ctx_correctness_aes128, AesGcm128);
+    test_ctx_correctness!(test_ctx_correctness_aes256, AesGcm256);
+    test_ctx_correctness!(test_ctx_correctness_chacha, ChaCha20Poly1305);
 }
