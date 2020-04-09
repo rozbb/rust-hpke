@@ -3,7 +3,7 @@ rust-hpke
 ![CI](https://github.com/rozbb/rust-hpke/workflows/CI/badge.svg)
 [![Coverage](https://codecov.io/gh/rozbb/rust-hpke/branch/master/graph/badge.svg)](https://codecov.io/gh/rozbb/rust-hpke)
 
-This is an work-in-progress implementation of the [HPKE](https://datatracker.ietf.org/doc/draft-irtf-cfrg-hpke/) hybrid encryption standard. Once this is passing official known-answer tests, I'll publish it as a crate.
+This is an **work-in-progress** implementation of the [HPKE](https://datatracker.ietf.org/doc/draft-irtf-cfrg-hpke/) hybrid encryption standard. Once this is passing official known-answer tests, I'll publish it as a crate.
 
 What it implements
 ------------------
@@ -49,9 +49,8 @@ This crate does not support crypto agility out of the box. This is because the c
 What's next
 -----------
 
-- [ ] Implement the single-shot API
-- [ ] Add support for more KEMs
-- [ ] Make feature flags for primitives, so you don't have bloat from algorithms you don't need
+* Add support for more KEMs
+* Make feature flags for primitives, so you don't have bloat from algorithms you don't need
 
 License
 -------
