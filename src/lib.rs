@@ -66,3 +66,18 @@ pub enum HpkeError {
     /// An error occured during encryption
     Encryption,
 }
+
+impl core::fmt::Display for HpkeError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let kind = match self {
+            HpkeError::SeqOverflow => "Sequence overflow",
+            HpkeError::InvalidTag => "Invalid tag",
+            HpkeError::Encryption => "Encryption error",
+        };
+        f.write_str(kind)
+    }
+}
+
+// And Error type is just something that's Debug and Display
+#[cfg(feature = "std")]
+impl std::error::Error for HpkeError {}
