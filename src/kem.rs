@@ -105,14 +105,12 @@ pub(crate) fn decap<Dh: DiffieHellman>(
 
 #[cfg(test)]
 mod tests {
-    use super::{decap, encap, Marshallable};
-    use crate::dh::{x25519::X25519, DiffieHellman, MarshalledPublicKey};
-
-    use rand::RngCore;
+    use super::{decap, encap, EncappedKey, Marshallable};
+    use crate::dh::{x25519::X25519, DiffieHellman};
 
     /// Tests that encap and decap produce the same shared secret when composed
     #[test]
-    fn encap_correctness() {
+    fn test_encap_correctness() {
         type Dh = X25519;
 
         let mut csprng = rand::thread_rng();
@@ -146,25 +144,25 @@ mod tests {
         assert_eq!(auth_shared_secret, decapped_auth_shared_secret);
     }
 
-    /// Tests that a marshal-unmarshal round-trip ends up at the same value
+    /// Tests that an unmarshal-marshal round-trip on an encapped key ends up at the same value
     #[test]
-    fn marshal_correctness() {
+    fn test_encapped_marshal() {
         type Dh = X25519;
 
-        let mut csprng = rand::thread_rng();
-        // Fill a buffer with randomness
-        let orig_bytes = {
-            let mut buf = <MarshalledPublicKey<Dh> as Default>::default();
-            csprng.fill_bytes(buf.as_mut_slice());
-            buf
+        // Encapsulate a random shared secret
+        let encapped_key = {
+            let mut csprng = rand::thread_rng();
+            let (_, pk_recip) = Dh::gen_keypair(&mut csprng);
+            encap::<Dh, _>(&pk_recip, None, &mut csprng).1
         };
+        // Marshal it
+        let encapped_key_bytes = encapped_key.marshal();
+        // Unmarshal it
+        let new_encapped_key = EncappedKey::<Dh>::unmarshal(encapped_key_bytes);
 
-        // Make a pubkey with those random points. Note, that unmarshal does not clamp the input
-        // bytes. This is why this test passes.
-        let pk = <<Dh as DiffieHellman>::PublicKey as Marshallable>::unmarshal(orig_bytes);
-        let pk_bytes = pk.marshal();
-
-        // See if the re-marshalled bytes are the same as the input
-        assert_eq!(orig_bytes, pk_bytes);
+        assert!(
+            new_encapped_key.0 == encapped_key.0,
+            "encapped key doesn't marshal correctly"
+        );
     }
 }

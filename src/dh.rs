@@ -145,41 +145,99 @@ pub mod x25519 {
         }
     }
 
-    // Some debugging stuff so we can test X25519 functionality
-
     #[cfg(test)]
-    use super::SharedSecret;
+    mod tests {
+        use crate::dh::{
+            x25519::{PrivateKey, PublicKey, X25519},
+            DiffieHellman, Marshallable, MarshalledPublicKey, SharedSecret,
+        };
+        use rand::RngCore;
 
-    // We need to be able to compare shared secrets in order to make sure that encap* and decap*
-    // produce the same output
-    #[cfg(test)]
-    impl PartialEq for SharedSecret<X25519> {
-        fn eq(&self, other: &SharedSecret<X25519>) -> bool {
-            match (self, other) {
-                (SharedSecret::Authed(x1, y1), SharedSecret::Authed(x2, y2)) => {
-                    x1.0.as_bytes() == x2.0.as_bytes() && y1.0.as_bytes() == y2.0.as_bytes()
-                }
-                (SharedSecret::Unauthed(x1), SharedSecret::Unauthed(x2)) => {
-                    x1.0.as_bytes() == x2.0.as_bytes()
-                }
-                _ => false,
+        // We need this in our marshal-unmarshal tests
+        impl PartialEq for PrivateKey {
+            fn eq(&self, other: &PrivateKey) -> bool {
+                self.0.to_bytes() == other.0.to_bytes()
             }
         }
-    }
 
-    #[cfg(test)]
-    impl Eq for SharedSecret<X25519> {}
-
-    // We need Debug in order to be able to assert_eq! shared secrets
-    #[cfg(test)]
-    impl core::fmt::Debug for SharedSecret<X25519> {
-        fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
-            match self {
-                SharedSecret::Authed(x1, x2) => {
-                    write!(f, "{:0x?}\n{:0x?}", x1.0.as_bytes(), x2.0.as_bytes())
-                }
-                SharedSecret::Unauthed(x) => write!(f, "{:0x?}", x.0.as_bytes()),
+        // We need this in our marshal-unmarshal tests
+        impl PartialEq for PublicKey {
+            fn eq(&self, other: &PublicKey) -> bool {
+                self.0.as_bytes() == other.0.as_bytes()
             }
+        }
+
+        // We need to be able to compare shared secrets in order to make sure that encap* and
+        // decap* produce the same output
+        impl PartialEq for SharedSecret<X25519> {
+            fn eq(&self, other: &SharedSecret<X25519>) -> bool {
+                match (self, other) {
+                    (SharedSecret::Authed(x1, y1), SharedSecret::Authed(x2, y2)) => {
+                        x1.0.as_bytes() == x2.0.as_bytes() && y1.0.as_bytes() == y2.0.as_bytes()
+                    }
+                    (SharedSecret::Unauthed(x1), SharedSecret::Unauthed(x2)) => {
+                        x1.0.as_bytes() == x2.0.as_bytes()
+                    }
+                    _ => false,
+                }
+            }
+        }
+
+        impl Eq for SharedSecret<X25519> {}
+
+        // We need Debug in order to be able to assert_eq! shared secrets
+        impl core::fmt::Debug for SharedSecret<X25519> {
+            fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+                match self {
+                    SharedSecret::Authed(x1, x2) => {
+                        write!(f, "{:0x?}\n{:0x?}", x1.0.as_bytes(), x2.0.as_bytes())
+                    }
+                    SharedSecret::Unauthed(x) => write!(f, "{:0x?}", x.0.as_bytes()),
+                }
+            }
+        }
+
+        /// Tests that an unmarshal-marshal round-trip ends up at the same pubkey
+        #[test]
+        fn test_pubkey_marshal_correctness() {
+            type Dh = X25519;
+
+            let mut csprng = rand::thread_rng();
+
+            // Fill a buffer with randomness
+            let orig_bytes = {
+                let mut buf = <MarshalledPublicKey<Dh> as Default>::default();
+                csprng.fill_bytes(buf.as_mut_slice());
+                buf
+            };
+
+            // Make a pubkey with those random bytes. Note, that unmarshal does not clamp the input
+            // bytes. This is why this test passes.
+            let pk = <<Dh as DiffieHellman>::PublicKey as Marshallable>::unmarshal(orig_bytes);
+            let pk_bytes = pk.marshal();
+
+            // See if the re-marshalled bytes are the same as the input
+            assert_eq!(orig_bytes, pk_bytes);
+        }
+
+        /// Tests that an unmarshal-marshal round-trip on a DH keypari ends up at the same values
+        #[test]
+        fn test_dh_marshal_correctness() {
+            type Dh = X25519;
+
+            let mut csprng = rand::thread_rng();
+
+            // Make a random keypair and marshal it
+            let (sk, pk) = Dh::gen_keypair(&mut csprng);
+            let (sk_bytes, pk_bytes) = (sk.marshal(), pk.marshal());
+
+            // Now unmarshal those bytes
+            let new_sk = <Dh as DiffieHellman>::PrivateKey::unmarshal(sk_bytes);
+            let new_pk = <Dh as DiffieHellman>::PublicKey::unmarshal(pk_bytes);
+
+            // See if the unmarshalled values are the same as the initial ones
+            assert!(new_sk == sk, "private key doesn't marshal correctly");
+            assert!(new_pk == pk, "public key doesn't marshal correctly");
         }
     }
 }
