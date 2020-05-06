@@ -81,12 +81,13 @@ pub(crate) fn gen_op_mode_pair<Dh: DiffieHellman, K: Kdf>(
             (sender_mode, receiver_mode)
         }
         OpModeKind::Auth => {
-            let sender_mode = OpModeS::Auth(sk_sender_id);
+            let sender_mode = OpModeS::Auth((sk_sender_id, pk_sender_id.clone()));
             let receiver_mode = OpModeR::Auth(pk_sender_id);
             (sender_mode, receiver_mode)
         }
         OpModeKind::AuthPsk => {
-            let sender_mode = OpModeS::AuthPsk(sk_sender_id, psk_bundle.clone());
+            let sender_mode =
+                OpModeS::AuthPsk((sk_sender_id, pk_sender_id.clone()), psk_bundle.clone());
             let receiver_mode = OpModeR::AuthPsk(pk_sender_id, psk_bundle);
             (sender_mode, receiver_mode)
         }

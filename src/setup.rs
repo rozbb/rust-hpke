@@ -1,28 +1,23 @@
 use crate::prelude::*;
 use crate::{
     aead::{Aead, AeadCtx},
-    dh::{DiffieHellman, Marshallable, SharedSecret},
-    kdf::Kdf,
-    kem::{self, EncappedKey},
+    dh::DiffieHellman,
+    kdf::{labeled_extract, Kdf, LabeledExpand},
+    kem::{self, EncappedKey, SharedSecret},
     op_mode::{OpMode, OpModeR, OpModeS},
+    util::static_zeros,
 };
 
 use byteorder::{BigEndian, WriteBytesExt};
 use digest::{generic_array::GenericArray, Digest};
 use rand::{CryptoRng, RngCore};
 
-/* From draft02 §6.1
-    struct {
+/* struct {
         // Mode and algorithms
         uint8 mode;
         uint16 kem_id;
         uint16 kdf_id;
         uint16 aead_id;
-
-        // Public inputs to this key exchange
-        opaque enc[Nenc];
-        opaque pkR[Npk];
-        opaque pkI[Npk];
 
         // Cryptographic hash of application-supplied pskID
         opaque pskID_hash[Nh];
@@ -39,37 +34,29 @@ pub(crate) type ExporterSecret<K> = GenericArray<u8, <<K as Kdf>::HashImpl as Di
 // inputs, and secrets, and spits out a key-nonce pair to be used for symmetric encryption
 fn derive_enc_ctx<A: Aead, Dh: DiffieHellman, K: Kdf, O: OpMode<Dh, K>>(
     mode: &O,
-    pk_recip: &Dh::PublicKey,
     shared_secret: SharedSecret<Dh>,
-    encapped_key: &EncappedKey<Dh>,
     info: &[u8],
 ) -> AeadCtx<A, K> {
     // In KeySchedule(),
-    //     pkRm = Marshal(pkR)
     //     ciphersuite = concat(encode_big_endian(kem_id, 2),
     //                          encode_big_endian(kdf_id, 2),
     //                          encode_big_endian(aead_id, 2))
-    //     pskID_hash = Hash(pskID)
-    //     info_hash = Hash(info)
-    //     context = concat(mode, ciphersuite, enc, pkRm, pkIm, pskID_hash, info_hash)
-    //
-    // `context` comes out to `7 + Nenc + 2*Npk + 2*Nh` bytes, where `Npk` is the size of a
-    // marshalled pubkey, and `Nh` is the digest size of the KDF
+    //     pskID_hash = LabeledExtract(zero(Nh), "pskID", pskID)
+    //     info_hash = LabeledExtract(zero(Nh), "info", info)
+    //     context = concat(ciphersuite, mode, pskID_hash, info_hash)
     let context_bytes: Vec<u8> = {
         let mut buf = Vec::new();
 
         // This relies on <Vec<u8> as Write>, which never errors, so unwrap() is justified
-        buf.write_u8(mode.mode_id()).unwrap();
         buf.write_u16::<BigEndian>(Dh::KEM_ID).unwrap();
         buf.write_u16::<BigEndian>(K::KDF_ID).unwrap();
         buf.write_u16::<BigEndian>(A::AEAD_ID).unwrap();
 
-        buf.extend(encapped_key.marshal());
-        buf.extend(pk_recip.marshal().as_ref());
-        buf.extend(mode.get_marshalled_sender_pk().as_ref());
+        buf.write_u8(mode.mode_id()).unwrap();
 
-        let psk_id_hash = K::HashImpl::digest(mode.get_psk_id());
-        let info_hash = K::HashImpl::digest(info);
+        let zeros = static_zeros::<K>();
+        let (psk_id_hash, _) = labeled_extract::<K>(zeros, b"pskID", mode.get_psk_id());
+        let (info_hash, _) = labeled_extract::<K>(zeros, b"info", info);
 
         buf.extend(psk_id_hash.as_slice());
         buf.extend(info_hash.as_slice());
@@ -78,39 +65,35 @@ fn derive_enc_ctx<A: Aead, Dh: DiffieHellman, K: Kdf, O: OpMode<Dh, K>>(
     };
 
     // In KeySchedule(),
-    //     secret = Extract(psk, zz)
-    //     key = Expand(secret, concat("hpke key", context), Nk)
-    //     nonce = Expand(secret, concat("hpke nonce", context), Nn)
-    //     exporter_secret = Expand(secret, concat("exp", context), Nh)
-    //     return Context(key, nonce, exporter_secret)
+    //   extracted_psk = LabeledExtract(zero(Nh), "psk", psk)
+    //   secret = LabeledExtract(extracted_psk, "zz", zz)
+    //   key = LabeledExpand(secret, "key", context, Nk)
+    //   nonce = LabeledExpand(secret, "nonce", context, Nn)
+    //   exporter_secret = LabeledExpand(secret, "exp", context, Nh)
+    //   return Context(key, nonce, exporter_secret)
     //
     // Instead of `secret` we derive an HKDF context which we run .expand() on to derive the
     // key-nonce pair.
-    let (_, hkdf_ctx) = {
-        let psk_bytes = mode.get_psk_bytes();
-        let shared_secret_bytes: Vec<u8> = shared_secret.into();
-        hkdf::Hkdf::<K::HashImpl>::extract(Some(&psk_bytes), &shared_secret_bytes)
-    };
-    // The info strings for HKDF::expand
-    let key_info = [&b"hpke key"[..], &context_bytes].concat();
-    let nonce_info = [&b"hpke nonce"[..], &context_bytes].concat();
-    let exporter_info = [&b"hpke exp"[..], &context_bytes].concat();
+    let (extracted_psk, _) =
+        labeled_extract::<K>(static_zeros::<K>(), b"psk", mode.get_psk_bytes());
+    let (_, secret_ctx) = labeled_extract::<K>(&extracted_psk, b"zz", &shared_secret);
 
     // Empty fixed-size buffers
     let mut key = crate::aead::AeadKey::<A>::default();
     let mut nonce = crate::aead::AeadNonce::<A>::default();
     let mut exporter_secret = <ExporterSecret<K> as Default>::default();
 
-    // Fill the key and nonce. This only errors if the output values are 255x the digest size of
-    // the hash function. Since these values are fixed at compile time, we don't worry about it.
-    hkdf_ctx
-        .expand(&key_info, key.as_mut_slice())
+    // Fill the key, nonce, and exporter secret. This only errors if the output values are 255x the
+    // digest size of the hash function. Since these values are fixed at compile time, we don't
+    // worry about it.
+    secret_ctx
+        .labeled_expand(b"key", &context_bytes, key.as_mut_slice())
         .expect("aead key len is way too big");
-    hkdf_ctx
-        .expand(&nonce_info, nonce.as_mut_slice())
-        .expect("aead nonce len is way too big");
-    hkdf_ctx
-        .expand(&exporter_info, exporter_secret.as_mut_slice())
+    secret_ctx
+        .labeled_expand(b"nonce", &context_bytes, nonce.as_mut_slice())
+        .expect("nonce len is way too big");
+    secret_ctx
+        .labeled_expand(b"exp", &context_bytes, exporter_secret.as_mut_slice())
         .expect("exporter secret len is way too big");
 
     AeadCtx::new(key, nonce, exporter_secret)
@@ -142,11 +125,11 @@ where
     R: CryptoRng + RngCore,
 {
     // If the identity key is set, use it
-    let sk_sender_id: Option<&Dh::PrivateKey> = mode.get_sk_sender_id();
+    let sender_id_keypair = mode.get_sender_id_keypair();
     // Do the encapsulation
-    let (shared_secret, encapped_key) = kem::encap(pk_recip, sk_sender_id, csprng);
+    let (shared_secret, encapped_key) = kem::encap::<_, K, _>(pk_recip, sender_id_keypair, csprng);
     // Use everything to derive an encryption context
-    let enc_ctx = derive_enc_ctx(mode, pk_recip, shared_secret, &encapped_key, info);
+    let enc_ctx = derive_enc_ctx(mode, shared_secret, info);
 
     (encapped_key, enc_ctx)
 }
@@ -166,6 +149,7 @@ where
 pub fn setup_receiver<A, Dh, K>(
     mode: &OpModeR<Dh, K>,
     sk_recip: &Dh::PrivateKey,
+    pk_recip: &Dh::PublicKey,
     encapped_key: &EncappedKey<Dh>,
     info: &[u8],
 ) -> AeadCtx<A, K>
@@ -177,12 +161,10 @@ where
     // If the identity key is set, use it
     let pk_sender_id: Option<&Dh::PublicKey> = mode.get_pk_sender_id();
     // Do the decapsulation
-    let shared_secret = kem::decap(sk_recip, pk_sender_id, encapped_key);
-    // Get the pubkey corresponding to the recipient's private key
-    let pk_recip = Dh::sk_to_pk(sk_recip);
+    let shared_secret = kem::decap::<_, K>(sk_recip, pk_recip, pk_sender_id, encapped_key);
 
     // Use everything to derive an encryption context
-    derive_enc_ctx(mode, &pk_recip, shared_secret, &encapped_key, info)
+    derive_enc_ctx(mode, shared_secret, info)
 }
 
 #[cfg(test)]
@@ -231,8 +213,13 @@ mod test {
                     );
 
                     // Use the encapped key to derive the reciever's encryption context
-                    let mut aead_ctx2 =
-                        setup_receiver(&receiver_mode, &sk_recip, &encapped_key, &info[..]);
+                    let mut aead_ctx2 = setup_receiver(
+                        &receiver_mode,
+                        &sk_recip,
+                        &pk_recip,
+                        &encapped_key,
+                        &info[..],
+                    );
 
                     // Ensure that the two derived contexts are equivalent
                     assert!(aead_ctx_eq(&mut aead_ctx1, &mut aead_ctx2));
@@ -319,12 +306,25 @@ mod test {
 
         // Now make a receiver with the wrong info string and ensure it doesn't match the sender
         let bad_info = b"something else";
-        let mut aead_ctx2 = setup_receiver(&receiver_mode, &sk_recip, &encapped_key, &bad_info[..]);
+        let mut aead_ctx2 = setup_receiver(
+            &receiver_mode,
+            &sk_recip,
+            &pk_recip,
+            &encapped_key,
+            &bad_info[..],
+        );
         assert!(!aead_ctx_eq(&mut aead_ctx1.clone(), &mut aead_ctx2));
 
         // Now make a receiver with the wrong secret key and ensure it doesn't match the sender
         let (bad_sk, _) = <Dh as DiffieHellman>::gen_keypair(&mut csprng);
-        let mut aead_ctx2 = setup_receiver(&receiver_mode, &bad_sk, &encapped_key, &info[..]);
+        let mut aead_ctx2 =
+            setup_receiver(&receiver_mode, &bad_sk, &pk_recip, &encapped_key, &info[..]);
+        assert!(!aead_ctx_eq(&mut aead_ctx1.clone(), &mut aead_ctx2));
+
+        // Now make a receiver with the wrong public key and ensure it doesn't match the sender
+        let (_, bad_pk) = <Dh as DiffieHellman>::gen_keypair(&mut csprng);
+        let mut aead_ctx2 =
+            setup_receiver(&receiver_mode, &sk_recip, &bad_pk, &encapped_key, &info[..]);
         assert!(!aead_ctx_eq(&mut aead_ctx1.clone(), &mut aead_ctx2));
 
         // Now make a receiver with the wrong encapped key and ensure it doesn't match the sender.
@@ -332,12 +332,24 @@ mod test {
         // and therefore different from the key that the sender sent.
         let (bad_encapped_key, _) =
             setup_sender::<A, Dh, _, _>(&sender_mode, &pk_recip, &info[..], &mut csprng);
-        let mut aead_ctx2 = setup_receiver(&receiver_mode, &sk_recip, &bad_encapped_key, &info[..]);
+        let mut aead_ctx2 = setup_receiver(
+            &receiver_mode,
+            &sk_recip,
+            &pk_recip,
+            &bad_encapped_key,
+            &info[..],
+        );
         assert!(!aead_ctx_eq(&mut aead_ctx1.clone(), &mut aead_ctx2));
 
         // Now make sure that this test was a valid test by ensuring that doing everything the
         // right way makes it pass
-        let mut aead_ctx2 = setup_receiver(&receiver_mode, &sk_recip, &encapped_key, &info[..]);
+        let mut aead_ctx2 = setup_receiver(
+            &receiver_mode,
+            &sk_recip,
+            &pk_recip,
+            &encapped_key,
+            &info[..],
+        );
         assert!(aead_ctx_eq(&mut aead_ctx1.clone(), &mut aead_ctx2));
     }
 }

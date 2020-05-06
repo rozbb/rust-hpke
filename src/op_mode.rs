@@ -2,24 +2,12 @@ use crate::prelude::*;
 use crate::{
     dh::{DiffieHellman, Marshallable},
     kdf::Kdf,
+    util::static_zeros,
 };
 
 use core::marker::PhantomData;
 
-use digest::{
-    generic_array::{typenum::Unsigned, GenericArray},
-    Digest,
-};
-
-/// For use with `static_zeros`. This only needs to be as long as the longest hash function digest.
-/// 128 bytes should be enough for anybody.
-const ZEROS: &[u8] = &[0u8; 128];
-
-/// Returns an immutable slice into a static array of zeros. This is so we don't have to keep
-/// allocated for the default value of a `Psk` (which is [0u8; HashImpl::OutputSize])
-fn static_zeros<K: Kdf>() -> &'static [u8] {
-    &ZEROS[..<<K as Kdf>::HashImpl as Digest>::OutputSize::to_usize()]
-}
+use digest::generic_array::GenericArray;
 
 /// A preshared key, i.e., a secret that the sender and recipient both know before any exchange has
 /// happened
@@ -107,19 +95,19 @@ pub enum OpModeS<Dh: DiffieHellman, K: Kdf> {
     Base,
     /// A preshared key known to the sender and receiver
     Psk(PskBundle<K>),
-    /// The identity public key of the sender
-    Auth(Dh::PrivateKey),
+    /// The identity keypair of the sender
+    Auth((Dh::PrivateKey, Dh::PublicKey)),
     /// Both of the above
-    AuthPsk(Dh::PrivateKey, PskBundle<K>),
+    AuthPsk((Dh::PrivateKey, Dh::PublicKey), PskBundle<K>),
 }
 
 // Helpers functions for setup_sender and testing
 impl<Dh: DiffieHellman, K: Kdf> OpModeS<Dh, K> {
     /// Returns the sender's identity pubkey if it's specified
-    pub(crate) fn get_sk_sender_id(&self) -> Option<&Dh::PrivateKey> {
+    pub(crate) fn get_sender_id_keypair(&self) -> Option<&(Dh::PrivateKey, Dh::PublicKey)> {
         match self {
-            OpModeS::Auth(sk) => Some(sk),
-            OpModeS::AuthPsk(sk, _) => Some(sk),
+            OpModeS::Auth(keypair) => Some(keypair),
+            OpModeS::AuthPsk(keypair, _) => Some(keypair),
             _ => None,
         }
     }
@@ -206,14 +194,8 @@ impl<Dh: DiffieHellman, K: Kdf> OpMode<Dh, K> for OpModeS<Dh, K> {
         // Since this OpMode stores just the secret key, we have to convert it to a pubkey before
         // returning it.
         match self {
-            OpModeS::Auth(sk) => {
-                let pk = Dh::sk_to_pk(sk);
-                pk.marshal()
-            }
-            OpModeS::AuthPsk(sk, _) => {
-                let pk = Dh::sk_to_pk(sk);
-                pk.marshal()
-            }
+            OpModeS::Auth((_, pk)) => pk.marshal(),
+            OpModeS::AuthPsk((_, pk), _) => pk.marshal(),
             _ => <MarshalledPubkey<Dh> as Default>::default(),
         }
     }

@@ -1,14 +1,15 @@
-use crate::prelude::*;
-
 use digest::generic_array::{ArrayLength, GenericArray};
 use rand::{CryptoRng, RngCore};
 
-/// This trait is used for values with fixed lengths that get sent over the wire. This includes DH
-/// public keys and encapsulated KEM outputs.
+/// Implemented by types that have a fixed-length byte representation
 pub trait Marshallable {
     type OutputSize: ArrayLength<u8>;
 
     fn marshal(&self) -> GenericArray<u8, Self::OutputSize>;
+}
+
+/// Implemented by types that can be deserialized from a fixed-length byte representation
+pub trait Unmarshallable: Marshallable {
     fn unmarshal(encoded: GenericArray<u8, Self::OutputSize>) -> Self;
 }
 
@@ -24,9 +25,9 @@ pub type MarshalledPrivateKey<Dh> =
 /// This trait captures the requirements of a DH-based KEM (draft02 §5.1). It must have a way to
 /// generate keypairs, perform the DH computation, and marshall/umarshall DH pubkeys
 pub trait DiffieHellman {
-    type PublicKey: Clone + Marshallable;
-    type PrivateKey: Clone + Marshallable;
-    type DhResult: Into<Vec<u8>>;
+    type PublicKey: Clone + Marshallable + Unmarshallable;
+    type PrivateKey: Clone + Marshallable + Unmarshallable;
+    type DhResult: Marshallable;
 
     const KEM_ID: u16;
 
@@ -37,29 +38,9 @@ pub trait DiffieHellman {
     fn dh(sk: &Self::PrivateKey, pk: &Self::PublicKey) -> Self::DhResult;
 }
 
-/// A shared secret as a result of a Diffie-Hellman operation
-pub(crate) enum SharedSecret<Dh: DiffieHellman> {
-    /// Secret is not linked to the sender's identity
-    Unauthed(Dh::DhResult),
-    /// Secret is linked to the sender's identity
-    Authed(Dh::DhResult, Dh::DhResult),
-}
-
-// We need to be able to serialize SharedSecrets. Since it's not necessarily contiguous in memory,
-// a Vec<u8> is the most logical way.
-impl<Dh: DiffieHellman> Into<Vec<u8>> for SharedSecret<Dh> {
-    fn into(self) -> Vec<u8> {
-        match self {
-            SharedSecret::Unauthed(s) => s.into(),
-            SharedSecret::Authed(s, t) => [s.into(), t.into()].concat(),
-        }
-    }
-}
-
 pub use x25519::X25519;
 pub mod x25519 {
-    use super::{DiffieHellman, Marshallable};
-    use crate::prelude::*;
+    use super::{DiffieHellman, Marshallable, Unmarshallable};
 
     use digest::generic_array::{typenum, GenericArray};
     use rand::{CryptoRng, RngCore};
@@ -73,8 +54,8 @@ pub mod x25519 {
     #[derive(Clone)]
     pub struct PrivateKey(x25519_dalek::StaticSecret);
 
-    // A bare DH computation result. This can be used to make either a SharedSecret::Unauthed (if
-    // it's just one DhResult), or a SharedSecret::Authed (if it's two).
+    // A bare DH computation result. This can be used to make either a DhResult::Unauthed (if
+    // it's just one DhResult), or a DhResult::Authed (if it's two).
     pub struct DhResult(x25519_dalek::SharedSecret);
 
     // Oh I love me an excuse to break out type-level integers
@@ -85,7 +66,8 @@ pub mod x25519 {
         fn marshal(&self) -> GenericArray<u8, typenum::U32> {
             GenericArray::clone_from_slice(self.0.as_bytes())
         }
-
+    }
+    impl Unmarshallable for PublicKey {
         // Dalek also lets us convert [u8; 32] to pubkeys
         fn unmarshal(encoded: GenericArray<u8, typenum::U32>) -> Self {
             let arr: [u8; 32] = encoded.into();
@@ -100,7 +82,8 @@ pub mod x25519 {
         fn marshal(&self) -> GenericArray<u8, typenum::U32> {
             GenericArray::clone_from_slice(&self.0.to_bytes())
         }
-
+    }
+    impl Unmarshallable for PrivateKey {
         // Dalek also lets us convert [u8; 32] to scalars
         fn unmarshal(encoded: GenericArray<u8, typenum::U32>) -> Self {
             let arr: [u8; 32] = encoded.into();
@@ -108,10 +91,13 @@ pub mod x25519 {
         }
     }
 
-    // Into<Vec<u8>> for SharedSecret relies on this
-    impl Into<Vec<u8>> for DhResult {
-        fn into(self) -> Vec<u8> {
-            self.0.as_bytes().to_vec()
+    impl Marshallable for DhResult {
+        // §7.1: DHKEM(Curve25519) Nzz = 32
+        type OutputSize = typenum::U32;
+
+        // Dalek lets us convert shared secrets to to [u8; 32]
+        fn marshal(&self) -> GenericArray<u8, typenum::U32> {
+            GenericArray::clone_from_slice(self.0.as_bytes())
         }
     }
 
@@ -124,7 +110,7 @@ pub mod x25519 {
         type DhResult = DhResult;
 
         // Section 8.1: DHKEM(Curve25519)
-        const KEM_ID: u16 = 0x0002;
+        const KEM_ID: u16 = 0x0020;
 
         /// Generates an X25519 keypair
         fn gen_keypair<R: CryptoRng + RngCore>(csprng: &mut R) -> (PrivateKey, PublicKey) {
@@ -148,8 +134,8 @@ pub mod x25519 {
     #[cfg(test)]
     mod tests {
         use crate::dh::{
-            x25519::{PrivateKey, PublicKey, X25519},
-            DiffieHellman, Marshallable, MarshalledPublicKey, SharedSecret,
+            x25519::{DhResult, PrivateKey, PublicKey, X25519},
+            DiffieHellman, Marshallable, MarshalledPublicKey, Unmarshallable,
         };
         use rand::RngCore;
 
@@ -169,31 +155,18 @@ pub mod x25519 {
 
         // We need to be able to compare shared secrets in order to make sure that encap* and
         // decap* produce the same output
-        impl PartialEq for SharedSecret<X25519> {
-            fn eq(&self, other: &SharedSecret<X25519>) -> bool {
-                match (self, other) {
-                    (SharedSecret::Authed(x1, y1), SharedSecret::Authed(x2, y2)) => {
-                        x1.0.as_bytes() == x2.0.as_bytes() && y1.0.as_bytes() == y2.0.as_bytes()
-                    }
-                    (SharedSecret::Unauthed(x1), SharedSecret::Unauthed(x2)) => {
-                        x1.0.as_bytes() == x2.0.as_bytes()
-                    }
-                    _ => false,
-                }
+        impl PartialEq for DhResult {
+            fn eq(&self, other: &DhResult) -> bool {
+                self.marshal() == other.marshal()
             }
         }
 
-        impl Eq for SharedSecret<X25519> {}
+        impl Eq for DhResult {}
 
         // We need Debug in order to be able to assert_eq! shared secrets
-        impl core::fmt::Debug for SharedSecret<X25519> {
+        impl core::fmt::Debug for DhResult {
             fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
-                match self {
-                    SharedSecret::Authed(x1, x2) => {
-                        write!(f, "{:0x?}\n{:0x?}", x1.0.as_bytes(), x2.0.as_bytes())
-                    }
-                    SharedSecret::Unauthed(x) => write!(f, "{:0x?}", x.0.as_bytes()),
-                }
+                write!(f, "{:0x?}", self.marshal())
             }
         }
 
@@ -213,14 +186,14 @@ pub mod x25519 {
 
             // Make a pubkey with those random bytes. Note, that unmarshal does not clamp the input
             // bytes. This is why this test passes.
-            let pk = <<Dh as DiffieHellman>::PublicKey as Marshallable>::unmarshal(orig_bytes);
+            let pk = <Dh as DiffieHellman>::PublicKey::unmarshal(orig_bytes);
             let pk_bytes = pk.marshal();
 
             // See if the re-marshalled bytes are the same as the input
             assert_eq!(orig_bytes, pk_bytes);
         }
 
-        /// Tests that an unmarshal-marshal round-trip on a DH keypari ends up at the same values
+        /// Tests that an unmarshal-marshal round-trip on a DH keypair ends up at the same values
         #[test]
         fn test_dh_marshal_correctness() {
             type Dh = X25519;

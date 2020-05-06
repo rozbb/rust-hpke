@@ -14,7 +14,10 @@
 
 use hpke::{
     aead::{Aead, AeadCtx, AeadTag, AesGcm128, AesGcm256, AssociatedData, ChaCha20Poly1305},
-    dh::{DiffieHellman, Marshallable, MarshalledPrivateKey, MarshalledPublicKey, X25519},
+    dh::{
+        DiffieHellman, Marshallable, MarshalledPrivateKey, MarshalledPublicKey, Unmarshallable,
+        X25519,
+    },
     kdf::{HkdfSha256, HkdfSha384, HkdfSha512, Kdf},
     kem::MarshalledEncappedKey,
     op_mode::{Psk, PskBundle},
@@ -291,6 +294,28 @@ impl AgilePrivateKey {
     }
 }
 
+#[derive(Clone)]
+struct AgileKeypair(AgilePrivateKey, AgilePublicKey);
+
+impl AgileKeypair {
+    fn try_lift<Dh: DiffieHellman>(
+        self,
+    ) -> Result<(Dh::PrivateKey, Dh::PublicKey), AgileHpkeError> {
+        Ok((self.0.try_lift::<Dh>()?, self.1.try_lift::<Dh>()?))
+    }
+
+    fn validate(&self) -> Result<(), AgileHpkeError> {
+        if self.0.dh_alg != self.1.dh_alg {
+            Err(AgileHpkeError::AlgMismatch(
+                (self.0.dh_alg.name(), "AgileKeypair::privkey"),
+                (self.1.dh_alg.name(), "AgileKeypair::pubkey"),
+            ))
+        } else {
+            Ok(())
+        }
+    }
+}
+
 // The leg work of agile_gen_keypair
 macro_rules! do_gen_keypair {
     ($dh_ty:ty, $dh_alg:ident, $csprng:ident) => {{
@@ -308,14 +333,11 @@ macro_rules! do_gen_keypair {
             pubkey_bytes: pk.marshal().to_vec(),
         };
 
-        (sk, pk)
+        AgileKeypair(sk, pk)
     }};
 }
 
-fn agile_gen_keypair<R: CryptoRng + RngCore>(
-    dh_alg: DhAlg,
-    csprng: &mut R,
-) -> (AgilePrivateKey, AgilePublicKey) {
+fn agile_gen_keypair<R: CryptoRng + RngCore>(dh_alg: DhAlg, csprng: &mut R) -> AgileKeypair {
     match dh_alg {
         DhAlg::X25519 => do_gen_keypair!(X25519, dh_alg, csprng),
         _ => unimplemented!(),
@@ -429,9 +451,9 @@ impl AgileOpModeS {
         let res = match self.op_mode_ty {
             AgileOpModeSTy::Base => OpModeS::Base,
             AgileOpModeSTy::Psk(bundle) => OpModeS::Psk(bundle.try_lift::<K>()?),
-            AgileOpModeSTy::Auth(sk) => OpModeS::Auth(sk.try_lift::<Dh>()?),
-            AgileOpModeSTy::AuthPsk(sk, bundle) => {
-                OpModeS::AuthPsk(sk.try_lift::<Dh>()?, bundle.try_lift::<K>()?)
+            AgileOpModeSTy::Auth(keypair) => OpModeS::Auth(keypair.try_lift::<Dh>()?),
+            AgileOpModeSTy::AuthPsk(keypair, bundle) => {
+                OpModeS::AuthPsk(keypair.try_lift::<Dh>()?, bundle.try_lift::<K>()?)
             }
         };
 
@@ -460,18 +482,20 @@ impl AgileOpModeS {
                     ));
                 }
             }
-            AgileOpModeSTy::Auth(sk) => {
-                if sk.dh_alg != self.dh_alg {
+            AgileOpModeSTy::Auth(keypair) => {
+                keypair.validate()?;
+                if keypair.0.dh_alg != self.dh_alg {
                     return Err(AgileHpkeError::AlgMismatch(
                         (self.dh_alg.name(), "AgileOpModeS::dh_alg"),
                         (
-                            sk.dh_alg.name(),
+                            keypair.0.dh_alg.name(),
                             "AgileOpModeS::op_mode_ty::AgilePrivateKey::dh_alg",
                         ),
                     ));
                 }
             }
-            AgileOpModeSTy::AuthPsk(sk, bundle) => {
+            AgileOpModeSTy::AuthPsk(keypair, bundle) => {
+                keypair.validate()?;
                 if bundle.dh_alg != self.dh_alg {
                     return Err(AgileHpkeError::AlgMismatch(
                         (self.dh_alg.name(), "AgileOpModeS::dh_alg"),
@@ -488,11 +512,11 @@ impl AgileOpModeS {
                             "AgileOpModeS::op_mode_ty::AgilePskBundle::kdf_alg",
                         ),
                     ));
-                } else if sk.dh_alg != self.dh_alg {
+                } else if keypair.0.dh_alg != self.dh_alg {
                     return Err(AgileHpkeError::AlgMismatch(
                         (self.dh_alg.name(), "AgileOpModeS::dh_alg"),
                         (
-                            sk.dh_alg.name(),
+                            keypair.0.dh_alg.name(),
                             "AgileOpModeS::op_mode_ty::AgilePrivateKey::dh_alg",
                         ),
                     ));
@@ -508,8 +532,8 @@ impl AgileOpModeS {
 enum AgileOpModeSTy {
     Base,
     Psk(AgilePskBundle),
-    Auth(AgilePrivateKey),
-    AuthPsk(AgilePrivateKey, AgilePskBundle),
+    Auth(AgileKeypair),
+    AuthPsk(AgileKeypair, AgilePskBundle),
 }
 
 #[derive(Clone)]
@@ -623,17 +647,17 @@ fn agile_setup_sender<R: CryptoRng + RngCore>(
 
 // The leg work of agile_setup_receiver
 macro_rules! do_setup_receiver {
-    ($aead_ty:ty, $dh_ty:ty, $kdf_ty:ty, $mode:ident, $sk_recip:ident, $encapped_key:ident, $info:ident) => {{
+    ($aead_ty:ty, $dh_ty:ty, $kdf_ty:ty, $mode:ident, $recip_keypair:ident, $encapped_key:ident, $info:ident) => {{
         type A = $aead_ty;
         type Dh = $dh_ty;
         type K = $kdf_ty;
 
         let mode = $mode.clone().try_lift::<Dh, K>()?;
-        let sk_recip = $sk_recip.clone().try_lift::<Dh>()?;
+        let (sk_recip, pk_recip) = $recip_keypair.clone().try_lift::<Dh>()?;
         let encapped_key = $encapped_key.clone().try_lift::<Dh>()?;
         let info = $info;
 
-        let aead_ctx = setup_receiver::<A, Dh, K>(&mode, &sk_recip, &encapped_key, info);
+        let aead_ctx = setup_receiver::<A, Dh, K>(&mode, &sk_recip, &pk_recip, &encapped_key, info);
         Ok(Box::new(aead_ctx))
     }};
 }
@@ -641,21 +665,22 @@ macro_rules! do_setup_receiver {
 fn agile_setup_receiver(
     aead_alg: AeadAlg,
     mode: &AgileOpModeR,
-    sk_recip: &AgilePrivateKey,
+    recip_keypair: &AgileKeypair,
     encapped_key: &AgileEncappedKey,
     info: &[u8],
 ) -> Result<Box<dyn AgileAeadCtx>, AgileHpkeError> {
     // Do all the necessary validation
+    recip_keypair.validate()?;
     mode.validate()?;
-    if mode.dh_alg != sk_recip.dh_alg {
+    if mode.dh_alg != recip_keypair.0.dh_alg {
         return Err(AgileHpkeError::AlgMismatch(
             (mode.dh_alg.name(), "mode::dh_alg"),
-            (sk_recip.dh_alg.name(), "sk_recip::dh_alg"),
+            (recip_keypair.0.dh_alg.name(), "recip_keypair::dh_alg"),
         ));
     }
-    if sk_recip.dh_alg != encapped_key.dh_alg {
+    if recip_keypair.0.dh_alg != encapped_key.dh_alg {
         return Err(AgileHpkeError::AlgMismatch(
-            (sk_recip.dh_alg.name(), "sk_recip::dh_alg"),
+            (recip_keypair.0.dh_alg.name(), "recip_keypair::dh_alg"),
             (encapped_key.dh_alg.name(), "encapped_key::dh_alg"),
         ));
     }
@@ -667,7 +692,7 @@ fn agile_setup_receiver(
             X25519,
             HkdfSha256,
             mode,
-            sk_recip,
+            recip_keypair,
             encapped_key,
             info
         ),
@@ -676,7 +701,7 @@ fn agile_setup_receiver(
             X25519,
             HkdfSha384,
             mode,
-            sk_recip,
+            recip_keypair,
             encapped_key,
             info
         ),
@@ -685,7 +710,7 @@ fn agile_setup_receiver(
             X25519,
             HkdfSha512,
             mode,
-            sk_recip,
+            recip_keypair,
             encapped_key,
             info
         ),
@@ -694,7 +719,7 @@ fn agile_setup_receiver(
             X25519,
             HkdfSha256,
             mode,
-            sk_recip,
+            recip_keypair,
             encapped_key,
             info
         ),
@@ -703,7 +728,7 @@ fn agile_setup_receiver(
             X25519,
             HkdfSha384,
             mode,
-            sk_recip,
+            recip_keypair,
             encapped_key,
             info
         ),
@@ -712,7 +737,7 @@ fn agile_setup_receiver(
             X25519,
             HkdfSha512,
             mode,
-            sk_recip,
+            recip_keypair,
             encapped_key,
             info
         ),
@@ -721,7 +746,7 @@ fn agile_setup_receiver(
             X25519,
             HkdfSha256,
             mode,
-            sk_recip,
+            recip_keypair,
             encapped_key,
             info
         ),
@@ -730,7 +755,7 @@ fn agile_setup_receiver(
             X25519,
             HkdfSha384,
             mode,
-            sk_recip,
+            recip_keypair,
             encapped_key,
             info
         ),
@@ -739,7 +764,7 @@ fn agile_setup_receiver(
             X25519,
             HkdfSha512,
             mode,
-            sk_recip,
+            recip_keypair,
             encapped_key,
             info
         ),
@@ -765,7 +790,7 @@ fn main() {
                 let info = b"we're gonna agile him in his clavicle";
 
                 // Make a random sender keypair and PSK bundle
-                let (sk_sender, pk_sender) = agile_gen_keypair(dh_alg, &mut csprng);
+                let sender_keypair = agile_gen_keypair(dh_alg, &mut csprng);
                 let psk_bundle = {
                     let mut psk_bytes = vec![0u8; kdf_alg.get_digest_len()];
                     let psk_id = b"preshared key attempt #5, take 2".to_vec();
@@ -780,13 +805,14 @@ fn main() {
 
                 // Make two agreeing OpModes (AuthPsk is the most complicated, so we're just using
                 // that).
-                let op_mode_s_ty = AgileOpModeSTy::AuthPsk(sk_sender, psk_bundle.clone());
+                let op_mode_s_ty =
+                    AgileOpModeSTy::AuthPsk(sender_keypair.clone(), psk_bundle.clone());
                 let op_mode_s = AgileOpModeS {
                     dh_alg: dh_alg,
                     kdf_alg: kdf_alg,
                     op_mode_ty: op_mode_s_ty,
                 };
-                let op_mode_r_ty = AgileOpModeRTy::AuthPsk(pk_sender, psk_bundle.clone());
+                let op_mode_r_ty = AgileOpModeRTy::AuthPsk(sender_keypair.1, psk_bundle.clone());
                 let op_mode_r = AgileOpModeR {
                     dh_alg: dh_alg,
                     kdf_alg: kdf_alg,
@@ -794,15 +820,25 @@ fn main() {
                 };
 
                 // Set up the sender's encryption context
-                let (sk_recip, pk_recip) = agile_gen_keypair(dh_alg, &mut csprng);
-                let (encapped_key, mut aead_ctx1) =
-                    agile_setup_sender(aead_alg, &op_mode_s, &pk_recip, &info[..], &mut csprng)
-                        .unwrap();
+                let recip_keypair = agile_gen_keypair(dh_alg, &mut csprng);
+                let (encapped_key, mut aead_ctx1) = agile_setup_sender(
+                    aead_alg,
+                    &op_mode_s,
+                    &recip_keypair.1,
+                    &info[..],
+                    &mut csprng,
+                )
+                .unwrap();
 
                 // Set up the receivers's encryption context
-                let mut aead_ctx2 =
-                    agile_setup_receiver(aead_alg, &op_mode_r, &sk_recip, &encapped_key, &info[..])
-                        .unwrap();
+                let mut aead_ctx2 = agile_setup_receiver(
+                    aead_alg,
+                    &op_mode_r,
+                    &recip_keypair,
+                    &encapped_key,
+                    &info[..],
+                )
+                .unwrap();
 
                 // Test an encryption-decryption round trip
                 let msg = b"paper boy paper boy";

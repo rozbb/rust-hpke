@@ -59,6 +59,7 @@ where
 pub fn single_shot_open<'a, A, Dh, K>(
     mode: &OpModeR<Dh, K>,
     sk_recip: &Dh::PrivateKey,
+    pk_recip: &Dh::PublicKey,
     encapped_key: &EncappedKey<Dh>,
     info: &[u8],
     ciphertext: &mut [u8],
@@ -71,7 +72,7 @@ where
     K: Kdf,
 {
     // Decap the key
-    let mut aead_ctx = setup_receiver::<A, Dh, K>(mode, sk_recip, encapped_key, info);
+    let mut aead_ctx = setup_receiver::<A, Dh, K>(mode, sk_recip, pk_recip, encapped_key, info);
     // Decrypt
     aead_ctx.open(ciphertext, aad, tag)
 }
@@ -110,7 +111,8 @@ mod test {
         let (sk_recip, pk_recip) = Dh::gen_keypair(&mut csprng);
 
         // Construct the sender's encryption context, and get an encapped key
-        let sender_mode = OpModeS::<Dh, _>::AuthPsk(sk_sender_id, psk_bundle.clone());
+        let sender_mode =
+            OpModeS::<Dh, _>::AuthPsk((sk_sender_id, pk_sender_id.clone()), psk_bundle.clone());
 
         // Use the encapped key to derive the reciever's encryption context
         let receiver_mode = OpModeR::<Dh, _>::AuthPsk(pk_sender_id, psk_bundle);
@@ -134,6 +136,7 @@ mod test {
         single_shot_open::<A, _, _>(
             &receiver_mode,
             &sk_recip,
+            &pk_recip,
             &encapped_key,
             info,
             &mut ciphertext[..],

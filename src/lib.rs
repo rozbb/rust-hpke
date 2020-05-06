@@ -38,6 +38,7 @@ pub mod op_mode;
 mod prelude;
 pub mod setup;
 pub mod single_shot;
+mod util;
 
 #[doc(inline)]
 pub use crate::aead::AeadCtx;

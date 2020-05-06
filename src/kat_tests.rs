@@ -1,7 +1,10 @@
 use crate::prelude::*;
 use crate::{
     aead::{Aead, AeadTag, AesGcm128, AesGcm256, AssociatedData, ChaCha20Poly1305},
-    dh::{x25519::X25519, DiffieHellman, Marshallable, MarshalledPrivateKey, MarshalledPublicKey},
+    dh::{
+        x25519::X25519, DiffieHellman, Marshallable, MarshalledPrivateKey, MarshalledPublicKey,
+        Unmarshallable,
+    },
     kdf::{HkdfSha256, HkdfSha384, HkdfSha512, Kdf},
     kem::encap_with_eph,
     op_mode::{OpModeR, Psk, PskBundle},
@@ -52,19 +55,19 @@ struct MainTestVector {
     // Private keys
     #[serde(rename = "skR", deserialize_with = "bytes_from_hex")]
     sk_recip: Vec<u8>,
-    #[serde(rename = "skS", deserialize_with = "bytes_from_hex_opt")]
+    #[serde(default, rename = "skS", deserialize_with = "bytes_from_hex_opt")]
     sk_sender: Option<Vec<u8>>,
     #[serde(rename = "skE", deserialize_with = "bytes_from_hex")]
     sk_eph: Vec<u8>,
-    #[serde(deserialize_with = "bytes_from_hex_opt")]
+    #[serde(default, deserialize_with = "bytes_from_hex_opt")]
     psk: Option<Vec<u8>>,
-    #[serde(rename = "pskID", deserialize_with = "bytes_from_hex_opt")]
+    #[serde(default, rename = "pskID", deserialize_with = "bytes_from_hex_opt")]
     psk_id: Option<Vec<u8>>,
 
     // Public Keys
     #[serde(rename = "pkR", deserialize_with = "bytes_from_hex")]
     pk_recip: Vec<u8>,
-    #[serde(rename = "pkS", deserialize_with = "bytes_from_hex_opt")]
+    #[serde(default, rename = "pkS", deserialize_with = "bytes_from_hex_opt")]
     pk_sender: Option<Vec<u8>>,
     #[serde(rename = "pkE", deserialize_with = "bytes_from_hex")]
     pk_eph: Vec<u8>,
@@ -182,12 +185,21 @@ macro_rules! test_case {
             buf.copy_from_slice(&bytes);
             <Dh as DiffieHellman>::PrivateKey::unmarshal(buf)
         });
+        // TODO: Use the provided pk_sender
+        let sender_keypair = sk_sender.map(|sk| {
+            let pk = Dh::sk_to_pk(&sk);
+            (sk, pk)
+        });
+
+        println!("context: {:02x?}", $tv._hpke_context);
+        println!("shared secret: {:02x?}", $tv._shared_secret);
+        println!("key: {:02x?}", $tv._aead_key);
 
         // Now derive the encapped key with the deterministic encap function, using all the inputs
         // above
-        let (_, encapped_key) = encap_with_eph::<Dh>(
+        let (_, encapped_key) = encap_with_eph::<Dh, K>(
             &pk_recip,
-            sk_sender.as_ref(),
+            sender_keypair.as_ref(),
             sk_eph.clone(),
             pk_eph.clone(),
         );
@@ -199,7 +211,8 @@ macro_rules! test_case {
 
         // We're going to test the encryption contexts. First, construct the appropriate OpMode.
         let mode = make_op_mode_r($tv.mode, $tv.pk_sender, $tv.psk, $tv.psk_id);
-        let mut aead_ctx = setup_receiver::<A, Dh, K>(&mode, &sk_recip, &encapped_key, &$tv.info);
+        let mut aead_ctx =
+            setup_receiver::<A, Dh, K>(&mode, &sk_recip, &pk_recip, &encapped_key, &$tv.info);
 
         // Go through all the plaintext-ciphertext pairs of this test vector and assert the
         // ciphertext decrypts to the corresponding plaintext
@@ -224,7 +237,7 @@ macro_rules! test_case {
             // Open the ciphertext in place and assert that this succeeds
             aead_ctx
                 .open(&mut ciphertext, AssociatedData(&aad), &tag)
-                .unwrap();
+                .expect("open failed");
             // Rename for clarity
             let plaintext = ciphertext;
 
