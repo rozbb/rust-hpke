@@ -236,10 +236,8 @@ pub(crate) fn decap<Ke: Kem>(
         // digest size of the hash function. Since these values are fixed at compile time, we don't
         // worry about it.
         let mut shared_secret = <SharedSecret<Ke::Dh> as Default>::default();
-        println!("doing extract and expand on shared secret");
         extract_and_expand::<Ke::Kdf>(&dh_res_eph.marshal(), &kem_context, &mut shared_secret)
             .expect("shared secret is way too big");
-        println!("MY shared secret: {:02x?}", shared_secret);
         Ok(shared_secret)
     }
 }
