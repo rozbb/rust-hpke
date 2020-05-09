@@ -9,16 +9,20 @@ use core::marker::PhantomData;
 
 use digest::generic_array::GenericArray;
 
+// TODO: Make Psk borrow its bytes instead of own them. We'd like to zeroize the contents on Drop,
+// but Vec can reallocate and leave an old copy of sensitive data lying around. So don't hold a
+// Vec, instead hold a slice.
+
 /// A preshared key, i.e., a secret that the sender and recipient both know before any exchange has
 /// happened
-pub struct Psk<K: Kdf> {
+pub struct Psk<Kd: Kdf> {
     bytes: Vec<u8>,
-    marker: PhantomData<K>,
+    marker: PhantomData<Kd>,
 }
 
-impl<K: Kdf> Psk<K> {
+impl<Kd: Kdf> Psk<Kd> {
     /// Constructs a preshared key from bytes
-    pub fn from_bytes(bytes: Vec<u8>) -> Psk<K> {
+    pub fn from_bytes(bytes: Vec<u8>) -> Psk<Kd> {
         Psk {
             bytes,
             marker: PhantomData,
@@ -32,7 +36,7 @@ impl<K: Kdf> Psk<K> {
 }
 
 // We can't use #[derive(Clone)] because the compiler thinks that K has to be Clone.
-impl<K: Kdf> Clone for Psk<K> {
+impl<Kd: Kdf> Clone for Psk<Kd> {
     fn clone(&self) -> Self {
         // Do the obvious thing
         Psk {
@@ -42,16 +46,16 @@ impl<K: Kdf> Clone for Psk<K> {
     }
 }
 
-/// Contains preshared key bytes as well as well as an identifier
-pub struct PskBundle<K: Kdf> {
+/// Contains preshared key bytes and an identifier
+pub struct PskBundle<Kd: Kdf> {
     /// The preshared key
-    pub psk: Psk<K>,
-    /// An bytestring that's supposed to uniquely identify this PSK
+    pub psk: Psk<Kd>,
+    /// An bytestring that uniquely identifies this PSK
     pub psk_id: Vec<u8>,
 }
 
 // We can't use #[derive(Clone)] because the compiler thinks that K has to be Clone.
-impl<K: Kdf> Clone for PskBundle<K> {
+impl<Kd: Kdf> Clone for PskBundle<Kd> {
     fn clone(&self) -> Self {
         // Do the obvious thing
         PskBundle {
@@ -64,19 +68,19 @@ impl<K: Kdf> Clone for PskBundle<K> {
 /// The operation mode of the receiver's side of HPKE. This determines what information is folded
 /// into the encryption context derived in the `setup_receiver` functions. You can include a
 /// preshared key, the identity key of the sender, both, or neither.
-pub enum OpModeR<Dh: DiffieHellman, K: Kdf> {
+pub enum OpModeR<Dh: DiffieHellman, Kd: Kdf> {
     /// No extra information included
     Base,
     /// A preshared key known to the sender and receiver
-    Psk(PskBundle<K>),
+    Psk(PskBundle<Kd>),
     /// The identity public key of the sender
     Auth(Dh::PublicKey),
     /// Both of the above
-    AuthPsk(Dh::PublicKey, PskBundle<K>),
+    AuthPsk(Dh::PublicKey, PskBundle<Kd>),
 }
 
 // Helper function for setup_receiver
-impl<'a, Dh: DiffieHellman, K: Kdf> OpModeR<Dh, K> {
+impl<'a, Dh: DiffieHellman, Kd: Kdf> OpModeR<Dh, Kd> {
     /// Returns the sender's identity pubkey if it's specified
     pub(crate) fn get_pk_sender_id(&self) -> Option<&Dh::PublicKey> {
         match self {
@@ -90,19 +94,19 @@ impl<'a, Dh: DiffieHellman, K: Kdf> OpModeR<Dh, K> {
 /// The operation mode of the sender's side of HPKE. This determines what information is folded
 /// into the encryption context derived in the `setup_sender` functions. You can include a
 /// preshared key, the identity key of the sender, both, or neither.
-pub enum OpModeS<Dh: DiffieHellman, K: Kdf> {
+pub enum OpModeS<Dh: DiffieHellman, Kd: Kdf> {
     /// No extra information included
     Base,
     /// A preshared key known to the sender and receiver
-    Psk(PskBundle<K>),
+    Psk(PskBundle<Kd>),
     /// The identity keypair of the sender
     Auth((Dh::PrivateKey, Dh::PublicKey)),
     /// Both of the above
-    AuthPsk((Dh::PrivateKey, Dh::PublicKey), PskBundle<K>),
+    AuthPsk((Dh::PrivateKey, Dh::PublicKey), PskBundle<Kd>),
 }
 
 // Helpers functions for setup_sender and testing
-impl<Dh: DiffieHellman, K: Kdf> OpModeS<Dh, K> {
+impl<Dh: DiffieHellman, Kd: Kdf> OpModeS<Dh, Kd> {
     /// Returns the sender's identity pubkey if it's specified
     pub(crate) fn get_sender_id_keypair(&self) -> Option<&(Dh::PrivateKey, Dh::PublicKey)> {
         match self {
@@ -119,7 +123,7 @@ type MarshalledPubkey<Dh> =
 
 /// Represents the convenience methods necessary for getting default values out of the operation
 /// mode. These are defined in draft02 §6.1.
-pub(crate) trait OpMode<Dh: DiffieHellman, K: Kdf> {
+pub(crate) trait OpMode<Dh: DiffieHellman> {
     /// Gets the mode ID (hardcoded based on variant)
     fn mode_id(&self) -> u8;
     /// If this is an auth mode, returns the sender's pubkey. Otherwise returns zeros.
@@ -130,7 +134,7 @@ pub(crate) trait OpMode<Dh: DiffieHellman, K: Kdf> {
     fn get_psk_id(&self) -> &[u8];
 }
 
-impl<Dh: DiffieHellman, K: Kdf> OpMode<Dh, K> for OpModeR<Dh, K> {
+impl<Dh: DiffieHellman, Kd: Kdf> OpMode<Dh> for OpModeR<Dh, Kd> {
     // Defined in draft02 §5.0
     fn mode_id(&self) -> u8 {
         match self {
@@ -159,7 +163,7 @@ impl<Dh: DiffieHellman, K: Kdf> OpMode<Dh, K> for OpModeR<Dh, K> {
         match self {
             OpModeR::Psk(bundle) => &bundle.psk.bytes,
             OpModeR::AuthPsk(_, bundle) => &bundle.psk.bytes,
-            _ => static_zeros::<K>(),
+            _ => static_zeros::<Kd>(),
         }
     }
 
@@ -176,7 +180,7 @@ impl<Dh: DiffieHellman, K: Kdf> OpMode<Dh, K> for OpModeR<Dh, K> {
 
 // I know there's a bunch of code reuse here, but it's not so much that I feel the need to abstract
 // something away
-impl<Dh: DiffieHellman, K: Kdf> OpMode<Dh, K> for OpModeS<Dh, K> {
+impl<Dh: DiffieHellman, Kd: Kdf> OpMode<Dh> for OpModeS<Dh, Kd> {
     // Defined in draft02 §5.0
     fn mode_id(&self) -> u8 {
         match self {
@@ -207,7 +211,7 @@ impl<Dh: DiffieHellman, K: Kdf> OpMode<Dh, K> for OpModeS<Dh, K> {
         match self {
             OpModeS::Psk(bundle) => &bundle.psk.bytes,
             OpModeS::AuthPsk(_, bundle) => &bundle.psk.bytes,
-            _ => static_zeros::<K>(),
+            _ => static_zeros::<Kd>(),
         }
     }
 

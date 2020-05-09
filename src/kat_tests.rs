@@ -1,12 +1,9 @@
 use crate::prelude::*;
 use crate::{
     aead::{Aead, AeadTag, AesGcm128, AesGcm256, AssociatedData, ChaCha20Poly1305},
-    dh::{
-        x25519::X25519, DiffieHellman, Marshallable, MarshalledPrivateKey, MarshalledPublicKey,
-        Unmarshallable,
-    },
+    dh::{DiffieHellman, Marshallable, MarshalledPrivateKey, MarshalledPublicKey, Unmarshallable},
     kdf::{HkdfSha256, HkdfSha384, HkdfSha512, Kdf},
-    kem::encap_with_eph,
+    kem::{encap_with_eph, Kem, X25519HkdfSha256},
     op_mode::{OpModeR, Psk, PskBundle},
     setup::setup_receiver,
 };
@@ -174,35 +171,32 @@ fn make_op_mode_r<Dh: DiffieHellman, K: Kdf>(
 macro_rules! test_case {
     ($tv:ident, $aead_ty:ty, $kdf_ty:ty) => {{
         type A = $aead_ty;
-        type Dh = X25519;
-        type K = $kdf_ty;
+        type Kd = $kdf_ty;
+        type Ke = X25519HkdfSha256;
+        type Dh = <X25519HkdfSha256 as Kem>::Dh;
 
         // First, unmarshall all the relevant keys so we can reconstruct the encapped key
         let (sk_recip, pk_recip) = get_and_assert_keypair::<Dh>(&$tv.sk_recip, &$tv.pk_recip);
-        let (sk_eph, pk_eph) = get_and_assert_keypair::<Dh>(&$tv.sk_eph, &$tv.pk_eph);
+        let (sk_eph, _) = get_and_assert_keypair::<Dh>(&$tv.sk_eph, &$tv.pk_eph);
+
         let sk_sender = $tv.sk_sender.map(|bytes| {
-            let mut buf = <MarshalledPublicKey<Dh> as Default>::default();
+            let mut buf = <MarshalledPrivateKey<Dh> as Default>::default();
             buf.copy_from_slice(&bytes);
             <Dh as DiffieHellman>::PrivateKey::unmarshal(buf)
         });
-        // TODO: Use the provided pk_sender
-        let sender_keypair = sk_sender.map(|sk| {
-            let pk = Dh::sk_to_pk(&sk);
-            (sk, pk)
+        let pk_sender = $tv.pk_sender.clone().map(|bytes| {
+            let mut buf = <MarshalledPublicKey<Dh> as Default>::default();
+            buf.copy_from_slice(&bytes);
+            <Dh as DiffieHellman>::PublicKey::unmarshal(buf)
         });
-
-        println!("context: {:02x?}", $tv._hpke_context);
-        println!("shared secret: {:02x?}", $tv._shared_secret);
-        println!("key: {:02x?}", $tv._aead_key);
+        // If sk_sender is Some, then so is pk_sender
+        let sender_keypair = sk_sender.map(|sk| (sk, pk_sender.unwrap()));
 
         // Now derive the encapped key with the deterministic encap function, using all the inputs
         // above
-        let (_, encapped_key) = encap_with_eph::<Dh, K>(
-            &pk_recip,
-            sender_keypair.as_ref(),
-            sk_eph.clone(),
-            pk_eph.clone(),
-        );
+        let (_, encapped_key) =
+            encap_with_eph::<Ke>(&pk_recip, sender_keypair.as_ref(), sk_eph.clone())
+                .expect("encap failed");
         // Now assert that the derived encapped key is identical to the one provided
         assert_eq!(
             encapped_key.marshal().as_slice(),
@@ -211,8 +205,8 @@ macro_rules! test_case {
 
         // We're going to test the encryption contexts. First, construct the appropriate OpMode.
         let mode = make_op_mode_r($tv.mode, $tv.pk_sender, $tv.psk, $tv.psk_id);
-        let mut aead_ctx =
-            setup_receiver::<A, Dh, K>(&mode, &sk_recip, &pk_recip, &encapped_key, &$tv.info);
+        let mut aead_ctx = setup_receiver::<A, Kd, Ke>(&mode, &sk_recip, &encapped_key, &$tv.info)
+            .expect("setup_receiver failed");
 
         // Go through all the plaintext-ciphertext pairs of this test vector and assert the
         // ciphertext decrypts to the corresponding plaintext
@@ -256,13 +250,12 @@ macro_rules! test_case {
 
 #[test]
 fn kat_test() {
-    //let file = File::open("test-vectors-76e2596.json").unwrap();
-    let file = File::open("test-vectors-modified.json").unwrap();
+    let file = File::open("test-vectors-d1dbba6.json").unwrap();
     let tvs: Vec<MainTestVector> = serde_json::from_reader(file).unwrap();
 
     for tv in tvs.into_iter() {
-        // Ignore everything that doesn't use X25519
-        if tv.kem_id != X25519::KEM_ID {
+        // Ignore everything that doesn't use X25519, since that's all we support right now
+        if tv.kem_id != X25519HkdfSha256::KEM_ID {
             continue;
         }
 

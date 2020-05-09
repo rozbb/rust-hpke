@@ -3,9 +3,10 @@ use crate::{
     aead::{Aead, AeadCtx},
     dh::DiffieHellman,
     kdf::{labeled_extract, Kdf, LabeledExpand},
-    kem::{self, EncappedKey, SharedSecret},
+    kem::{self, EncappedKey, Kem, SharedSecret},
     op_mode::{OpMode, OpModeR, OpModeS},
     util::static_zeros,
+    HpkeError,
 };
 
 use byteorder::{BigEndian, WriteBytesExt};
@@ -32,11 +33,17 @@ pub(crate) type ExporterSecret<K> = GenericArray<u8, <<K as Kdf>::HashImpl as Di
 
 // This is the KeySchedule function defined in draft02 §6.1. It runs a KDF over all the parameters,
 // inputs, and secrets, and spits out a key-nonce pair to be used for symmetric encryption
-fn derive_enc_ctx<A: Aead, Dh: DiffieHellman, K: Kdf, O: OpMode<Dh, K>>(
+fn derive_enc_ctx<A, Kd, Ke, O>(
     mode: &O,
-    shared_secret: SharedSecret<Dh>,
+    shared_secret: SharedSecret<Ke::Dh>,
     info: &[u8],
-) -> AeadCtx<A, K> {
+) -> AeadCtx<A, Kd>
+where
+    A: Aead,
+    Kd: Kdf,
+    Ke: Kem,
+    O: OpMode<Ke::Dh>,
+{
     // In KeySchedule(),
     //     ciphersuite = concat(encode_big_endian(kem_id, 2),
     //                          encode_big_endian(kdf_id, 2),
@@ -48,15 +55,15 @@ fn derive_enc_ctx<A: Aead, Dh: DiffieHellman, K: Kdf, O: OpMode<Dh, K>>(
         let mut buf = Vec::new();
 
         // This relies on <Vec<u8> as Write>, which never errors, so unwrap() is justified
-        buf.write_u16::<BigEndian>(Dh::KEM_ID).unwrap();
-        buf.write_u16::<BigEndian>(K::KDF_ID).unwrap();
+        buf.write_u16::<BigEndian>(Ke::KEM_ID).unwrap();
+        buf.write_u16::<BigEndian>(Kd::KDF_ID).unwrap();
         buf.write_u16::<BigEndian>(A::AEAD_ID).unwrap();
 
         buf.write_u8(mode.mode_id()).unwrap();
 
-        let zeros = static_zeros::<K>();
-        let (psk_id_hash, _) = labeled_extract::<K>(zeros, b"pskID", mode.get_psk_id());
-        let (info_hash, _) = labeled_extract::<K>(zeros, b"info", info);
+        let zeros = static_zeros::<Kd>();
+        let (psk_id_hash, _) = labeled_extract::<Kd>(zeros, b"pskID_hash", mode.get_psk_id());
+        let (info_hash, _) = labeled_extract::<Kd>(zeros, b"info", info);
 
         buf.extend(psk_id_hash.as_slice());
         buf.extend(info_hash.as_slice());
@@ -75,13 +82,13 @@ fn derive_enc_ctx<A: Aead, Dh: DiffieHellman, K: Kdf, O: OpMode<Dh, K>>(
     // Instead of `secret` we derive an HKDF context which we run .expand() on to derive the
     // key-nonce pair.
     let (extracted_psk, _) =
-        labeled_extract::<K>(static_zeros::<K>(), b"psk", mode.get_psk_bytes());
-    let (_, secret_ctx) = labeled_extract::<K>(&extracted_psk, b"zz", &shared_secret);
+        labeled_extract::<Kd>(static_zeros::<Kd>(), b"psk_hash", mode.get_psk_bytes());
+    let (_, secret_ctx) = labeled_extract::<Kd>(&extracted_psk, b"zz", &shared_secret);
 
     // Empty fixed-size buffers
     let mut key = crate::aead::AeadKey::<A>::default();
     let mut nonce = crate::aead::AeadNonce::<A>::default();
-    let mut exporter_secret = <ExporterSecret<K> as Default>::default();
+    let mut exporter_secret = <ExporterSecret<Kd> as Default>::default();
 
     // Fill the key, nonce, and exporter secret. This only errors if the output values are 255x the
     // digest size of the hash function. Since these values are fixed at compile time, we don't
@@ -110,28 +117,28 @@ fn derive_enc_ctx<A: Aead, Dh: DiffieHellman, K: Kdf, O: OpMode<Dh, K>>(
 ///
 /// Return Value
 /// ============
-/// Returns an encapsulated public key (intended to be sent to the recipient), and an encryption
-/// context.
-pub fn setup_sender<A, Dh, K, R>(
-    mode: &OpModeS<Dh, K>,
-    pk_recip: &Dh::PublicKey,
+/// On success, returns an encapsulated public key (intended to be sent to the recipient), and an
+/// encryption context. The only possible error is `HpkeError::DiffieHellman`.
+pub fn setup_sender<A, Kd, Ke, R>(
+    mode: &OpModeS<Ke::Dh, Kd>,
+    pk_recip: &<Ke::Dh as DiffieHellman>::PublicKey,
     info: &[u8],
     csprng: &mut R,
-) -> (EncappedKey<Dh>, AeadCtx<A, K>)
+) -> Result<(EncappedKey<Ke::Dh>, AeadCtx<A, Kd>), HpkeError>
 where
     A: Aead,
-    Dh: DiffieHellman,
-    K: Kdf,
+    Kd: Kdf,
+    Ke: Kem,
     R: CryptoRng + RngCore,
 {
     // If the identity key is set, use it
     let sender_id_keypair = mode.get_sender_id_keypair();
     // Do the encapsulation
-    let (shared_secret, encapped_key) = kem::encap::<_, K, _>(pk_recip, sender_id_keypair, csprng);
+    let (shared_secret, encapped_key) = kem::encap::<Ke, _>(pk_recip, sender_id_keypair, csprng)?;
     // Use everything to derive an encryption context
-    let enc_ctx = derive_enc_ctx(mode, shared_secret, info);
+    let enc_ctx = derive_enc_ctx::<_, _, Ke, _>(mode, shared_secret, info);
 
-    (encapped_key, enc_ctx)
+    Ok((encapped_key, enc_ctx))
 }
 
 //  From draft02 §6.5:
@@ -145,26 +152,26 @@ where
 ///
 /// Return Value
 /// ============
-/// Returns an encryption context
-pub fn setup_receiver<A, Dh, K>(
-    mode: &OpModeR<Dh, K>,
-    sk_recip: &Dh::PrivateKey,
-    pk_recip: &Dh::PublicKey,
-    encapped_key: &EncappedKey<Dh>,
+/// On success, returns an encryption context. The only possible error is
+/// `HpkeError::DiffieHellman`.
+pub fn setup_receiver<A, Kd, Ke>(
+    mode: &OpModeR<Ke::Dh, Kd>,
+    sk_recip: &<Ke::Dh as DiffieHellman>::PrivateKey,
+    encapped_key: &EncappedKey<Ke::Dh>,
     info: &[u8],
-) -> AeadCtx<A, K>
+) -> Result<AeadCtx<A, Kd>, HpkeError>
 where
     A: Aead,
-    Dh: DiffieHellman,
-    K: Kdf,
+    Kd: Kdf,
+    Ke: Kem,
 {
     // If the identity key is set, use it
-    let pk_sender_id: Option<&Dh::PublicKey> = mode.get_pk_sender_id();
+    let pk_sender_id: Option<&<Ke::Dh as DiffieHellman>::PublicKey> = mode.get_pk_sender_id();
     // Do the decapsulation
-    let shared_secret = kem::decap::<_, K>(sk_recip, pk_recip, pk_sender_id, encapped_key);
+    let shared_secret = kem::decap::<Ke>(sk_recip, pk_sender_id, encapped_key)?;
 
     // Use everything to derive an encryption context
-    derive_enc_ctx(mode, shared_secret, info)
+    Ok(derive_enc_ctx::<_, _, Ke, _>(mode, shared_secret, info))
 }
 
 #[cfg(test)]
@@ -173,19 +180,23 @@ mod test {
     use crate::test_util::{aead_ctx_eq, gen_op_mode_pair, OpModeKind};
     use crate::{
         aead::{AesGcm128, AesGcm256, ChaCha20Poly1305},
-        dh::{x25519::X25519, DiffieHellman},
+        dh::DiffieHellman,
         kdf::{HkdfSha256, HkdfSha384, HkdfSha512},
+        kem::{Kem, X25519HkdfSha256},
     };
 
     /// This tests that `setup_sender` and `setup_receiver` derive the same context. We do this by
     /// testing that `gen_ctx_kem_pair` returns identical encryption contexts
     macro_rules! test_setup_correctness {
-        ($test_name:ident, $aead_ty:ty, $dh_ty:ty, $kdf_ty:ty) => {
+        ($test_name:ident, $aead_ty:ty, $kdf_ty:ty, $kem_ty:ty) => {
             #[test]
             fn $test_name() {
+                use crate::kem::Kem;
+
                 type A = $aead_ty;
-                type Dh = $dh_ty;
-                type K = $kdf_ty;
+                type Kd = $kdf_ty;
+                type Ke = $kem_ty;
+                type Dh = <Ke as Kem>::Dh;
 
                 let mut csprng = rand::thread_rng();
 
@@ -202,24 +213,25 @@ mod test {
                     OpModeKind::AuthPsk,
                 ] {
                     // Generate a mutually agreeing op mode pair
-                    let (sender_mode, receiver_mode) = gen_op_mode_pair::<Dh, K>(*op_mode_kind);
+                    let (sender_mode, receiver_mode) = gen_op_mode_pair::<Dh, Kd>(*op_mode_kind);
 
                     // Construct the sender's encryption context, and get an encapped key
-                    let (encapped_key, mut aead_ctx1) = setup_sender::<A, Dh, _, _>(
+                    let (encapped_key, mut aead_ctx1) = setup_sender::<A, _, Ke, _>(
                         &sender_mode,
                         &pk_recip,
                         &info[..],
                         &mut csprng,
-                    );
+                    )
+                    .unwrap();
 
                     // Use the encapped key to derive the reciever's encryption context
-                    let mut aead_ctx2 = setup_receiver(
+                    let mut aead_ctx2 = setup_receiver::<A, _, Ke>(
                         &receiver_mode,
                         &sk_recip,
-                        &pk_recip,
                         &encapped_key,
                         &info[..],
-                    );
+                    )
+                    .unwrap();
 
                     // Ensure that the two derived contexts are equivalent
                     assert!(aead_ctx_eq(&mut aead_ctx1, &mut aead_ctx2));
@@ -231,64 +243,65 @@ mod test {
     test_setup_correctness!(
         test_setup_correctness_chacha_sha256,
         ChaCha20Poly1305,
-        X25519,
-        HkdfSha256
+        HkdfSha256,
+        X25519HkdfSha256
     );
     test_setup_correctness!(
         test_setup_correctness_aes128_sha256,
         AesGcm128,
-        X25519,
-        HkdfSha256
+        HkdfSha256,
+        X25519HkdfSha256
     );
     test_setup_correctness!(
         test_setup_correctness_aes256_sha256,
         AesGcm256,
-        X25519,
-        HkdfSha256
+        HkdfSha256,
+        X25519HkdfSha256
     );
     test_setup_correctness!(
         test_setup_correctness_chacha_sha384,
         ChaCha20Poly1305,
-        X25519,
-        HkdfSha384
+        HkdfSha384,
+        X25519HkdfSha256
     );
     test_setup_correctness!(
         test_setup_correctness_aes128_sha384,
         AesGcm128,
-        X25519,
-        HkdfSha384
+        HkdfSha384,
+        X25519HkdfSha256
     );
     test_setup_correctness!(
         test_setup_correctness_aes256_sha384,
         AesGcm256,
-        X25519,
-        HkdfSha384
+        HkdfSha384,
+        X25519HkdfSha256
     );
     test_setup_correctness!(
         test_setup_correctness_chacha_sha512,
         ChaCha20Poly1305,
-        X25519,
-        HkdfSha512
+        HkdfSha512,
+        X25519HkdfSha256
     );
     test_setup_correctness!(
         test_setup_correctness_aes128_sha512,
         AesGcm128,
-        X25519,
-        HkdfSha512
+        HkdfSha512,
+        X25519HkdfSha256
     );
     test_setup_correctness!(
         test_setup_correctness_aes256_sha512,
         AesGcm256,
-        X25519,
-        HkdfSha512
+        HkdfSha512,
+        X25519HkdfSha256
     );
 
     /// Tests that using different input data gives you different encryption contexts
     #[test]
     fn test_setup_soundness() {
         type A = ChaCha20Poly1305;
-        type Dh = X25519;
-        type K = HkdfSha256;
+        type Kd = HkdfSha256;
+        type Ke = X25519HkdfSha256;
+        type Dh = <Ke as Kem>::Dh;
 
         let mut csprng = rand::thread_rng();
 
@@ -298,58 +311,40 @@ mod test {
         let (sk_recip, pk_recip) = <Dh as DiffieHellman>::gen_keypair(&mut csprng);
 
         // Generate a mutually agreeing op mode pair
-        let (sender_mode, receiver_mode) = gen_op_mode_pair::<Dh, K>(OpModeKind::Base);
+        let (sender_mode, receiver_mode) = gen_op_mode_pair::<Dh, Kd>(OpModeKind::Base);
 
         // Construct the sender's encryption context normally
         let (encapped_key, aead_ctx1) =
-            setup_sender::<A, Dh, _, _>(&sender_mode, &pk_recip, &info[..], &mut csprng);
+            setup_sender::<A, _, Ke, _>(&sender_mode, &pk_recip, &info[..], &mut csprng).unwrap();
 
         // Now make a receiver with the wrong info string and ensure it doesn't match the sender
         let bad_info = b"something else";
-        let mut aead_ctx2 = setup_receiver(
-            &receiver_mode,
-            &sk_recip,
-            &pk_recip,
-            &encapped_key,
-            &bad_info[..],
-        );
+        let mut aead_ctx2 =
+            setup_receiver::<_, _, Ke>(&receiver_mode, &sk_recip, &encapped_key, &bad_info[..])
+                .unwrap();
         assert!(!aead_ctx_eq(&mut aead_ctx1.clone(), &mut aead_ctx2));
 
         // Now make a receiver with the wrong secret key and ensure it doesn't match the sender
         let (bad_sk, _) = <Dh as DiffieHellman>::gen_keypair(&mut csprng);
         let mut aead_ctx2 =
-            setup_receiver(&receiver_mode, &bad_sk, &pk_recip, &encapped_key, &info[..]);
-        assert!(!aead_ctx_eq(&mut aead_ctx1.clone(), &mut aead_ctx2));
-
-        // Now make a receiver with the wrong public key and ensure it doesn't match the sender
-        let (_, bad_pk) = <Dh as DiffieHellman>::gen_keypair(&mut csprng);
-        let mut aead_ctx2 =
-            setup_receiver(&receiver_mode, &sk_recip, &bad_pk, &encapped_key, &info[..]);
+            setup_receiver::<_, _, Ke>(&receiver_mode, &bad_sk, &encapped_key, &info[..]).unwrap();
         assert!(!aead_ctx_eq(&mut aead_ctx1.clone(), &mut aead_ctx2));
 
         // Now make a receiver with the wrong encapped key and ensure it doesn't match the sender.
         // The reason `bad_encapped_key` is bad is because its underlying key is uniformly random,
         // and therefore different from the key that the sender sent.
         let (bad_encapped_key, _) =
-            setup_sender::<A, Dh, _, _>(&sender_mode, &pk_recip, &info[..], &mut csprng);
-        let mut aead_ctx2 = setup_receiver(
-            &receiver_mode,
-            &sk_recip,
-            &pk_recip,
-            &bad_encapped_key,
-            &info[..],
-        );
+            setup_sender::<A, _, Ke, _>(&sender_mode, &pk_recip, &info[..], &mut csprng).unwrap();
+        let mut aead_ctx2 =
+            setup_receiver::<_, _, Ke>(&receiver_mode, &sk_recip, &bad_encapped_key, &info[..])
+                .unwrap();
         assert!(!aead_ctx_eq(&mut aead_ctx1.clone(), &mut aead_ctx2));
 
         // Now make sure that this test was a valid test by ensuring that doing everything the
         // right way makes it pass
-        let mut aead_ctx2 = setup_receiver(
-            &receiver_mode,
-            &sk_recip,
-            &pk_recip,
-            &encapped_key,
-            &info[..],
-        );
+        let mut aead_ctx2 =
+            setup_receiver::<_, _, Ke>(&receiver_mode, &sk_recip, &encapped_key, &info[..])
+                .unwrap();
         assert!(aead_ctx_eq(&mut aead_ctx1.clone(), &mut aead_ctx2));
     }
 }

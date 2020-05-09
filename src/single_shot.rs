@@ -2,7 +2,7 @@ use crate::{
     aead::{Aead, AeadTag, AssociatedData},
     dh::DiffieHellman,
     kdf::Kdf,
-    kem::EncappedKey,
+    kem::{EncappedKey, Kem},
     op_mode::{OpModeR, OpModeS},
     setup::{setup_receiver, setup_sender},
     HpkeError,
@@ -20,25 +20,25 @@ use rand::{CryptoRng, RngCore};
 ///
 /// Return Value
 /// ============
-/// Returns `Ok((encapped_key, tag))` on success. If an unspecified error happened during
-/// encryption, returns `Err(HpkeError::Encryption)`. In this case, the contents of `plaintext` is
-/// undefined.
-pub fn single_shot_seal<'a, A, Dh, K, R>(
-    mode: &OpModeS<Dh, K>,
-    pk_recip: &Dh::PublicKey,
+/// Returns `Ok((encapped_key, tag))` on success. If an error happened during key exchange, returns
+/// `Err(HpkeError::DiffieHellman)`. If an unspecified error happened during encryption, returns
+/// `Err(HpkeError::Encryption)`. In this case, the contents of `plaintext` is undefined.
+pub fn single_shot_seal<'a, A, Kd, Ke, R>(
+    mode: &OpModeS<Ke::Dh, Kd>,
+    pk_recip: &<Ke::Dh as DiffieHellman>::PublicKey,
     info: &[u8],
     plaintext: &mut [u8],
     aad: AssociatedData<'a>,
     csprng: &mut R,
-) -> Result<(EncappedKey<Dh>, AeadTag<A>), HpkeError>
+) -> Result<(EncappedKey<Ke::Dh>, AeadTag<A>), HpkeError>
 where
     A: Aead,
-    Dh: DiffieHellman,
-    K: Kdf,
+    Kd: Kdf,
+    Ke: Kem,
     R: CryptoRng + RngCore,
 {
     // Encap a key
-    let (encapped_key, mut aead_ctx) = setup_sender::<A, Dh, K, R>(mode, pk_recip, info, csprng);
+    let (encapped_key, mut aead_ctx) = setup_sender::<A, Kd, Ke, R>(mode, pk_recip, info, csprng)?;
     // Encrypt
     let tag = aead_ctx.seal(plaintext, aad)?;
 
@@ -54,13 +54,13 @@ where
 ///
 /// Return Value
 /// ============
-/// Returns `Ok()` on success. If an unspecified error happened during decryption, returns
+/// Returns `Ok()` on success. If an error happened during key exchange, returns
+/// `Err(HpkeError::DiffieHellman)`. If an unspecified error happened during decryption, returns
 /// `Err(HpkeError::Encryption)`. In this case, the contents of `ciphertext` is undefined.
-pub fn single_shot_open<'a, A, Dh, K>(
-    mode: &OpModeR<Dh, K>,
-    sk_recip: &Dh::PrivateKey,
-    pk_recip: &Dh::PublicKey,
-    encapped_key: &EncappedKey<Dh>,
+pub fn single_shot_open<'a, A, Kd, Ke>(
+    mode: &OpModeR<Ke::Dh, Kd>,
+    sk_recip: &<Ke::Dh as DiffieHellman>::PrivateKey,
+    encapped_key: &EncappedKey<Ke::Dh>,
     info: &[u8],
     ciphertext: &mut [u8],
     aad: AssociatedData<'a>,
@@ -68,11 +68,11 @@ pub fn single_shot_open<'a, A, Dh, K>(
 ) -> Result<(), HpkeError>
 where
     A: Aead,
-    Dh: DiffieHellman,
-    K: Kdf,
+    Kd: Kdf,
+    Ke: Kem,
 {
     // Decap the key
-    let mut aead_ctx = setup_receiver::<A, Dh, K>(mode, sk_recip, pk_recip, encapped_key, info);
+    let mut aead_ctx = setup_receiver::<A, Kd, Ke>(mode, sk_recip, encapped_key, info)?;
     // Decrypt
     aead_ctx.open(ciphertext, aad, tag)
 }
@@ -82,8 +82,9 @@ mod test {
     use super::{single_shot_open, single_shot_seal};
     use crate::{
         aead::{AssociatedData, ChaCha20Poly1305},
-        dh::{DiffieHellman, X25519},
+        dh::DiffieHellman,
         kdf::HkdfSha256,
+        kem::{Kem, X25519HkdfSha256},
         op_mode::{OpModeR, OpModeS},
         test_util::gen_psk_bundle,
     };
@@ -93,9 +94,10 @@ mod test {
     /// correctness of `seal/open` and `setup_sender/setup_receiver`.
     #[test]
     fn test_single_shot_correctness() {
-        type K = HkdfSha256;
-        type Dh = X25519;
         type A = ChaCha20Poly1305;
+        type Kd = HkdfSha256;
+        type Ke = X25519HkdfSha256;
+        type Dh = <Ke as Kem>::Dh;
 
         let msg = b"Good night, a-ding ding ding ding ding";
         let aad = AssociatedData(b"Five four three two one");
@@ -104,7 +106,7 @@ mod test {
 
         // Set up an arbitrary info string, a random PSK, and an arbitrary PSK ID
         let info = b"why would you think in a million years that that would actually work";
-        let psk_bundle = gen_psk_bundle::<K>();
+        let psk_bundle = gen_psk_bundle::<Kd>();
 
         // Generate the sender's and receiver's long-term keypairs
         let (sk_sender_id, pk_sender_id) = Dh::gen_keypair(&mut csprng);
@@ -119,7 +121,7 @@ mod test {
 
         // Encrypt with the first context
         let mut ciphertext = msg.clone();
-        let (encapped_key, tag) = single_shot_seal::<A, _, _, _>(
+        let (encapped_key, tag) = single_shot_seal::<A, _, Ke, _>(
             &sender_mode,
             &pk_recip,
             &info[..],
@@ -133,10 +135,9 @@ mod test {
         assert!(&ciphertext[..] != &msg[..]);
 
         // Decrypt with the second context
-        single_shot_open::<A, _, _>(
+        single_shot_open::<A, _, Ke>(
             &receiver_mode,
             &sk_recip,
-            &pk_recip,
             &encapped_key,
             info,
             &mut ciphertext[..],

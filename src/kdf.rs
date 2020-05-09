@@ -1,7 +1,5 @@
 use crate::{prelude::*, util::static_zeros};
 
-use core::u16;
-
 use byteorder::{BigEndian, WriteBytesExt};
 use digest::{generic_array::GenericArray, BlockInput, Digest, FixedOutput, Input, Reset};
 use sha2::{Sha256, Sha384, Sha512};
@@ -63,9 +61,9 @@ pub(crate) fn extract_and_expand<K: Kdf>(
     // The salt is a zero array of length Nh
     let salt = static_zeros::<K>();
     // Extract using given IKM
-    let (_, hkdf_ctx) = hkdf::Hkdf::<K::HashImpl>::extract(Some(&salt), ikm);
+    let (_, hkdf_ctx) = labeled_extract::<K>(&salt, b"dh", ikm);
     // Expand using given info string
-    hkdf_ctx.expand(info, out)
+    hkdf_ctx.labeled_expand(b"prk", info, out)
 }
 
 // def LabeledExtract(salt, label, IKM):
@@ -109,6 +107,7 @@ impl<D: Input + BlockInput + FixedOutput + Reset + Default + Clone> LabeledExpan
         info: &[u8],
         out: &mut [u8],
     ) -> Result<(), hkdf::InvalidLength> {
+        // We need to write the length as a u16, so that's the de-facto upper bound on length
         assert!(out.len() <= u16::MAX as usize);
 
         // Encode the output length in the info string

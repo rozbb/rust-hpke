@@ -47,7 +47,7 @@ pub use dh::{DiffieHellman, Marshallable, MarshalledPrivateKey, MarshalledPublic
 #[doc(inline)]
 pub use kdf::Kdf;
 #[doc(inline)]
-pub use kem::{EncappedKey, MarshalledEncappedKey};
+pub use kem::{EncappedKey, Kem, MarshalledEncappedKey};
 #[doc(inline)]
 pub use op_mode::{OpModeR, OpModeS, Psk, PskBundle};
 #[doc(inline)]
@@ -66,6 +66,8 @@ pub enum HpkeError {
     InvalidTag,
     /// An error occured during encryption
     Encryption,
+    /// A Diffie-Hellman input or output was invalid
+    DiffieHellman,
 }
 
 impl core::fmt::Display for HpkeError {
@@ -74,11 +76,12 @@ impl core::fmt::Display for HpkeError {
             HpkeError::SeqOverflow => "Sequence overflow",
             HpkeError::InvalidTag => "Invalid tag",
             HpkeError::Encryption => "Encryption error",
+            HpkeError::DiffieHellman => "Diffie-Hellman validation error",
         };
         f.write_str(kind)
     }
 }
 
-// And Error type is just something that's Debug and Display
+// An Error type is just something that's Debug and Display
 #[cfg(feature = "std")]
 impl std::error::Error for HpkeError {}

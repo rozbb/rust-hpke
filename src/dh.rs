@@ -1,3 +1,5 @@
+use crate::HpkeError;
+
 use digest::generic_array::{ArrayLength, GenericArray};
 use rand::{CryptoRng, RngCore};
 
@@ -29,21 +31,21 @@ pub trait DiffieHellman {
     type PrivateKey: Clone + Marshallable + Unmarshallable;
     type DhResult: Marshallable;
 
-    const KEM_ID: u16;
-
     fn gen_keypair<R: CryptoRng + RngCore>(csprng: &mut R) -> (Self::PrivateKey, Self::PublicKey);
 
     fn sk_to_pk(sk: &Self::PrivateKey) -> Self::PublicKey;
 
-    fn dh(sk: &Self::PrivateKey, pk: &Self::PublicKey) -> Self::DhResult;
+    fn dh(sk: &Self::PrivateKey, pk: &Self::PublicKey) -> Result<Self::DhResult, HpkeError>;
 }
 
 pub use x25519::X25519;
 pub mod x25519 {
     use super::{DiffieHellman, Marshallable, Unmarshallable};
+    use crate::HpkeError;
 
     use digest::generic_array::{typenum, GenericArray};
     use rand::{CryptoRng, RngCore};
+    use subtle::ConstantTimeEq;
 
     // We wrap the types in order to abstract away the dalek dep
 
@@ -54,8 +56,7 @@ pub mod x25519 {
     #[derive(Clone)]
     pub struct PrivateKey(x25519_dalek::StaticSecret);
 
-    // A bare DH computation result. This can be used to make either a DhResult::Unauthed (if
-    // it's just one DhResult), or a DhResult::Authed (if it's two).
+    // A bare DH computation result
     pub struct DhResult(x25519_dalek::SharedSecret);
 
     // Oh I love me an excuse to break out type-level integers
@@ -109,9 +110,6 @@ pub mod x25519 {
         type PrivateKey = PrivateKey;
         type DhResult = DhResult;
 
-        // Section 8.1: DHKEM(Curve25519)
-        const KEM_ID: u16 = 0x0020;
-
         /// Generates an X25519 keypair
         fn gen_keypair<R: CryptoRng + RngCore>(csprng: &mut R) -> (PrivateKey, PublicKey) {
             let sk = x25519_dalek::StaticSecret::new(csprng);
@@ -125,9 +123,17 @@ pub mod x25519 {
             PublicKey(x25519_dalek::PublicKey::from(&sk.0))
         }
 
-        /// Does the DH operation
-        fn dh(sk: &PrivateKey, pk: &PublicKey) -> DhResult {
-            DhResult(sk.0.diffie_hellman(&pk.0))
+        /// Does the DH operation. Returns `HpkeError::DiffieHellman` if and only if the DH result
+        /// was all zeros. This is required by the HPKE spec.
+        fn dh(sk: &PrivateKey, pk: &PublicKey) -> Result<DhResult, HpkeError> {
+            let res = sk.0.diffie_hellman(&pk.0);
+            // "Senders and recipients MUST check whether the shared secret is the all-zero value
+            // and abort if so"
+            if res.as_bytes().ct_eq(&[0u8; 32]).into() {
+                Err(HpkeError::DiffieHellman)
+            } else {
+                Ok(DhResult(res))
+            }
         }
     }
 

@@ -19,7 +19,7 @@ use hpke::{
         X25519,
     },
     kdf::{HkdfSha256, HkdfSha384, HkdfSha512, Kdf},
-    kem::MarshalledEncappedKey,
+    kem::{Kem, MarshalledEncappedKey, X25519HkdfSha256},
     op_mode::{Psk, PskBundle},
     setup_receiver, setup_sender, EncappedKey, HpkeError, OpModeR, OpModeS,
 };
@@ -58,6 +58,13 @@ enum AgileHpkeError {
     UnknownAlgIdent(&'static str, u16),
     /// Represents an error in the `hpke` crate
     HpkeError(HpkeError),
+}
+
+// This just wraps the HpkeError
+impl From<HpkeError> for AgileHpkeError {
+    fn from(e: HpkeError) -> AgileHpkeError {
+        AgileHpkeError::HpkeError(e)
+    }
 }
 
 impl<A: Aead, K: Kdf> AgileAeadCtx for AeadCtx<A, K> {
@@ -194,29 +201,6 @@ impl DhAlg {
         }
     }
 
-    fn try_from_u16(id: u16) -> Result<DhAlg, AgileHpkeError> {
-        let res = match id {
-            0x10 => DhAlg::P256,
-            0x11 => DhAlg::P384,
-            0x12 => DhAlg::P521,
-            0x20 => DhAlg::X25519,
-            0x21 => DhAlg::X448,
-            _ => return Err(AgileHpkeError::UnknownAlgIdent("KdfAlg", id)),
-        };
-
-        Ok(res)
-    }
-
-    fn to_u16(&self) -> u16 {
-        match self {
-            DhAlg::P256 => 0x10,
-            DhAlg::P384 => 0x11,
-            DhAlg::P521 => 0x12,
-            DhAlg::X25519 => 0x20,
-            DhAlg::X448 => 0x21,
-        }
-    }
-
     fn get_pubkey_len(&self) -> usize {
         match self {
             DhAlg::X25519 => 32,
@@ -224,6 +208,51 @@ impl DhAlg {
             DhAlg::P256 => 65,
             DhAlg::P384 => 97,
             DhAlg::P521 => 133,
+        }
+    }
+}
+
+struct KemAlg {
+    dh_alg: DhAlg,
+    kdf_alg: KdfAlg,
+}
+
+impl KemAlg {
+    fn try_from_u16(id: u16) -> Result<KemAlg, AgileHpkeError> {
+        let res = match id {
+            0x10 => KemAlg {
+                dh_alg: DhAlg::P256,
+                kdf_alg: KdfAlg::HkdfSha256,
+            },
+            0x11 => KemAlg {
+                dh_alg: DhAlg::P384,
+                kdf_alg: KdfAlg::HkdfSha384,
+            },
+            0x12 => KemAlg {
+                dh_alg: DhAlg::P521,
+                kdf_alg: KdfAlg::HkdfSha512,
+            },
+            0x20 => KemAlg {
+                dh_alg: DhAlg::X25519,
+                kdf_alg: KdfAlg::HkdfSha256,
+            },
+            0x21 => KemAlg {
+                dh_alg: DhAlg::X448,
+                kdf_alg: KdfAlg::HkdfSha512,
+            },
+            _ => return Err(AgileHpkeError::UnknownAlgIdent("KemAlg", id)),
+        };
+
+        Ok(res)
+    }
+
+    fn to_u16(&self) -> u16 {
+        match self.dh_alg {
+            DhAlg::P256 => 0x10,
+            DhAlg::P384 => 0x11,
+            DhAlg::P521 => 0x12,
+            DhAlg::X25519 => 0x20,
+            DhAlg::X448 => 0x21,
         }
     }
 }
@@ -557,18 +586,19 @@ impl AgilePskBundle {
 
 // The leg work of agile_setup_sender
 macro_rules! do_setup_sender {
-    ($aead_ty:ty, $dh_ty:ty, $kdf_ty:ty, $mode:ident, $pk_recip:ident, $info:ident, $csprng:ident) => {{
+    ($aead_ty:ty, $kdf_ty:ty, $kem_ty:ty, $mode:ident, $pk_recip:ident, $info:ident, $csprng:ident) => {{
         type A = $aead_ty;
-        type Dh = $dh_ty;
-        type K = $kdf_ty;
+        type Kd = $kdf_ty;
+        type Ke = $kem_ty;
+        type Dh = <Ke as Kem>::Dh;
 
         let dh_alg = $mode.dh_alg;
-        let mode = $mode.clone().try_lift::<Dh, K>()?;
+        let mode = $mode.clone().try_lift::<Dh, Kd>()?;
         let pk_recip = $pk_recip.clone().try_lift::<Dh>()?;
         let info = $info;
         let csprng = $csprng;
 
-        let (encapped_key, aead_ctx) = setup_sender::<A, Dh, K, _>(&mode, &pk_recip, info, csprng);
+        let (encapped_key, aead_ctx) = setup_sender::<A, _, Ke, _>(&mode, &pk_recip, info, csprng)?;
         let encapped_key = AgileEncappedKey {
             dh_alg: dh_alg,
             encapped_key_bytes: encapped_key.marshal().to_vec(),
@@ -598,8 +628,8 @@ fn agile_setup_sender<R: CryptoRng + RngCore>(
     match (aead_alg, mode.dh_alg, mode.kdf_alg) {
         (AeadAlg::ChaCha20Poly1305, DhAlg::X25519, KdfAlg::HkdfSha256) => do_setup_sender!(
             ChaCha20Poly1305,
-            X25519,
             HkdfSha256,
+            X25519HkdfSha256,
             mode,
             pk_recip,
             info,
@@ -607,8 +637,8 @@ fn agile_setup_sender<R: CryptoRng + RngCore>(
         ),
         (AeadAlg::ChaCha20Poly1305, DhAlg::X25519, KdfAlg::HkdfSha384) => do_setup_sender!(
             ChaCha20Poly1305,
-            X25519,
             HkdfSha384,
+            X25519HkdfSha256,
             mode,
             pk_recip,
             info,
@@ -616,48 +646,85 @@ fn agile_setup_sender<R: CryptoRng + RngCore>(
         ),
         (AeadAlg::ChaCha20Poly1305, DhAlg::X25519, KdfAlg::HkdfSha512) => do_setup_sender!(
             ChaCha20Poly1305,
-            X25519,
             HkdfSha512,
+            X25519HkdfSha256,
             mode,
             pk_recip,
             info,
             csprng
         ),
-        (AeadAlg::AesGcm128, DhAlg::X25519, KdfAlg::HkdfSha256) => {
-            do_setup_sender!(AesGcm128, X25519, HkdfSha256, mode, pk_recip, info, csprng)
-        }
-        (AeadAlg::AesGcm128, DhAlg::X25519, KdfAlg::HkdfSha384) => {
-            do_setup_sender!(AesGcm128, X25519, HkdfSha384, mode, pk_recip, info, csprng)
-        }
-        (AeadAlg::AesGcm128, DhAlg::X25519, KdfAlg::HkdfSha512) => {
-            do_setup_sender!(AesGcm128, X25519, HkdfSha512, mode, pk_recip, info, csprng)
-        }
-        (AeadAlg::AesGcm256, DhAlg::X25519, KdfAlg::HkdfSha256) => {
-            do_setup_sender!(AesGcm256, X25519, HkdfSha256, mode, pk_recip, info, csprng)
-        }
-        (AeadAlg::AesGcm256, DhAlg::X25519, KdfAlg::HkdfSha384) => {
-            do_setup_sender!(AesGcm256, X25519, HkdfSha384, mode, pk_recip, info, csprng)
-        }
-        (AeadAlg::AesGcm256, DhAlg::X25519, KdfAlg::HkdfSha512) => {
-            do_setup_sender!(AesGcm256, X25519, HkdfSha512, mode, pk_recip, info, csprng)
-        }
+        (AeadAlg::AesGcm128, DhAlg::X25519, KdfAlg::HkdfSha256) => do_setup_sender!(
+            AesGcm128,
+            HkdfSha256,
+            X25519HkdfSha256,
+            mode,
+            pk_recip,
+            info,
+            csprng
+        ),
+        (AeadAlg::AesGcm128, DhAlg::X25519, KdfAlg::HkdfSha384) => do_setup_sender!(
+            AesGcm128,
+            HkdfSha384,
+            X25519HkdfSha256,
+            mode,
+            pk_recip,
+            info,
+            csprng
+        ),
+        (AeadAlg::AesGcm128, DhAlg::X25519, KdfAlg::HkdfSha512) => do_setup_sender!(
+            AesGcm128,
+            HkdfSha512,
+            X25519HkdfSha256,
+            mode,
+            pk_recip,
+            info,
+            csprng
+        ),
+        (AeadAlg::AesGcm256, DhAlg::X25519, KdfAlg::HkdfSha256) => do_setup_sender!(
+            AesGcm256,
+            HkdfSha256,
+            X25519HkdfSha256,
+            mode,
+            pk_recip,
+            info,
+            csprng
+        ),
+        (AeadAlg::AesGcm256, DhAlg::X25519, KdfAlg::HkdfSha384) => do_setup_sender!(
+            AesGcm256,
+            HkdfSha384,
+            X25519HkdfSha256,
+            mode,
+            pk_recip,
+            info,
+            csprng
+        ),
+        (AeadAlg::AesGcm256, DhAlg::X25519, KdfAlg::HkdfSha512) => do_setup_sender!(
+            AesGcm256,
+            HkdfSha512,
+            X25519HkdfSha256,
+            mode,
+            pk_recip,
+            info,
+            csprng
+        ),
         _ => unimplemented!(),
     }
 }
 
 // The leg work of agile_setup_receiver
 macro_rules! do_setup_receiver {
-    ($aead_ty:ty, $dh_ty:ty, $kdf_ty:ty, $mode:ident, $recip_keypair:ident, $encapped_key:ident, $info:ident) => {{
+    ($aead_ty:ty, $kdf_ty:ty, $kem_ty:ty, $mode:ident, $recip_keypair:ident, $encapped_key:ident, $info:ident) => {{
         type A = $aead_ty;
-        type Dh = $dh_ty;
-        type K = $kdf_ty;
+        type Kd = $kdf_ty;
+        type Ke = $kem_ty;
+        type Dh = <Ke as Kem>::Dh;
 
-        let mode = $mode.clone().try_lift::<Dh, K>()?;
-        let (sk_recip, pk_recip) = $recip_keypair.clone().try_lift::<Dh>()?;
+        let mode = $mode.clone().try_lift::<Dh, Kd>()?;
+        let (sk_recip, _) = $recip_keypair.clone().try_lift::<Dh>()?;
         let encapped_key = $encapped_key.clone().try_lift::<Dh>()?;
         let info = $info;
 
-        let aead_ctx = setup_receiver::<A, Dh, K>(&mode, &sk_recip, &pk_recip, &encapped_key, info);
+        let aead_ctx = setup_receiver::<A, _, Ke>(&mode, &sk_recip, &encapped_key, info)?;
         Ok(Box::new(aead_ctx))
     }};
 }
@@ -689,8 +756,8 @@ fn agile_setup_receiver(
     match (aead_alg, mode.dh_alg, mode.kdf_alg) {
         (AeadAlg::ChaCha20Poly1305, DhAlg::X25519, KdfAlg::HkdfSha256) => do_setup_receiver!(
             ChaCha20Poly1305,
-            X25519,
             HkdfSha256,
+            X25519HkdfSha256,
             mode,
             recip_keypair,
             encapped_key,
@@ -698,8 +765,8 @@ fn agile_setup_receiver(
         ),
         (AeadAlg::ChaCha20Poly1305, DhAlg::X25519, KdfAlg::HkdfSha384) => do_setup_receiver!(
             ChaCha20Poly1305,
-            X25519,
             HkdfSha384,
+            X25519HkdfSha256,
             mode,
             recip_keypair,
             encapped_key,
@@ -707,8 +774,8 @@ fn agile_setup_receiver(
         ),
         (AeadAlg::ChaCha20Poly1305, DhAlg::X25519, KdfAlg::HkdfSha512) => do_setup_receiver!(
             ChaCha20Poly1305,
-            X25519,
             HkdfSha512,
+            X25519HkdfSha256,
             mode,
             recip_keypair,
             encapped_key,
@@ -716,8 +783,8 @@ fn agile_setup_receiver(
         ),
         (AeadAlg::AesGcm128, DhAlg::X25519, KdfAlg::HkdfSha256) => do_setup_receiver!(
             AesGcm128,
-            X25519,
             HkdfSha256,
+            X25519HkdfSha256,
             mode,
             recip_keypair,
             encapped_key,
@@ -725,8 +792,8 @@ fn agile_setup_receiver(
         ),
         (AeadAlg::AesGcm128, DhAlg::X25519, KdfAlg::HkdfSha384) => do_setup_receiver!(
             AesGcm128,
-            X25519,
             HkdfSha384,
+            X25519HkdfSha256,
             mode,
             recip_keypair,
             encapped_key,
@@ -734,8 +801,8 @@ fn agile_setup_receiver(
         ),
         (AeadAlg::AesGcm128, DhAlg::X25519, KdfAlg::HkdfSha512) => do_setup_receiver!(
             AesGcm128,
-            X25519,
             HkdfSha512,
+            X25519HkdfSha256,
             mode,
             recip_keypair,
             encapped_key,
@@ -743,8 +810,8 @@ fn agile_setup_receiver(
         ),
         (AeadAlg::AesGcm256, DhAlg::X25519, KdfAlg::HkdfSha256) => do_setup_receiver!(
             AesGcm256,
-            X25519,
             HkdfSha256,
+            X25519HkdfSha256,
             mode,
             recip_keypair,
             encapped_key,
@@ -752,8 +819,8 @@ fn agile_setup_receiver(
         ),
         (AeadAlg::AesGcm256, DhAlg::X25519, KdfAlg::HkdfSha384) => do_setup_receiver!(
             AesGcm256,
-            X25519,
             HkdfSha384,
+            X25519HkdfSha256,
             mode,
             recip_keypair,
             encapped_key,
@@ -761,8 +828,8 @@ fn agile_setup_receiver(
         ),
         (AeadAlg::AesGcm256, DhAlg::X25519, KdfAlg::HkdfSha512) => do_setup_receiver!(
             AesGcm256,
-            X25519,
             HkdfSha512,
+            X25519HkdfSha256,
             mode,
             recip_keypair,
             encapped_key,
