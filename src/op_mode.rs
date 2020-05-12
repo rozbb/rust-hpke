@@ -1,13 +1,8 @@
 use crate::prelude::*;
-use crate::{
-    kdf::Kdf as KdfTrait,
-    kex::{KeyExchange, Marshallable},
-    util::static_zeros,
-};
+use crate::{kdf::Kdf as KdfTrait, kex::KeyExchange, util::static_zeros};
 
 use core::marker::PhantomData;
 
-use digest::generic_array::GenericArray;
 use zeroize::Zeroizing;
 
 /// A preshared key, i.e., a secret that the sender and recipient both know before any exchange has
@@ -109,17 +104,11 @@ impl<Kex: KeyExchange, Kdf: KdfTrait> OpModeS<Kex, Kdf> {
     }
 }
 
-// A convenience type. This is just a fixed-size array containing the bytes of a pubkey.
-type MarshalledPubkey<Kex> =
-    GenericArray<u8, <<Kex as KeyExchange>::PublicKey as Marshallable>::OutputSize>;
-
 /// Represents the convenience methods necessary for getting default values out of the operation
 /// mode. These are defined in draft02 §6.1.
 pub(crate) trait OpMode<Kex: KeyExchange> {
     /// Gets the mode ID (hardcoded based on variant)
     fn mode_id(&self) -> u8;
-    /// If this is an auth mode, returns the sender's pubkey. Otherwise returns zeros.
-    fn get_marshalled_sender_pk(&self) -> MarshalledPubkey<Kex>;
     /// If this is a PSK mode, returns the PSK. Otherwise returns zeros.
     fn get_psk_bytes(&self) -> &[u8];
     /// If this is a PSK mode, returns the PSK ID. Otherwise returns the empty string.
@@ -134,17 +123,6 @@ impl<Kex: KeyExchange, Kdf: KdfTrait> OpMode<Kex> for OpModeR<Kex, Kdf> {
             OpModeR::Psk(..) => 0x01,
             OpModeR::Auth(..) => 0x02,
             OpModeR::AuthPsk(..) => 0x03,
-        }
-    }
-
-    // Returns the sender's identity key if it's set in the mode, otherwise returns
-    // [0u8; Kex::PublicKey::OutputSize]
-    fn get_marshalled_sender_pk(&self) -> MarshalledPubkey<Kex> {
-        // draft02 §6.1: default_pkIm = zero(Npk)
-        match self {
-            OpModeR::Auth(pk) => pk.marshal(),
-            OpModeR::AuthPsk(pk, _) => pk.marshal(),
-            _ => <MarshalledPubkey<Kex> as Default>::default(),
         }
     }
 
@@ -180,19 +158,6 @@ impl<Kex: KeyExchange, Kdf: KdfTrait> OpMode<Kex> for OpModeS<Kex, Kdf> {
             OpModeS::Psk(..) => 0x01,
             OpModeS::Auth(..) => 0x02,
             OpModeS::AuthPsk(..) => 0x03,
-        }
-    }
-
-    // Returns the sender's identity key if it's set in the mode, otherwise returns
-    // [0u8; Kex::PublicKey::OutputSize]
-    fn get_marshalled_sender_pk(&self) -> MarshalledPubkey<Kex> {
-        // draft02 §6.1: default_pkIm = zero(Npk)
-        // Since this OpMode stores just the secret key, we have to convert it to a pubkey before
-        // returning it.
-        match self {
-            OpModeS::Auth((_, pk)) => pk.marshal(),
-            OpModeS::AuthPsk((_, pk), _) => pk.marshal(),
-            _ => <MarshalledPubkey<Kex> as Default>::default(),
         }
     }
 

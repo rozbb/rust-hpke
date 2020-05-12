@@ -151,7 +151,7 @@ pub mod x25519 {
     #[cfg(test)]
     mod tests {
         use crate::kex::{
-            x25519::{KexResult, PrivateKey, PublicKey, X25519},
+            x25519::{PrivateKey, PublicKey, X25519},
             KeyExchange, Marshallable, Unmarshallable,
         };
         use rand::RngCore;
@@ -167,23 +167,6 @@ pub mod x25519 {
         impl PartialEq for PublicKey {
             fn eq(&self, other: &PublicKey) -> bool {
                 self.0.as_bytes() == other.0.as_bytes()
-            }
-        }
-
-        // We need to be able to compare shared secrets in order to make sure that encap* and
-        // decap* produce the same output
-        impl PartialEq for KexResult {
-            fn eq(&self, other: &KexResult) -> bool {
-                self.marshal() == other.marshal()
-            }
-        }
-
-        impl Eq for KexResult {}
-
-        // We need Debug in order to be able to assert_eq! shared secrets
-        impl core::fmt::Debug for KexResult {
-            fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
-                write!(f, "{:0x?}", self.marshal())
             }
         }
 
