@@ -15,19 +15,19 @@ This implementation complies with the [HPKE draft](https://github.com/cfrg/draft
 Here are all the primitives listed in the spec. The primitives with checked boxes are the ones that are implemented.
 
 * KEMs
-    [X] DHKEM(Curve25519, HKDF-SHA256)
-    [ ] DHKEM(Curve448, HKDF-SHA512)
-    [ ] DHKEM(P-256, HKDF-SHA256)
-    [ ] DHKEM(P-384, HKDF-SHA384)
-    [ ] DHKEM(P-521, HKDF-SHA512)
+    - [X] DHKEM(Curve25519, HKDF-SHA256)
+    - [ ] DHKEM(Curve448, HKDF-SHA512)
+    - [ ] DHKEM(P-256, HKDF-SHA256)
+    - [ ] DHKEM(P-384, HKDF-SHA384)
+    - [ ] DHKEM(P-521, HKDF-SHA512)
 * KDFs
-    [X] HKDF-SHA256
-    [X] HKDF-SHA384
-    [X] HKDF-SHA512
+    - [X] HKDF-SHA256
+    - [X] HKDF-SHA384
+    - [X] HKDF-SHA512
 * AEADs
-    [X] AES-GCM-128
-    [X] AES-GCM-256
-    [X] ChaCha20Poly1305
+    - [X] AES-GCM-128
+    - [X] AES-GCM-256
+    - [X] ChaCha20Poly1305
 
 Crate Features
 --------------
