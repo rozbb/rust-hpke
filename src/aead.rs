@@ -250,14 +250,17 @@ impl<A: Aead, K: Kdf> AeadCtx<A, K> {
     /// Return Value
     /// ============
     /// Returns `Ok(())` on success. If the buffer length is more than 255x the digest size of the
-    /// underlying hash function, returns an `Err(InvalidLength)`.
-    pub fn export(&self, info: &[u8], out_buf: &mut [u8]) -> Result<(), hkdf::InvalidLength> {
+    /// underlying hash function, returns a `HpkeError::InvalidKdfLength`.
+    pub fn export(&self, info: &[u8], out_buf: &mut [u8]) -> Result<(), HpkeError> {
         // Use our exporter secret as the PRK for an HKDF-Expand op. The only time this fails is
         // when the length of the PRK is not the the underlying hash function's digest size. But
         // that's guaranteed by the type system, so we can unwrap().
         let hkdf_ctx = Hkdf::<K::HashImpl>::from_prk(self.exporter_secret.as_slice()).unwrap();
 
-        hkdf_ctx.expand(info, out_buf)
+        // This call either succeeds or returns hkdf::InvalidLength
+        hkdf_ctx
+            .expand(info, out_buf)
+            .map_err(|_| HpkeError::InvalidKdfLength)
     }
 }
 

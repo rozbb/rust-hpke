@@ -68,6 +68,8 @@ pub enum HpkeError {
     Encryption,
     /// A Diffie-Hellman input or output was invalid
     DiffieHellman,
+    /// The KDF was asked to output too many bytes
+    InvalidKdfLength,
 }
 
 impl core::fmt::Display for HpkeError {
@@ -77,6 +79,7 @@ impl core::fmt::Display for HpkeError {
             HpkeError::InvalidTag => "Invalid tag",
             HpkeError::Encryption => "Encryption error",
             HpkeError::DiffieHellman => "Diffie-Hellman validation error",
+            HpkeError::InvalidKdfLength => "Too many bytes requested from KDF",
         };
         f.write_str(kind)
     }
