@@ -1,29 +1,33 @@
 rust-hpke
 =========
+[![Version](https://img.shields.io/crates/v/hpke.svg)](https://crates.io/crates/hpke)
+[![Docs](https://docs.rs/hpke/badge.svg)](https://docs.rs/hpke)
 ![CI](https://github.com/rozbb/rust-hpke/workflows/CI/badge.svg)
 [![Coverage](https://codecov.io/gh/rozbb/rust-hpke/branch/master/graph/badge.svg)](https://codecov.io/gh/rozbb/rust-hpke)
 
-This is an **work-in-progress** implementation of the [HPKE](https://datatracker.ietf.org/doc/draft-irtf-cfrg-hpke/) hybrid encryption standard. Once this is passing official known-answer tests, I'll publish it as a crate.
+This is an **work-in-progress** implementation of the [HPKE](https://datatracker.ietf.org/doc/draft-irtf-cfrg-hpke/) hybrid encryption standard.
 
 What it implements
 ------------------
 
-Currently, all of draft02 functionality is implemented, besides the single-shot API. In addition, the exporter API is implemented.
+This implementation complies with the [HPKE draft](https://github.com/cfrg/draft-irtf-cfrg-hpke) up to commit e955931cdc4e9708da2fd4d905dd920fc4668c85.
 
-Not many algorithms are currently supported. Here's what we have:
+Here are all the primitives listed in the spec. The primitives with checked boxes are the ones that are implemented.
 
 * KEMs
-    * DHKEM(Curve25519)
+    [X] DHKEM(Curve25519, HKDF-SHA256)
+    [ ] DHKEM(Curve448, HKDF-SHA512)
+    [ ] DHKEM(P-256, HKDF-SHA256)
+    [ ] DHKEM(P-384, HKDF-SHA384)
+    [ ] DHKEM(P-521, HKDF-SHA512)
 * KDFs
-    * HKDF-SHA256
-    * HKDF-SHA384
-    * HKDF-SHA512
+    [X] HKDF-SHA256
+    [X] HKDF-SHA384
+    [X] HKDF-SHA512
 * AEADs
-    * AES-GCM-128
-    * AES-GCM-256
-    * ChaCha20Poly1305
-
-**THIS IMPLEMENTATION IS NOT KNOWN TO COMPLY WITH ANY STANDARDS...YET**
+    [X] AES-GCM-128
+    [X] AES-GCM-256
+    [X] ChaCha20Poly1305
 
 Crate Features
 --------------
@@ -35,9 +39,12 @@ For info on how to omit or include feature flags, see the [cargo docs on feature
 Tests
 -----
 
-To run tests, execute `cargo test`. This includes known-answer tests, which test against `test-vector-COMMIT_ID.json`,where `COMMIT_ID` is the short commit of the [reference implementation](https://github.com/bifurcation/hpke) version that created that test vector. Please see the reference implementation for information on how to generate a test vector.
+To run tests, execute `cargo test`. This includes known-answer tests, which test against `test-vector-COMMIT_ID.json`,where `COMMIT_ID` is the short commit of the version of the [spec](https://github.com/cfrg/draft-irtf-cfrg-hpke) that the test vectors came from. See the [reference implementation](https://github.com/bifurcation/hpke) for information on how to generate a test vector.
 
-Currently, file `test-vector-modified.json` is derived from a modified version of the reference implementation. Once the necessary changes are made upstream, the file will be updated.
+Examples
+--------
+
+See the [client-server](examples/client_server.rs) example for an idea of how to use HPKE.
 
 Agility
 -------
