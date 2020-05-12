@@ -1,6 +1,6 @@
 use crate::prelude::*;
 use crate::{
-    aead::{Aead, AeadTag, AesGcm128, AesGcm256, AssociatedData, ChaCha20Poly1305},
+    aead::{Aead, AeadTag, AesGcm128, AesGcm256, ChaCha20Poly1305},
     dh::{DiffieHellman, Marshallable, MarshalledPrivateKey, MarshalledPublicKey, Unmarshallable},
     kdf::{HkdfSha256, HkdfSha384, HkdfSha512, Kdf},
     kem::{encap_with_eph, Kem, X25519HkdfSha256},
@@ -230,7 +230,7 @@ macro_rules! test_case {
 
             // Open the ciphertext in place and assert that this succeeds
             aead_ctx
-                .open(&mut ciphertext, AssociatedData(&aad), &tag)
+                .open(&mut ciphertext, &aad, &tag)
                 .expect("open failed");
             // Rename for clarity
             let plaintext = ciphertext;

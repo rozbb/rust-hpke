@@ -13,7 +13,7 @@
 //! of runtime checks.
 
 use hpke::{
-    aead::{Aead, AeadCtx, AeadTag, AesGcm128, AesGcm256, AssociatedData, ChaCha20Poly1305},
+    aead::{Aead, AeadCtx, AeadTag, AesGcm128, AesGcm256, ChaCha20Poly1305},
     dh::{
         DiffieHellman, Marshallable, MarshalledPrivateKey, MarshalledPublicKey, Unmarshallable,
         X25519,
@@ -29,16 +29,12 @@ use rand::{CryptoRng, RngCore};
 // In your head, just replace "agile" with "dangerous" :)
 
 trait AgileAeadCtx {
-    fn seal<'a>(
-        &mut self,
-        plaintext: &mut [u8],
-        aad: AssociatedData<'a>,
-    ) -> Result<AgileAeadTag, HpkeError>;
+    fn seal(&mut self, plaintext: &mut [u8], aad: &[u8]) -> Result<AgileAeadTag, HpkeError>;
 
-    fn open<'a>(
+    fn open(
         &mut self,
         ciphertext: &mut [u8],
-        aad: AssociatedData<'a>,
+        aad: &[u8],
         tag_bytes: &[u8],
     ) -> Result<(), AgileHpkeError>;
 }
@@ -68,18 +64,14 @@ impl From<HpkeError> for AgileHpkeError {
 }
 
 impl<A: Aead, K: Kdf> AgileAeadCtx for AeadCtx<A, K> {
-    fn seal<'a>(
-        &mut self,
-        plaintext: &mut [u8],
-        aad: AssociatedData<'a>,
-    ) -> Result<Vec<u8>, HpkeError> {
+    fn seal(&mut self, plaintext: &mut [u8], aad: &[u8]) -> Result<Vec<u8>, HpkeError> {
         self.seal(plaintext, aad).map(|tag| tag.to_vec())
     }
 
-    fn open<'a>(
+    fn open(
         &mut self,
         ciphertext: &mut [u8],
-        aad: AssociatedData<'a>,
+        aad: &[u8],
         tag_bytes: &[u8],
     ) -> Result<(), AgileHpkeError> {
         let tag = {
@@ -909,7 +901,7 @@ fn main() {
 
                 // Test an encryption-decryption round trip
                 let msg = b"paper boy paper boy";
-                let aad = AssociatedData(b"all about that paper, boy");
+                let aad = b"all about that paper, boy";
                 let mut plaintext = *msg;
                 let tag = aead_ctx1.seal(&mut plaintext, aad).unwrap();
                 let mut ciphertext = plaintext;

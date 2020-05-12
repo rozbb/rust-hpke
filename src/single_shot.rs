@@ -1,5 +1,5 @@
 use crate::{
-    aead::{Aead, AeadTag, AssociatedData},
+    aead::{Aead, AeadTag},
     dh::DiffieHellman,
     kdf::Kdf,
     kem::{EncappedKey, Kem},
@@ -23,12 +23,12 @@ use rand::{CryptoRng, RngCore};
 /// Returns `Ok((encapped_key, tag))` on success. If an error happened during key exchange, returns
 /// `Err(HpkeError::DiffieHellman)`. If an unspecified error happened during encryption, returns
 /// `Err(HpkeError::Encryption)`. In this case, the contents of `plaintext` is undefined.
-pub fn single_shot_seal<'a, A, Kd, Ke, R>(
+pub fn single_shot_seal<A, Kd, Ke, R>(
     mode: &OpModeS<Ke::Dh, Kd>,
     pk_recip: &<Ke::Dh as DiffieHellman>::PublicKey,
     info: &[u8],
     plaintext: &mut [u8],
-    aad: AssociatedData<'a>,
+    aad: &[u8],
     csprng: &mut R,
 ) -> Result<(EncappedKey<Ke::Dh>, AeadTag<A>), HpkeError>
 where
@@ -57,13 +57,13 @@ where
 /// Returns `Ok()` on success. If an error happened during key exchange, returns
 /// `Err(HpkeError::DiffieHellman)`. If an unspecified error happened during decryption, returns
 /// `Err(HpkeError::Encryption)`. In this case, the contents of `ciphertext` is undefined.
-pub fn single_shot_open<'a, A, Kd, Ke>(
+pub fn single_shot_open<A, Kd, Ke>(
     mode: &OpModeR<Ke::Dh, Kd>,
     sk_recip: &<Ke::Dh as DiffieHellman>::PrivateKey,
     encapped_key: &EncappedKey<Ke::Dh>,
     info: &[u8],
     ciphertext: &mut [u8],
-    aad: AssociatedData<'a>,
+    aad: &[u8],
     tag: &AeadTag<A>,
 ) -> Result<(), HpkeError>
 where
@@ -81,7 +81,7 @@ where
 mod test {
     use super::{single_shot_open, single_shot_seal};
     use crate::{
-        aead::{AssociatedData, ChaCha20Poly1305},
+        aead::ChaCha20Poly1305,
         dh::DiffieHellman,
         kdf::HkdfSha256,
         kem::{Kem, X25519HkdfSha256},
@@ -100,7 +100,7 @@ mod test {
         type Dh = <Ke as Kem>::Dh;
 
         let msg = b"Good night, a-ding ding ding ding ding";
-        let aad = AssociatedData(b"Five four three two one");
+        let aad = b"Five four three two one";
 
         let mut csprng = rand::thread_rng();
 

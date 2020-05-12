@@ -139,12 +139,6 @@ impl<A: Aead, K: Kdf> Clone for AeadCtx<A, K> {
     }
 }
 
-/// Associated data for encryption. This is wrapped in order to distinguish it from the `plaintext`
-/// input to `seal()` and `ciphertext` input to `open()`. Relying on argument order for two
-/// bytestrings is asking for trouble.
-#[derive(Clone, Copy)]
-pub struct AssociatedData<'a>(pub &'a [u8]);
-
 // These are the methods defined for Context in draft02 §6.6. export() is newer than that, though
 impl<A: Aead, K: Kdf> AeadCtx<A, K> {
     /// Makes an AeadCtx from a raw key and nonce
@@ -174,11 +168,7 @@ impl<A: Aead, K: Kdf> AeadCtx<A, K> {
     /// the sequence number overflowed, returns `Err(Hpkeerror::SeqOverflow)`. If this happens,
     /// `plaintext` will be unmodified. If an unspecified error happened during encryption, returns
     /// `Err(HpkeError::Encryption)`. If this happens, the contents of `plaintext` is undefined.
-    pub fn seal<'a>(
-        &mut self,
-        plaintext: &mut [u8],
-        aad: AssociatedData<'a>,
-    ) -> Result<AeadTag<A>, HpkeError> {
+    pub fn seal(&mut self, plaintext: &mut [u8], aad: &[u8]) -> Result<AeadTag<A>, HpkeError> {
         if self.overflowed {
             // If the sequence counter overflowed, we've been used for far too long. Shut down.
             Err(HpkeError::SeqOverflow)
@@ -187,7 +177,7 @@ impl<A: Aead, K: Kdf> AeadCtx<A, K> {
             let nonce = mix_nonce(&self.nonce, &self.seq);
             let tag_res = self
                 .encryptor
-                .encrypt_in_place_detached(&nonce, &aad.0, plaintext);
+                .encrypt_in_place_detached(&nonce, &aad, plaintext);
 
             // Check if an error occurred when encrypting
             let tag = match tag_res {
@@ -220,10 +210,10 @@ impl<A: Aead, K: Kdf> AeadCtx<A, K> {
     /// the sequence number overflowed, returns `Err(HpkeError::SeqOverflow)`. If this happens,
     /// `plaintext` will be unmodified. If the tag fails to validate, returns
     /// `Err(HpkeError::InvalidTag)`. If this happens, `plaintext` is in an undefined state.
-    pub fn open<'a>(
+    pub fn open(
         &mut self,
         ciphertext: &mut [u8],
-        aad: AssociatedData<'a>,
+        aad: &[u8],
         tag: &AeadTag<A>,
     ) -> Result<(), HpkeError> {
         if self.overflowed {
@@ -234,7 +224,7 @@ impl<A: Aead, K: Kdf> AeadCtx<A, K> {
             let nonce = mix_nonce(&self.nonce, &self.seq);
             let decrypt_res = self
                 .encryptor
-                .decrypt_in_place_detached(&nonce, &aad.0, ciphertext, tag);
+                .decrypt_in_place_detached(&nonce, &aad, ciphertext, tag);
 
             if decrypt_res.is_err() {
                 // Opening failed due to a bad tag
@@ -273,7 +263,7 @@ impl<A: Aead, K: Kdf> AeadCtx<A, K> {
 
 #[cfg(test)]
 mod test {
-    use super::{AeadTag, AesGcm128, AesGcm256, AssociatedData, ChaCha20Poly1305, Seq};
+    use super::{AeadTag, AesGcm128, AesGcm256, ChaCha20Poly1305, Seq};
     use crate::kdf::HkdfSha256;
     use crate::test_util::gen_ctx_simple_pair;
 
@@ -295,7 +285,7 @@ mod test {
         // Modify the context by encrypting something
         let mut plaintext = *b"back hand";
         aead_ctx
-            .seal(&mut plaintext[..], AssociatedData(b""))
+            .seal(&mut plaintext[..], b"")
             .expect("seal() failed");
 
         // Get a second export secret
@@ -328,7 +318,7 @@ mod test {
         // These should support precisely one more encryption before it registers an overflow
 
         let msg = b"draxx them sklounst";
-        let aad = AssociatedData(b"with my prayers");
+        let aad = b"with my prayers";
 
         // Do one round trip and ensure it works
         {
@@ -381,7 +371,7 @@ mod test {
                 let (mut ctx1, mut ctx2) = gen_ctx_simple_pair::<A, K>();
 
                 let msg = b"Love it or leave it, you better gain way";
-                let aad = AssociatedData(b"You better hit bull's eye, the kid don't play");
+                let aad = b"You better hit bull's eye, the kid don't play";
 
                 // Encrypt with the first context
                 let mut ciphertext = msg.clone();

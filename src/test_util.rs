@@ -1,5 +1,5 @@
 use crate::{
-    aead::{Aead, AeadCtx, AeadKey, AeadNonce, AssociatedData},
+    aead::{Aead, AeadCtx, AeadKey, AeadNonce},
     dh::DiffieHellman,
     kdf::Kdf,
     op_mode::{OpModeR, OpModeS, Psk, PskBundle},
@@ -109,13 +109,12 @@ pub(crate) fn aead_ctx_eq<A: Aead, K: Kdf>(
         csprng.fill_bytes(&mut buf);
         buf
     };
-    let aad_bytes = {
+    let aad = {
         let len = csprng.gen::<u8>();
         let mut buf = vec![0u8; len as usize];
         csprng.fill_bytes(&mut buf);
         buf
     };
-    let aad = AssociatedData(&aad_bytes);
 
     // Do 1000 iterations of encryption-decryption. The underlying sequence number increments
     // each time.
@@ -123,13 +122,13 @@ pub(crate) fn aead_ctx_eq<A: Aead, K: Kdf>(
         let mut plaintext = msg.clone();
         // Encrypt the plaintext
         let tag = ctx1
-            .seal(&mut plaintext[..], aad)
+            .seal(&mut plaintext[..], &aad)
             .expect(&format!("seal() #{} failed", i));
         // Rename for clarity
         let mut ciphertext = plaintext;
 
         // Now to decrypt on the other side
-        if let Err(_) = ctx2.open(&mut ciphertext[..], aad, &tag) {
+        if let Err(_) = ctx2.open(&mut ciphertext[..], &aad, &tag) {
             // An error occurred in decryption. These encryption contexts are not identical.
             return false;
         }

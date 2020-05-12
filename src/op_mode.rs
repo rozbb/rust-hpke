@@ -8,15 +8,12 @@ use crate::{
 use core::marker::PhantomData;
 
 use digest::generic_array::GenericArray;
-
-// TODO: Make Psk borrow its bytes instead of own them. We'd like to zeroize the contents on Drop,
-// but Vec can reallocate and leave an old copy of sensitive data lying around. So don't hold a
-// Vec, instead hold a slice.
+use zeroize::Zeroizing;
 
 /// A preshared key, i.e., a secret that the sender and recipient both know before any exchange has
 /// happened
 pub struct Psk<Kd: Kdf> {
-    bytes: Vec<u8>,
+    bytes: Zeroizing<Vec<u8>>,
     marker: PhantomData<Kd>,
 }
 
@@ -24,14 +21,9 @@ impl<Kd: Kdf> Psk<Kd> {
     /// Constructs a preshared key from bytes
     pub fn from_bytes(bytes: Vec<u8>) -> Psk<Kd> {
         Psk {
-            bytes,
+            bytes: Zeroizing::new(bytes),
             marker: PhantomData,
         }
-    }
-
-    /// Deconstructs this preshared key to bytes
-    pub fn into_bytes(self) -> Vec<u8> {
-        self.bytes
     }
 }
 
