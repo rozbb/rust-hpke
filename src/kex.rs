@@ -17,30 +17,30 @@ pub trait Unmarshallable: Marshallable {
 
 /// A convenience type representing the fixed-size byte array that a DH pubkey gets serialized
 /// to/from.
-pub type MarshalledPublicKey<Dh> =
-    GenericArray<u8, <<Dh as DiffieHellman>::PublicKey as Marshallable>::OutputSize>;
+pub type MarshalledPublicKey<Kex> =
+    GenericArray<u8, <<Kex as KeyExchange>::PublicKey as Marshallable>::OutputSize>;
 /// A convenience type representing the fixed-size byte array that a DH privkey gets serialized
 /// to/from.
-pub type MarshalledPrivateKey<Dh> =
-    GenericArray<u8, <<Dh as DiffieHellman>::PrivateKey as Marshallable>::OutputSize>;
+pub type MarshalledPrivateKey<Kex> =
+    GenericArray<u8, <<Kex as KeyExchange>::PrivateKey as Marshallable>::OutputSize>;
 
 /// This trait captures the requirements of a DH-based KEM (draft02 §5.1). It must have a way to
 /// generate keypairs, perform the DH computation, and marshall/umarshall DH pubkeys
-pub trait DiffieHellman {
+pub trait KeyExchange {
     type PublicKey: Clone + Marshallable + Unmarshallable;
     type PrivateKey: Clone + Marshallable + Unmarshallable;
-    type DhResult: Marshallable;
+    type KexResult: Marshallable;
 
     fn gen_keypair<R: CryptoRng + RngCore>(csprng: &mut R) -> (Self::PrivateKey, Self::PublicKey);
 
     fn sk_to_pk(sk: &Self::PrivateKey) -> Self::PublicKey;
 
-    fn dh(sk: &Self::PrivateKey, pk: &Self::PublicKey) -> Result<Self::DhResult, HpkeError>;
+    fn kex(sk: &Self::PrivateKey, pk: &Self::PublicKey) -> Result<Self::KexResult, HpkeError>;
 }
 
 pub use x25519::X25519;
 pub mod x25519 {
-    use super::{DiffieHellman, Marshallable, Unmarshallable};
+    use super::{KeyExchange, Marshallable, Unmarshallable};
     use crate::HpkeError;
 
     use digest::generic_array::{typenum, GenericArray};
@@ -57,7 +57,7 @@ pub mod x25519 {
     pub struct PrivateKey(x25519_dalek::StaticSecret);
 
     // A bare DH computation result
-    pub struct DhResult(x25519_dalek::SharedSecret);
+    pub struct KexResult(x25519_dalek::SharedSecret);
 
     // Oh I love me an excuse to break out type-level integers
     impl Marshallable for PublicKey {
@@ -92,7 +92,7 @@ pub mod x25519 {
         }
     }
 
-    impl Marshallable for DhResult {
+    impl Marshallable for KexResult {
         // §7.1: DHKEM(Curve25519) Nzz = 32
         type OutputSize = typenum::U32;
 
@@ -102,13 +102,13 @@ pub mod x25519 {
         }
     }
 
-    /// Dummy type which implements the `DiffieHellman` trait
+    /// Dummy type which implements the `KeyExchange` trait
     pub struct X25519 {}
 
-    impl DiffieHellman for X25519 {
+    impl KeyExchange for X25519 {
         type PublicKey = PublicKey;
         type PrivateKey = PrivateKey;
-        type DhResult = DhResult;
+        type KexResult = KexResult;
 
         /// Generates an X25519 keypair
         fn gen_keypair<R: CryptoRng + RngCore>(csprng: &mut R) -> (PrivateKey, PublicKey) {
@@ -123,25 +123,25 @@ pub mod x25519 {
             PublicKey(x25519_dalek::PublicKey::from(&sk.0))
         }
 
-        /// Does the DH operation. Returns `HpkeError::DiffieHellman` if and only if the DH result
-        /// was all zeros. This is required by the HPKE spec.
-        fn dh(sk: &PrivateKey, pk: &PublicKey) -> Result<DhResult, HpkeError> {
+        /// Does the DH operation. Returns `HpkeError::InvalidKeyExchange` if and only if the DH
+        /// result was all zeros. This is required by the HPKE spec.
+        fn kex(sk: &PrivateKey, pk: &PublicKey) -> Result<KexResult, HpkeError> {
             let res = sk.0.diffie_hellman(&pk.0);
             // "Senders and recipients MUST check whether the shared secret is the all-zero value
             // and abort if so"
             if res.as_bytes().ct_eq(&[0u8; 32]).into() {
-                Err(HpkeError::DiffieHellman)
+                Err(HpkeError::InvalidKeyExchange)
             } else {
-                Ok(DhResult(res))
+                Ok(KexResult(res))
             }
         }
     }
 
     #[cfg(test)]
     mod tests {
-        use crate::dh::{
-            x25519::{DhResult, PrivateKey, PublicKey, X25519},
-            DiffieHellman, Marshallable, MarshalledPublicKey, Unmarshallable,
+        use crate::kex::{
+            x25519::{KexResult, PrivateKey, PublicKey, X25519},
+            KeyExchange, Marshallable, MarshalledPublicKey, Unmarshallable,
         };
         use rand::RngCore;
 
@@ -161,16 +161,16 @@ pub mod x25519 {
 
         // We need to be able to compare shared secrets in order to make sure that encap* and
         // decap* produce the same output
-        impl PartialEq for DhResult {
-            fn eq(&self, other: &DhResult) -> bool {
+        impl PartialEq for KexResult {
+            fn eq(&self, other: &KexResult) -> bool {
                 self.marshal() == other.marshal()
             }
         }
 
-        impl Eq for DhResult {}
+        impl Eq for KexResult {}
 
         // We need Debug in order to be able to assert_eq! shared secrets
-        impl core::fmt::Debug for DhResult {
+        impl core::fmt::Debug for KexResult {
             fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
                 write!(f, "{:0x?}", self.marshal())
             }
@@ -179,20 +179,20 @@ pub mod x25519 {
         /// Tests that an unmarshal-marshal round-trip ends up at the same pubkey
         #[test]
         fn test_pubkey_marshal_correctness() {
-            type Dh = X25519;
+            type Kex = X25519;
 
             let mut csprng = rand::thread_rng();
 
             // Fill a buffer with randomness
             let orig_bytes = {
-                let mut buf = <MarshalledPublicKey<Dh> as Default>::default();
+                let mut buf = <MarshalledPublicKey<Kex> as Default>::default();
                 csprng.fill_bytes(buf.as_mut_slice());
                 buf
             };
 
             // Make a pubkey with those random bytes. Note, that unmarshal does not clamp the input
             // bytes. This is why this test passes.
-            let pk = <Dh as DiffieHellman>::PublicKey::unmarshal(orig_bytes);
+            let pk = <Kex as KeyExchange>::PublicKey::unmarshal(orig_bytes);
             let pk_bytes = pk.marshal();
 
             // See if the re-marshalled bytes are the same as the input
@@ -202,17 +202,17 @@ pub mod x25519 {
         /// Tests that an unmarshal-marshal round-trip on a DH keypair ends up at the same values
         #[test]
         fn test_dh_marshal_correctness() {
-            type Dh = X25519;
+            type Kex = X25519;
 
             let mut csprng = rand::thread_rng();
 
             // Make a random keypair and marshal it
-            let (sk, pk) = Dh::gen_keypair(&mut csprng);
+            let (sk, pk) = Kex::gen_keypair(&mut csprng);
             let (sk_bytes, pk_bytes) = (sk.marshal(), pk.marshal());
 
             // Now unmarshal those bytes
-            let new_sk = <Dh as DiffieHellman>::PrivateKey::unmarshal(sk_bytes);
-            let new_pk = <Dh as DiffieHellman>::PublicKey::unmarshal(pk_bytes);
+            let new_sk = <Kex as KeyExchange>::PrivateKey::unmarshal(sk_bytes);
+            let new_pk = <Kex as KeyExchange>::PublicKey::unmarshal(pk_bytes);
 
             // See if the unmarshalled values are the same as the initial ones
             assert!(new_sk == sk, "private key doesn't marshal correctly");

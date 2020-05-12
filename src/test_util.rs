@@ -1,7 +1,7 @@
 use crate::{
     aead::{Aead, AeadCtx, AeadKey, AeadNonce},
-    dh::DiffieHellman,
-    kdf::Kdf,
+    kdf::Kdf as KdfTrait,
+    kex::KeyExchange,
     op_mode::{OpModeR, OpModeS, Psk, PskBundle},
     setup::ExporterSecret,
 };
@@ -9,13 +9,13 @@ use crate::{
 use rand::{Rng, RngCore};
 
 /// Makes an random PSK bundle
-pub(crate) fn gen_psk_bundle<K: Kdf>() -> PskBundle<K> {
+pub(crate) fn gen_psk_bundle<Kdf: KdfTrait>() -> PskBundle<Kdf> {
     let mut csprng = rand::thread_rng();
 
     let psk = {
         let mut buf = vec![0u8; 32];
         csprng.fill_bytes(buf.as_mut_slice());
-        Psk::<K>::from_bytes(buf)
+        Psk::<Kdf>::from_bytes(buf)
     };
     let psk_id = {
         let mut buf = [0u8; 32];
@@ -23,11 +23,11 @@ pub(crate) fn gen_psk_bundle<K: Kdf>() -> PskBundle<K> {
         buf.to_vec()
     };
 
-    PskBundle::<K> { psk, psk_id }
+    PskBundle::<Kdf> { psk, psk_id }
 }
 
 /// Creates a pair of `AeadCtx`s without doing a key exchange
-pub(crate) fn gen_ctx_simple_pair<A: Aead, K: Kdf>() -> (AeadCtx<A, K>, AeadCtx<A, K>) {
+pub(crate) fn gen_ctx_simple_pair<A: Aead, Kdf: KdfTrait>() -> (AeadCtx<A, Kdf>, AeadCtx<A, Kdf>) {
     let mut csprng = rand::thread_rng();
 
     // Initialize the key and nonce
@@ -42,7 +42,7 @@ pub(crate) fn gen_ctx_simple_pair<A: Aead, K: Kdf>() -> (AeadCtx<A, K>, AeadCtx<
         buf
     };
     let exporter_secret = {
-        let mut buf = ExporterSecret::<K>::default();
+        let mut buf = ExporterSecret::<Kdf>::default();
         csprng.fill_bytes(buf.as_mut_slice());
         buf
     };
@@ -62,12 +62,12 @@ pub(crate) enum OpModeKind {
 }
 
 /// Makes an agreeing pair of `OpMode`s of the specified variant
-pub(crate) fn gen_op_mode_pair<Dh: DiffieHellman, K: Kdf>(
+pub(crate) fn gen_op_mode_pair<Kex: KeyExchange, Kdf: KdfTrait>(
     kind: OpModeKind,
-) -> (OpModeS<Dh, K>, OpModeR<Dh, K>) {
+) -> (OpModeS<Kex, Kdf>, OpModeR<Kex, Kdf>) {
     let mut csprng = rand::thread_rng();
-    let (sk_sender_id, pk_sender_id) = Dh::gen_keypair(&mut csprng);
-    let psk_bundle = gen_psk_bundle::<K>();
+    let (sk_sender_id, pk_sender_id) = Kex::gen_keypair(&mut csprng);
+    let psk_bundle = gen_psk_bundle::<Kdf>();
 
     match kind {
         OpModeKind::Base => {
@@ -96,7 +96,7 @@ pub(crate) fn gen_op_mode_pair<Dh: DiffieHellman, K: Kdf>(
 
 /// Evaluates the equivalence of two encryption contexts by doing some encryption-decryption
 /// round trips. Returns `true` iff the contexts are equal after 1000 iterations
-pub(crate) fn aead_ctx_eq<A: Aead, K: Kdf>(
+pub(crate) fn aead_ctx_eq<A: Aead, K: KdfTrait>(
     ctx1: &mut AeadCtx<A, K>,
     ctx2: &mut AeadCtx<A, K>,
 ) -> bool {

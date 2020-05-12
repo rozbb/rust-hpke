@@ -1,9 +1,9 @@
 use crate::prelude::*;
 use crate::{
     aead::{Aead, AeadCtx},
-    dh::DiffieHellman,
-    kdf::{labeled_extract, Kdf, LabeledExpand},
-    kem::{self, EncappedKey, Kem, SharedSecret},
+    kdf::{labeled_extract, Kdf as KdfTrait, LabeledExpand},
+    kem::{self, EncappedKey, Kem as KemTrait, SharedSecret},
+    kex::KeyExchange,
     op_mode::{OpMode, OpModeR, OpModeS},
     util::static_zeros,
     HpkeError,
@@ -29,20 +29,21 @@ use rand::{CryptoRng, RngCore};
 */
 
 /// Secret generated in `derive_enc_ctx` and stored in `AeadCtx`
-pub(crate) type ExporterSecret<K> = GenericArray<u8, <<K as Kdf>::HashImpl as Digest>::OutputSize>;
+pub(crate) type ExporterSecret<K> =
+    GenericArray<u8, <<K as KdfTrait>::HashImpl as Digest>::OutputSize>;
 
 // This is the KeySchedule function defined in draft02 §6.1. It runs a KDF over all the parameters,
 // inputs, and secrets, and spits out a key-nonce pair to be used for symmetric encryption
-fn derive_enc_ctx<A, Kd, Ke, O>(
+fn derive_enc_ctx<A, Kdf, Kem, O>(
     mode: &O,
-    shared_secret: SharedSecret<Ke::Dh>,
+    shared_secret: SharedSecret<Kem::Kex>,
     info: &[u8],
-) -> AeadCtx<A, Kd>
+) -> AeadCtx<A, Kdf>
 where
     A: Aead,
-    Kd: Kdf,
-    Ke: Kem,
-    O: OpMode<Ke::Dh>,
+    Kdf: KdfTrait,
+    Kem: KemTrait,
+    O: OpMode<Kem::Kex>,
 {
     // In KeySchedule(),
     //     ciphersuite = concat(encode_big_endian(kem_id, 2),
@@ -55,15 +56,15 @@ where
         let mut buf = Vec::new();
 
         // This relies on <Vec<u8> as Write>, which never errors, so unwrap() is justified
-        buf.write_u16::<BigEndian>(Ke::KEM_ID).unwrap();
-        buf.write_u16::<BigEndian>(Kd::KDF_ID).unwrap();
+        buf.write_u16::<BigEndian>(Kem::KEM_ID).unwrap();
+        buf.write_u16::<BigEndian>(Kdf::KDF_ID).unwrap();
         buf.write_u16::<BigEndian>(A::AEAD_ID).unwrap();
 
         buf.write_u8(mode.mode_id()).unwrap();
 
-        let zeros = static_zeros::<Kd>();
-        let (psk_id_hash, _) = labeled_extract::<Kd>(zeros, b"pskID_hash", mode.get_psk_id());
-        let (info_hash, _) = labeled_extract::<Kd>(zeros, b"info", info);
+        let zeros = static_zeros::<Kdf>();
+        let (psk_id_hash, _) = labeled_extract::<Kdf>(zeros, b"pskID_hash", mode.get_psk_id());
+        let (info_hash, _) = labeled_extract::<Kdf>(zeros, b"info", info);
 
         buf.extend(psk_id_hash.as_slice());
         buf.extend(info_hash.as_slice());
@@ -82,13 +83,13 @@ where
     // Instead of `secret` we derive an HKDF context which we run .expand() on to derive the
     // key-nonce pair.
     let (extracted_psk, _) =
-        labeled_extract::<Kd>(static_zeros::<Kd>(), b"psk_hash", mode.get_psk_bytes());
-    let (_, secret_ctx) = labeled_extract::<Kd>(&extracted_psk, b"zz", &shared_secret);
+        labeled_extract::<Kdf>(static_zeros::<Kdf>(), b"psk_hash", mode.get_psk_bytes());
+    let (_, secret_ctx) = labeled_extract::<Kdf>(&extracted_psk, b"zz", &shared_secret);
 
     // Empty fixed-size buffers
     let mut key = crate::aead::AeadKey::<A>::default();
     let mut nonce = crate::aead::AeadNonce::<A>::default();
-    let mut exporter_secret = <ExporterSecret<Kd> as Default>::default();
+    let mut exporter_secret = <ExporterSecret<Kdf> as Default>::default();
 
     // Fill the key, nonce, and exporter secret. This only errors if the output values are 255x the
     // digest size of the hash function. Since these values are fixed at compile time, we don't
@@ -118,25 +119,26 @@ where
 /// Return Value
 /// ============
 /// On success, returns an encapsulated public key (intended to be sent to the recipient), and an
-/// encryption context. The only possible error is `HpkeError::DiffieHellman`.
-pub fn setup_sender<A, Kd, Ke, R>(
-    mode: &OpModeS<Ke::Dh, Kd>,
-    pk_recip: &<Ke::Dh as DiffieHellman>::PublicKey,
+/// encryption context. If an error happened during key exchange, returns
+/// `Err(HpkeError::InvalidKeyExchange)`. This is the only possible error.
+pub fn setup_sender<A, Kdf, Kem, R>(
+    mode: &OpModeS<Kem::Kex, Kdf>,
+    pk_recip: &<Kem::Kex as KeyExchange>::PublicKey,
     info: &[u8],
     csprng: &mut R,
-) -> Result<(EncappedKey<Ke::Dh>, AeadCtx<A, Kd>), HpkeError>
+) -> Result<(EncappedKey<Kem::Kex>, AeadCtx<A, Kdf>), HpkeError>
 where
     A: Aead,
-    Kd: Kdf,
-    Ke: Kem,
+    Kdf: KdfTrait,
+    Kem: KemTrait,
     R: CryptoRng + RngCore,
 {
     // If the identity key is set, use it
     let sender_id_keypair = mode.get_sender_id_keypair();
     // Do the encapsulation
-    let (shared_secret, encapped_key) = kem::encap::<Ke, _>(pk_recip, sender_id_keypair, csprng)?;
+    let (shared_secret, encapped_key) = kem::encap::<Kem, _>(pk_recip, sender_id_keypair, csprng)?;
     // Use everything to derive an encryption context
-    let enc_ctx = derive_enc_ctx::<_, _, Ke, _>(mode, shared_secret, info);
+    let enc_ctx = derive_enc_ctx::<_, _, Kem, _>(mode, shared_secret, info);
 
     Ok((encapped_key, enc_ctx))
 }
@@ -152,26 +154,26 @@ where
 ///
 /// Return Value
 /// ============
-/// On success, returns an encryption context. The only possible error is
-/// `HpkeError::DiffieHellman`.
-pub fn setup_receiver<A, Kd, Ke>(
-    mode: &OpModeR<Ke::Dh, Kd>,
-    sk_recip: &<Ke::Dh as DiffieHellman>::PrivateKey,
-    encapped_key: &EncappedKey<Ke::Dh>,
+/// On success, returns an encryption context. If an error happened during key exchange, returns
+/// `Err(HpkeError::InvalidKeyExchange)`. This is the only possible error.
+pub fn setup_receiver<A, Kdf, Kem>(
+    mode: &OpModeR<Kem::Kex, Kdf>,
+    sk_recip: &<Kem::Kex as KeyExchange>::PrivateKey,
+    encapped_key: &EncappedKey<Kem::Kex>,
     info: &[u8],
-) -> Result<AeadCtx<A, Kd>, HpkeError>
+) -> Result<AeadCtx<A, Kdf>, HpkeError>
 where
     A: Aead,
-    Kd: Kdf,
-    Ke: Kem,
+    Kdf: KdfTrait,
+    Kem: KemTrait,
 {
     // If the identity key is set, use it
-    let pk_sender_id: Option<&<Ke::Dh as DiffieHellman>::PublicKey> = mode.get_pk_sender_id();
+    let pk_sender_id: Option<&<Kem::Kex as KeyExchange>::PublicKey> = mode.get_pk_sender_id();
     // Do the decapsulation
-    let shared_secret = kem::decap::<Ke>(sk_recip, pk_sender_id, encapped_key)?;
+    let shared_secret = kem::decap::<Kem>(sk_recip, pk_sender_id, encapped_key)?;
 
     // Use everything to derive an encryption context
-    Ok(derive_enc_ctx::<_, _, Ke, _>(mode, shared_secret, info))
+    Ok(derive_enc_ctx::<_, _, Kem, _>(mode, shared_secret, info))
 }
 
 #[cfg(test)]
@@ -180,9 +182,9 @@ mod test {
     use crate::test_util::{aead_ctx_eq, gen_op_mode_pair, OpModeKind};
     use crate::{
         aead::{AesGcm128, AesGcm256, ChaCha20Poly1305},
-        dh::DiffieHellman,
         kdf::{HkdfSha256, HkdfSha384, HkdfSha512},
-        kem::{Kem, X25519HkdfSha256},
+        kem::{Kem as KemTrait, X25519HkdfSha256},
+        kex::KeyExchange,
     };
 
     /// This tests that `setup_sender` and `setup_receiver` derive the same context. We do this by
@@ -191,19 +193,17 @@ mod test {
         ($test_name:ident, $aead_ty:ty, $kdf_ty:ty, $kem_ty:ty) => {
             #[test]
             fn $test_name() {
-                use crate::kem::Kem;
-
                 type A = $aead_ty;
-                type Kd = $kdf_ty;
-                type Ke = $kem_ty;
-                type Dh = <Ke as Kem>::Dh;
+                type Kdf = $kdf_ty;
+                type Kem = $kem_ty;
+                type Kex = <Kem as KemTrait>::Kex;
 
                 let mut csprng = rand::thread_rng();
 
                 let info = b"why would you think in a million years that that would actually work";
 
                 // Generate the receiver's long-term keypair
-                let (sk_recip, pk_recip) = <Dh as DiffieHellman>::gen_keypair(&mut csprng);
+                let (sk_recip, pk_recip) = <Kex as KeyExchange>::gen_keypair(&mut csprng);
 
                 // Try a full setup for all the op modes
                 for op_mode_kind in &[
@@ -213,10 +213,10 @@ mod test {
                     OpModeKind::AuthPsk,
                 ] {
                     // Generate a mutually agreeing op mode pair
-                    let (sender_mode, receiver_mode) = gen_op_mode_pair::<Dh, Kd>(*op_mode_kind);
+                    let (sender_mode, receiver_mode) = gen_op_mode_pair::<Kex, Kdf>(*op_mode_kind);
 
                     // Construct the sender's encryption context, and get an encapped key
-                    let (encapped_key, mut aead_ctx1) = setup_sender::<A, _, Ke, _>(
+                    let (encapped_key, mut aead_ctx1) = setup_sender::<A, _, Kem, _>(
                         &sender_mode,
                         &pk_recip,
                         &info[..],
@@ -225,7 +225,7 @@ mod test {
                     .unwrap();
 
                     // Use the encapped key to derive the reciever's encryption context
-                    let mut aead_ctx2 = setup_receiver::<A, _, Ke>(
+                    let mut aead_ctx2 = setup_receiver::<A, _, Kem>(
                         &receiver_mode,
                         &sk_recip,
                         &encapped_key,
@@ -299,51 +299,51 @@ mod test {
     #[test]
     fn test_setup_soundness() {
         type A = ChaCha20Poly1305;
-        type Kd = HkdfSha256;
-        type Ke = X25519HkdfSha256;
-        type Dh = <Ke as Kem>::Dh;
+        type Kdf = HkdfSha256;
+        type Kem = X25519HkdfSha256;
+        type Kex = <Kem as KemTrait>::Kex;
 
         let mut csprng = rand::thread_rng();
 
         let info = b"why would you think in a million years that that would actually work";
 
         // Generate the receiver's long-term keypair
-        let (sk_recip, pk_recip) = <Dh as DiffieHellman>::gen_keypair(&mut csprng);
+        let (sk_recip, pk_recip) = <Kex as KeyExchange>::gen_keypair(&mut csprng);
 
         // Generate a mutually agreeing op mode pair
-        let (sender_mode, receiver_mode) = gen_op_mode_pair::<Dh, Kd>(OpModeKind::Base);
+        let (sender_mode, receiver_mode) = gen_op_mode_pair::<Kex, Kdf>(OpModeKind::Base);
 
         // Construct the sender's encryption context normally
         let (encapped_key, aead_ctx1) =
-            setup_sender::<A, _, Ke, _>(&sender_mode, &pk_recip, &info[..], &mut csprng).unwrap();
+            setup_sender::<A, _, Kem, _>(&sender_mode, &pk_recip, &info[..], &mut csprng).unwrap();
 
         // Now make a receiver with the wrong info string and ensure it doesn't match the sender
         let bad_info = b"something else";
         let mut aead_ctx2 =
-            setup_receiver::<_, _, Ke>(&receiver_mode, &sk_recip, &encapped_key, &bad_info[..])
+            setup_receiver::<_, _, Kem>(&receiver_mode, &sk_recip, &encapped_key, &bad_info[..])
                 .unwrap();
         assert!(!aead_ctx_eq(&mut aead_ctx1.clone(), &mut aead_ctx2));
 
         // Now make a receiver with the wrong secret key and ensure it doesn't match the sender
-        let (bad_sk, _) = <Dh as DiffieHellman>::gen_keypair(&mut csprng);
+        let (bad_sk, _) = <Kex as KeyExchange>::gen_keypair(&mut csprng);
         let mut aead_ctx2 =
-            setup_receiver::<_, _, Ke>(&receiver_mode, &bad_sk, &encapped_key, &info[..]).unwrap();
+            setup_receiver::<_, _, Kem>(&receiver_mode, &bad_sk, &encapped_key, &info[..]).unwrap();
         assert!(!aead_ctx_eq(&mut aead_ctx1.clone(), &mut aead_ctx2));
 
         // Now make a receiver with the wrong encapped key and ensure it doesn't match the sender.
         // The reason `bad_encapped_key` is bad is because its underlying key is uniformly random,
         // and therefore different from the key that the sender sent.
         let (bad_encapped_key, _) =
-            setup_sender::<A, _, Ke, _>(&sender_mode, &pk_recip, &info[..], &mut csprng).unwrap();
+            setup_sender::<A, _, Kem, _>(&sender_mode, &pk_recip, &info[..], &mut csprng).unwrap();
         let mut aead_ctx2 =
-            setup_receiver::<_, _, Ke>(&receiver_mode, &sk_recip, &bad_encapped_key, &info[..])
+            setup_receiver::<_, _, Kem>(&receiver_mode, &sk_recip, &bad_encapped_key, &info[..])
                 .unwrap();
         assert!(!aead_ctx_eq(&mut aead_ctx1.clone(), &mut aead_ctx2));
 
         // Now make sure that this test was a valid test by ensuring that doing everything the
         // right way makes it pass
         let mut aead_ctx2 =
-            setup_receiver::<_, _, Ke>(&receiver_mode, &sk_recip, &encapped_key, &info[..])
+            setup_receiver::<_, _, Kem>(&receiver_mode, &sk_recip, &encapped_key, &info[..])
                 .unwrap();
         assert!(aead_ctx_eq(&mut aead_ctx1.clone(), &mut aead_ctx2));
     }

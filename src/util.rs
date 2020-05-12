@@ -6,8 +6,9 @@ use digest::{generic_array::typenum::Unsigned, Digest};
 /// 128 bytes should be enough for anybody.
 const ZEROS: &[u8] = &[0u8; 128];
 
-/// Returns an immutable slice into a static array of zeros. This is so we don't have to keep
-/// allocated for the default value of a `Psk` (which is [0u8; HashImpl::OutputSize])
+/// Returns an immutable slice into a static array of zeros. The slice length is the digest length
+/// of the underlying hash function. This function is defined so we don't have to keep allocating
+/// the default value of a `Psk`, which is `[0u8; HashImpl::OutputSize]`.
 pub(crate) fn static_zeros<K: Kdf>() -> &'static [u8] {
     &ZEROS[..<<K as Kdf>::HashImpl as Digest>::OutputSize::to_usize()]
 }

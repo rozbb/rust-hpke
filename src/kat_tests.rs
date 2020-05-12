@@ -1,9 +1,9 @@
 use crate::prelude::*;
 use crate::{
     aead::{Aead, AeadTag, AesGcm128, AesGcm256, ChaCha20Poly1305},
-    dh::{DiffieHellman, Marshallable, MarshalledPrivateKey, MarshalledPublicKey, Unmarshallable},
-    kdf::{HkdfSha256, HkdfSha384, HkdfSha512, Kdf},
-    kem::{encap_with_eph, Kem, X25519HkdfSha256},
+    kdf::{HkdfSha256, HkdfSha384, HkdfSha512, Kdf as KdfTrait},
+    kem::{encap_with_eph, Kem as KemTrait, X25519HkdfSha256},
+    kex::{KeyExchange, Marshallable, MarshalledPrivateKey, MarshalledPublicKey, Unmarshallable},
     op_mode::{OpModeR, Psk, PskBundle},
     setup::setup_receiver,
 };
@@ -111,27 +111,27 @@ struct ExporterTestVector {
     export_val: Vec<u8>,
 }
 
-/// Returns a DH keypair given the secret bytes and pubkey bytes, and ensures that the pubkey does
+/// Returns a KEX keypair given the secret bytes and pubkey bytes, and ensures that the pubkey does
 /// indeed correspond to that secret key
-fn get_and_assert_keypair<Dh: DiffieHellman>(
+fn get_and_assert_keypair<Kex: KeyExchange>(
     sk_bytes: &[u8],
     pk_bytes: &[u8],
-) -> (Dh::PrivateKey, Dh::PublicKey) {
+) -> (Kex::PrivateKey, Kex::PublicKey) {
     // Unmarshall the secret key
     let sk = {
-        let mut buf = <MarshalledPrivateKey<Dh> as Default>::default();
+        let mut buf = <MarshalledPrivateKey<Kex> as Default>::default();
         buf.copy_from_slice(sk_bytes);
-        <Dh as DiffieHellman>::PrivateKey::unmarshal(buf)
+        <Kex as KeyExchange>::PrivateKey::unmarshal(buf)
     };
     // Unmarshall the pubkey
     let pk = {
-        let mut buf = <MarshalledPublicKey<Dh> as Default>::default();
+        let mut buf = <MarshalledPublicKey<Kex> as Default>::default();
         buf.copy_from_slice(pk_bytes);
-        <Dh as DiffieHellman>::PublicKey::unmarshal(buf)
+        <Kex as KeyExchange>::PublicKey::unmarshal(buf)
     };
 
     // Make sure the derived pubkey matches the given pubkey
-    assert_eq!(pk.marshal(), Dh::sk_to_pk(&sk).marshal());
+    assert_eq!(pk.marshal(), Kex::sk_to_pk(&sk).marshal());
 
     (sk, pk)
 }
@@ -139,21 +139,21 @@ fn get_and_assert_keypair<Dh: DiffieHellman>(
 /// Constructs an `OpModeR` from the given components. The variant constructed is determined solely
 /// by `mode_id`. This will panic if there is insufficient data to construct the variants specified
 /// by `mode_id`.
-fn make_op_mode_r<Dh: DiffieHellman, K: Kdf>(
+fn make_op_mode_r<Kex: KeyExchange, Kdf: KdfTrait>(
     mode_id: u8,
     pk_sender_bytes: Option<Vec<u8>>,
     psk: Option<Vec<u8>>,
     psk_id: Option<Vec<u8>>,
-) -> OpModeR<Dh, K> {
+) -> OpModeR<Kex, Kdf> {
     // Unmarshal the optional pubkey
     let pk = pk_sender_bytes.map(|bytes| {
-        let mut buf = <MarshalledPublicKey<Dh> as Default>::default();
+        let mut buf = <MarshalledPublicKey<Kex> as Default>::default();
         buf.copy_from_slice(&bytes);
-        <Dh as DiffieHellman>::PublicKey::unmarshal(buf)
+        <Kex as KeyExchange>::PublicKey::unmarshal(buf)
     });
     // Unmarshal the optinoal bundle
-    let bundle = psk.map(|bytes| PskBundle::<K> {
-        psk: Psk::<K>::from_bytes(bytes),
+    let bundle = psk.map(|bytes| PskBundle::<Kdf> {
+        psk: Psk::<Kdf>::from_bytes(bytes),
         psk_id: psk_id.unwrap(),
     });
 
@@ -171,23 +171,23 @@ fn make_op_mode_r<Dh: DiffieHellman, K: Kdf>(
 macro_rules! test_case {
     ($tv:ident, $aead_ty:ty, $kdf_ty:ty) => {{
         type A = $aead_ty;
-        type Kd = $kdf_ty;
-        type Ke = X25519HkdfSha256;
-        type Dh = <X25519HkdfSha256 as Kem>::Dh;
+        type Kdf = $kdf_ty;
+        type Kem = X25519HkdfSha256;
+        type Kex = <X25519HkdfSha256 as KemTrait>::Kex;
 
         // First, unmarshall all the relevant keys so we can reconstruct the encapped key
-        let (sk_recip, pk_recip) = get_and_assert_keypair::<Dh>(&$tv.sk_recip, &$tv.pk_recip);
-        let (sk_eph, _) = get_and_assert_keypair::<Dh>(&$tv.sk_eph, &$tv.pk_eph);
+        let (sk_recip, pk_recip) = get_and_assert_keypair::<Kex>(&$tv.sk_recip, &$tv.pk_recip);
+        let (sk_eph, _) = get_and_assert_keypair::<Kex>(&$tv.sk_eph, &$tv.pk_eph);
 
         let sk_sender = $tv.sk_sender.map(|bytes| {
-            let mut buf = <MarshalledPrivateKey<Dh> as Default>::default();
+            let mut buf = <MarshalledPrivateKey<Kex> as Default>::default();
             buf.copy_from_slice(&bytes);
-            <Dh as DiffieHellman>::PrivateKey::unmarshal(buf)
+            <Kex as KeyExchange>::PrivateKey::unmarshal(buf)
         });
         let pk_sender = $tv.pk_sender.clone().map(|bytes| {
-            let mut buf = <MarshalledPublicKey<Dh> as Default>::default();
+            let mut buf = <MarshalledPublicKey<Kex> as Default>::default();
             buf.copy_from_slice(&bytes);
-            <Dh as DiffieHellman>::PublicKey::unmarshal(buf)
+            <Kex as KeyExchange>::PublicKey::unmarshal(buf)
         });
         // If sk_sender is Some, then so is pk_sender
         let sender_keypair = sk_sender.map(|sk| (sk, pk_sender.unwrap()));
@@ -195,7 +195,7 @@ macro_rules! test_case {
         // Now derive the encapped key with the deterministic encap function, using all the inputs
         // above
         let (_, encapped_key) =
-            encap_with_eph::<Ke>(&pk_recip, sender_keypair.as_ref(), sk_eph.clone())
+            encap_with_eph::<Kem>(&pk_recip, sender_keypair.as_ref(), sk_eph.clone())
                 .expect("encap failed");
         // Now assert that the derived encapped key is identical to the one provided
         assert_eq!(
@@ -205,8 +205,9 @@ macro_rules! test_case {
 
         // We're going to test the encryption contexts. First, construct the appropriate OpMode.
         let mode = make_op_mode_r($tv.mode, $tv.pk_sender, $tv.psk, $tv.psk_id);
-        let mut aead_ctx = setup_receiver::<A, Kd, Ke>(&mode, &sk_recip, &encapped_key, &$tv.info)
-            .expect("setup_receiver failed");
+        let mut aead_ctx =
+            setup_receiver::<A, Kdf, Kem>(&mode, &sk_recip, &encapped_key, &$tv.info)
+                .expect("setup_receiver failed");
 
         // Go through all the plaintext-ciphertext pairs of this test vector and assert the
         // ciphertext decrypts to the corresponding plaintext

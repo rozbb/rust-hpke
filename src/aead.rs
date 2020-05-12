@@ -91,6 +91,7 @@ fn mix_nonce<A: Aead>(base_nonce: &AeadNonce<A>, seq: &Seq<A>) -> AeadNonce<A> {
 pub(crate) type AeadNonce<A> = GenericArray<u8, <<A as Aead>::AeadImpl as BaseAead>::NonceSize>;
 pub(crate) type AeadKey<A> = GenericArray<u8, <<A as Aead>::AeadImpl as aead::NewAead>::KeySize>;
 
+/// A sequence counter
 struct Seq<A: Aead>(AeadNonce<A>);
 
 /// The default sequence counter is all zeros
@@ -139,7 +140,6 @@ impl<A: Aead, K: Kdf> Clone for AeadCtx<A, K> {
     }
 }
 
-// These are the methods defined for Context in draft02 §6.6. export() is newer than that, though
 impl<A: Aead, K: Kdf> AeadCtx<A, K> {
     /// Makes an AeadCtx from a raw key and nonce
     pub(crate) fn new(
@@ -250,7 +250,7 @@ impl<A: Aead, K: Kdf> AeadCtx<A, K> {
     /// Return Value
     /// ============
     /// Returns `Ok(())` on success. If the buffer length is more than 255x the digest size of the
-    /// underlying hash function, returns a `HpkeError::InvalidKdfLength`.
+    /// underlying hash function, returns an `Err(HpkeError::InvalidKdfLength)`.
     pub fn export(&self, info: &[u8], out_buf: &mut [u8]) -> Result<(), HpkeError> {
         // Use our exporter secret as the PRK for an HKDF-Expand op. The only time this fails is
         // when the length of the PRK is not the the underlying hash function's digest size. But

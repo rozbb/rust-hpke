@@ -31,9 +31,9 @@ mod test_util;
 //-------- Modules and exports--------//
 
 pub mod aead;
-pub mod dh;
 pub mod kdf;
 pub mod kem;
+pub mod kex;
 pub mod op_mode;
 mod prelude;
 pub mod setup;
@@ -43,11 +43,11 @@ mod util;
 #[doc(inline)]
 pub use crate::aead::AeadCtx;
 #[doc(inline)]
-pub use dh::{DiffieHellman, Marshallable, MarshalledPrivateKey, MarshalledPublicKey};
-#[doc(inline)]
 pub use kdf::Kdf;
 #[doc(inline)]
 pub use kem::{EncappedKey, Kem, MarshalledEncappedKey};
+#[doc(inline)]
+pub use kex::{KeyExchange, Marshallable, MarshalledPrivateKey, MarshalledPublicKey};
 #[doc(inline)]
 pub use op_mode::{OpModeR, OpModeS, Psk, PskBundle};
 #[doc(inline)]
@@ -66,8 +66,8 @@ pub enum HpkeError {
     InvalidTag,
     /// An error occured during encryption
     Encryption,
-    /// A Diffie-Hellman input or output was invalid
-    DiffieHellman,
+    /// A key exchange input or output was invalid
+    InvalidKeyExchange,
     /// The KDF was asked to output too many bytes
     InvalidKdfLength,
 }
@@ -78,7 +78,7 @@ impl core::fmt::Display for HpkeError {
             HpkeError::SeqOverflow => "Sequence overflow",
             HpkeError::InvalidTag => "Invalid tag",
             HpkeError::Encryption => "Encryption error",
-            HpkeError::DiffieHellman => "Diffie-Hellman validation error",
+            HpkeError::InvalidKeyExchange => "Key exchange validation error",
             HpkeError::InvalidKdfLength => "Too many bytes requested from KDF",
         };
         f.write_str(kind)

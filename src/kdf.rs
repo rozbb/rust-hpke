@@ -18,10 +18,13 @@ pub trait Kdf {
     const KDF_ID: u16;
 }
 
+// We use Kdf as a type parameter, so this is to avoid ambiguity.
+use Kdf as KdfTrait;
+
 /// The implementation of HKDF-SHA256
 pub struct HkdfSha256 {}
 
-impl Kdf for HkdfSha256 {
+impl KdfTrait for HkdfSha256 {
     type HashImpl = Sha256;
 
     // draft02 §8.2: HKDF-SHA256
@@ -31,7 +34,7 @@ impl Kdf for HkdfSha256 {
 /// The implementation of HKDF-SHA384
 pub struct HkdfSha384 {}
 
-impl Kdf for HkdfSha384 {
+impl KdfTrait for HkdfSha384 {
     type HashImpl = Sha384;
 
     // draft02 §8.2: HKDF-SHA384
@@ -41,7 +44,7 @@ impl Kdf for HkdfSha384 {
 /// The implementation of HKDF-SHA512
 pub struct HkdfSha512 {}
 
-impl Kdf for HkdfSha512 {
+impl KdfTrait for HkdfSha512 {
     type HashImpl = Sha512;
 
     // draft02 §8.2: HKDF-SHA512
@@ -53,15 +56,15 @@ impl Kdf for HkdfSha512 {
 //   return LabeledExpand(prk, "prk", kemContext, Nzz)
 /// Uses the given IKM to extract a secret, and then uses that secret, plus the given info string,
 /// to expand to the output buffer
-pub(crate) fn extract_and_expand<K: Kdf>(
+pub(crate) fn extract_and_expand<Kdf: KdfTrait>(
     ikm: &[u8],
     info: &[u8],
     out: &mut [u8],
 ) -> Result<(), hkdf::InvalidLength> {
     // The salt is a zero array of length Nh
-    let salt = static_zeros::<K>();
+    let salt = static_zeros::<Kdf>();
     // Extract using given IKM
-    let (_, hkdf_ctx) = labeled_extract::<K>(&salt, b"dh", ikm);
+    let (_, hkdf_ctx) = labeled_extract::<Kdf>(&salt, b"dh", ikm);
     // Expand using given info string
     hkdf_ctx.labeled_expand(b"prk", info, out)
 }
@@ -70,18 +73,18 @@ pub(crate) fn extract_and_expand<K: Kdf>(
 //   labeledIKM = concat("RFCXXXX ", label, IKM)
 //   return Extract(salt, labeledIKM)
 /// Returns the HKDF context derived from `(salt=salt, ikm= "RFCXXXX"||label||ikm)`
-pub(crate) fn labeled_extract<K: Kdf>(
+pub(crate) fn labeled_extract<Kdf: KdfTrait>(
     salt: &[u8],
     label: &[u8],
     ikm: &[u8],
 ) -> (
-    GenericArray<u8, <<K as Kdf>::HashImpl as FixedOutput>::OutputSize>,
-    hkdf::Hkdf<K::HashImpl>,
+    GenericArray<u8, <<Kdf as KdfTrait>::HashImpl as FixedOutput>::OutputSize>,
+    hkdf::Hkdf<Kdf::HashImpl>,
 ) {
     // Concat the inputs to create a new IKM
     let labeled_ikm: Vec<u8> = [RFC_STR, label, ikm].concat();
     // Extract and the HKDF context
-    hkdf::Hkdf::<K::HashImpl>::extract(Some(&salt), &labeled_ikm)
+    hkdf::Hkdf::<Kdf::HashImpl>::extract(Some(&salt), &labeled_ikm)
 }
 
 // This trait only exists so I can implement it for hkdf::Hkdf
