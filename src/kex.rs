@@ -1,6 +1,6 @@
 use crate::HpkeError;
 
-use digest::generic_array::{ArrayLength, GenericArray};
+use digest::generic_array::{typenum::marker_traits::Unsigned, ArrayLength, GenericArray};
 use rand::{CryptoRng, RngCore};
 
 /// Implemented by types that have a fixed-length byte representation
@@ -8,21 +8,17 @@ pub trait Marshallable {
     type OutputSize: ArrayLength<u8>;
 
     fn marshal(&self) -> GenericArray<u8, Self::OutputSize>;
+
+    /// Returns the size (in bytes) of this type when marshalled
+    fn size() -> usize {
+        Self::OutputSize::to_usize()
+    }
 }
 
-/// Implemented by types that can be deserialized from a fixed-length byte representation
-pub trait Unmarshallable: Marshallable {
-    fn unmarshal(encoded: GenericArray<u8, Self::OutputSize>) -> Self;
+/// Implemented by types that can be deserialized from byte representation
+pub trait Unmarshallable: Marshallable + Sized {
+    fn unmarshal(encoded: &[u8]) -> Result<Self, HpkeError>;
 }
-
-/// A convenience type representing the fixed-size byte array that a DH pubkey gets serialized
-/// to/from.
-pub type MarshalledPublicKey<Kex> =
-    GenericArray<u8, <<Kex as KeyExchange>::PublicKey as Marshallable>::OutputSize>;
-/// A convenience type representing the fixed-size byte array that a DH privkey gets serialized
-/// to/from.
-pub type MarshalledPrivateKey<Kex> =
-    GenericArray<u8, <<Kex as KeyExchange>::PrivateKey as Marshallable>::OutputSize>;
 
 /// This trait captures the requirements of a DH-based KEM (draft02 §5.1). It must have a way to
 /// generate keypairs, perform the DH computation, and marshall/umarshall DH pubkeys
@@ -68,11 +64,19 @@ pub mod x25519 {
             GenericArray::clone_from_slice(self.0.as_bytes())
         }
     }
+
     impl Unmarshallable for PublicKey {
         // Dalek also lets us convert [u8; 32] to pubkeys
-        fn unmarshal(encoded: GenericArray<u8, typenum::U32>) -> Self {
-            let arr: [u8; 32] = encoded.into();
-            PublicKey(x25519_dalek::PublicKey::from(arr))
+        fn unmarshal(encoded: &[u8]) -> Result<Self, HpkeError> {
+            if encoded.len() != Self::size() {
+                // Pubkeys must be 32 bytes
+                Err(HpkeError::InvalidMarshalledLength)
+            } else {
+                // Copy to a fixed-size array
+                let mut arr = [0u8; 32];
+                arr.copy_from_slice(encoded);
+                Ok(PublicKey(x25519_dalek::PublicKey::from(arr)))
+            }
         }
     }
 
@@ -86,9 +90,16 @@ pub mod x25519 {
     }
     impl Unmarshallable for PrivateKey {
         // Dalek also lets us convert [u8; 32] to scalars
-        fn unmarshal(encoded: GenericArray<u8, typenum::U32>) -> Self {
-            let arr: [u8; 32] = encoded.into();
-            PrivateKey(x25519_dalek::StaticSecret::from(arr))
+        fn unmarshal(encoded: &[u8]) -> Result<Self, HpkeError> {
+            if encoded.len() != 32 {
+                // Privkeys must be 32 bytes
+                Err(HpkeError::InvalidMarshalledLength)
+            } else {
+                // Copy to a fixed-size array
+                let mut arr = [0u8; 32];
+                arr.copy_from_slice(encoded);
+                Ok(PrivateKey(x25519_dalek::StaticSecret::from(arr)))
+            }
         }
     }
 
@@ -141,7 +152,7 @@ pub mod x25519 {
     mod tests {
         use crate::kex::{
             x25519::{KexResult, PrivateKey, PublicKey, X25519},
-            KeyExchange, Marshallable, MarshalledPublicKey, Unmarshallable,
+            KeyExchange, Marshallable, Unmarshallable,
         };
         use rand::RngCore;
 
@@ -185,18 +196,18 @@ pub mod x25519 {
 
             // Fill a buffer with randomness
             let orig_bytes = {
-                let mut buf = <MarshalledPublicKey<Kex> as Default>::default();
+                let mut buf = vec![0u8; <Kex as KeyExchange>::PublicKey::size()];
                 csprng.fill_bytes(buf.as_mut_slice());
                 buf
             };
 
             // Make a pubkey with those random bytes. Note, that unmarshal does not clamp the input
             // bytes. This is why this test passes.
-            let pk = <Kex as KeyExchange>::PublicKey::unmarshal(orig_bytes);
+            let pk = <Kex as KeyExchange>::PublicKey::unmarshal(&orig_bytes).unwrap();
             let pk_bytes = pk.marshal();
 
             // See if the re-marshalled bytes are the same as the input
-            assert_eq!(orig_bytes, pk_bytes);
+            assert_eq!(orig_bytes.as_slice(), pk_bytes.as_slice());
         }
 
         /// Tests that an unmarshal-marshal round-trip on a DH keypair ends up at the same values
@@ -211,8 +222,8 @@ pub mod x25519 {
             let (sk_bytes, pk_bytes) = (sk.marshal(), pk.marshal());
 
             // Now unmarshal those bytes
-            let new_sk = <Kex as KeyExchange>::PrivateKey::unmarshal(sk_bytes);
-            let new_pk = <Kex as KeyExchange>::PublicKey::unmarshal(pk_bytes);
+            let new_sk = <Kex as KeyExchange>::PrivateKey::unmarshal(&sk_bytes).unwrap();
+            let new_pk = <Kex as KeyExchange>::PublicKey::unmarshal(&pk_bytes).unwrap();
 
             // See if the unmarshalled values are the same as the initial ones
             assert!(new_sk == sk, "private key doesn't marshal correctly");

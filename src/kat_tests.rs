@@ -3,7 +3,7 @@ use crate::{
     aead::{Aead, AeadTag, AesGcm128, AesGcm256, ChaCha20Poly1305},
     kdf::{HkdfSha256, HkdfSha384, HkdfSha512, Kdf as KdfTrait},
     kem::{encap_with_eph, Kem as KemTrait, X25519HkdfSha256},
-    kex::{KeyExchange, Marshallable, MarshalledPrivateKey, MarshalledPublicKey, Unmarshallable},
+    kex::{KeyExchange, Marshallable, Unmarshallable},
     op_mode::{OpModeR, Psk, PskBundle},
     setup::setup_receiver,
 };
@@ -118,17 +118,9 @@ fn get_and_assert_keypair<Kex: KeyExchange>(
     pk_bytes: &[u8],
 ) -> (Kex::PrivateKey, Kex::PublicKey) {
     // Unmarshall the secret key
-    let sk = {
-        let mut buf = <MarshalledPrivateKey<Kex> as Default>::default();
-        buf.copy_from_slice(sk_bytes);
-        <Kex as KeyExchange>::PrivateKey::unmarshal(buf)
-    };
+    let sk = <Kex as KeyExchange>::PrivateKey::unmarshal(sk_bytes).unwrap();
     // Unmarshall the pubkey
-    let pk = {
-        let mut buf = <MarshalledPublicKey<Kex> as Default>::default();
-        buf.copy_from_slice(pk_bytes);
-        <Kex as KeyExchange>::PublicKey::unmarshal(buf)
-    };
+    let pk = <Kex as KeyExchange>::PublicKey::unmarshal(pk_bytes).unwrap();
 
     // Make sure the derived pubkey matches the given pubkey
     assert_eq!(pk.marshal(), Kex::sk_to_pk(&sk).marshal());
@@ -146,11 +138,8 @@ fn make_op_mode_r<Kex: KeyExchange, Kdf: KdfTrait>(
     psk_id: Option<Vec<u8>>,
 ) -> OpModeR<Kex, Kdf> {
     // Unmarshal the optional pubkey
-    let pk = pk_sender_bytes.map(|bytes| {
-        let mut buf = <MarshalledPublicKey<Kex> as Default>::default();
-        buf.copy_from_slice(&bytes);
-        <Kex as KeyExchange>::PublicKey::unmarshal(buf)
-    });
+    let pk =
+        pk_sender_bytes.map(|bytes| <Kex as KeyExchange>::PublicKey::unmarshal(&bytes).unwrap());
     // Unmarshal the optinoal bundle
     let bundle = psk.map(|bytes| PskBundle::<Kdf> {
         psk: Psk::<Kdf>::from_bytes(bytes),
@@ -179,16 +168,13 @@ macro_rules! test_case {
         let (sk_recip, pk_recip) = get_and_assert_keypair::<Kex>(&$tv.sk_recip, &$tv.pk_recip);
         let (sk_eph, _) = get_and_assert_keypair::<Kex>(&$tv.sk_eph, &$tv.pk_eph);
 
-        let sk_sender = $tv.sk_sender.map(|bytes| {
-            let mut buf = <MarshalledPrivateKey<Kex> as Default>::default();
-            buf.copy_from_slice(&bytes);
-            <Kex as KeyExchange>::PrivateKey::unmarshal(buf)
-        });
-        let pk_sender = $tv.pk_sender.clone().map(|bytes| {
-            let mut buf = <MarshalledPublicKey<Kex> as Default>::default();
-            buf.copy_from_slice(&bytes);
-            <Kex as KeyExchange>::PublicKey::unmarshal(buf)
-        });
+        let sk_sender = $tv
+            .sk_sender
+            .map(|bytes| <Kex as KeyExchange>::PrivateKey::unmarshal(&bytes).unwrap());
+        let pk_sender = $tv
+            .pk_sender
+            .clone()
+            .map(|bytes| <Kex as KeyExchange>::PublicKey::unmarshal(&bytes).unwrap());
         // If sk_sender is Some, then so is pk_sender
         let sender_keypair = sk_sender.map(|sk| (sk, pk_sender.unwrap()));
 
@@ -220,13 +206,14 @@ macro_rules! test_case {
                 let mut ciphertext_and_tag = enc_packet.ciphertext;
                 let total_len = ciphertext_and_tag.len();
 
-                let mut tag_buf = <AeadTag<A> as Default>::default();
+                let tag_size = AeadTag::<A>::size();
                 let (ciphertext_bytes, tag_bytes) =
-                    ciphertext_and_tag.split_at_mut(total_len - tag_buf.len());
+                    ciphertext_and_tag.split_at_mut(total_len - tag_size);
 
-                tag_buf.copy_from_slice(tag_bytes);
-
-                (ciphertext_bytes.to_vec(), tag_buf)
+                (
+                    ciphertext_bytes.to_vec(),
+                    AeadTag::unmarshal(tag_bytes).unwrap(),
+                )
             };
 
             // Open the ciphertext in place and assert that this succeeds

@@ -1,4 +1,9 @@
-use crate::{kdf::Kdf, setup::ExporterSecret, HpkeError};
+use crate::{
+    kdf::Kdf,
+    kex::{Marshallable, Unmarshallable},
+    setup::ExporterSecret,
+    HpkeError,
+};
 
 use core::u8;
 
@@ -109,8 +114,29 @@ impl<A: Aead> Clone for Seq<A> {
     }
 }
 
-/// A convenience type for authenticated encryption tags
-pub type AeadTag<A> = GenericArray<u8, <<A as Aead>::AeadImpl as BaseAead>::TagSize>;
+/// An authenticated encryption tag
+pub struct AeadTag<A: Aead>(GenericArray<u8, <A::AeadImpl as BaseAead>::TagSize>);
+
+impl<A: Aead> Marshallable for AeadTag<A> {
+    type OutputSize = <A::AeadImpl as BaseAead>::TagSize;
+
+    fn marshal(&self) -> GenericArray<u8, Self::OutputSize> {
+        self.0.clone()
+    }
+}
+
+impl<A: Aead> Unmarshallable for AeadTag<A> {
+    fn unmarshal(encoded: &[u8]) -> Result<Self, HpkeError> {
+        if encoded.len() != Self::size() {
+            Err(HpkeError::InvalidMarshalledLength)
+        } else {
+            // Copy to a fixed-size array
+            let mut arr = <GenericArray<u8, Self::OutputSize> as Default>::default();
+            arr.copy_from_slice(encoded);
+            Ok(AeadTag(arr))
+        }
+    }
+}
 
 /// The HPKE encryption context. This is what you use to `seal` plaintexts and `open` ciphertexts.
 pub struct AeadCtx<A: Aead, K: Kdf> {
@@ -191,7 +217,7 @@ impl<A: Aead, K: Kdf> AeadCtx<A, K> {
             }
 
             // Return the tag
-            Ok(tag)
+            Ok(AeadTag(tag))
         }
     }
 
@@ -224,7 +250,7 @@ impl<A: Aead, K: Kdf> AeadCtx<A, K> {
             let nonce = mix_nonce(&self.nonce, &self.seq);
             let decrypt_res = self
                 .encryptor
-                .decrypt_in_place_detached(&nonce, &aad, ciphertext, tag);
+                .decrypt_in_place_detached(&nonce, &aad, ciphertext, &tag.0);
 
             if decrypt_res.is_err() {
                 // Opening failed due to a bad tag
@@ -267,8 +293,7 @@ impl<A: Aead, K: Kdf> AeadCtx<A, K> {
 #[cfg(test)]
 mod test {
     use super::{AeadTag, AesGcm128, AesGcm256, ChaCha20Poly1305, Seq};
-    use crate::kdf::HkdfSha256;
-    use crate::test_util::gen_ctx_simple_pair;
+    use crate::{kdf::HkdfSha256, kex::Unmarshallable, test_util::gen_ctx_simple_pair, HpkeError};
 
     use core::u8;
 
@@ -348,18 +373,22 @@ mod test {
         {
             let mut plaintext = *msg;
             // Try to encrypt the plaintext
-            aead_ctx1
-                .seal(&mut plaintext[..], aad)
-                .expect_err("seal() succeeded");
-            // Rename for clarity
-            let mut ciphertext = plaintext;
+            match aead_ctx1.seal(&mut plaintext[..], aad) {
+                Err(HpkeError::SeqOverflow) => {} // Good, this should have overflowed
+                Err(e) => panic!("seal() should have overflowed. Instead got {}", e),
+                _ => panic!("seal() should have overflowed. Instead it succeeded"),
+            }
 
-            // Now try to decrypt the ciphertext. This isn't a valid ciphertext, but the overflow
+            // Now try to decrypt something. This isn't a valid ciphertext or tag, but the overflow
             // should fail before the tag check fails.
-            let dummy_tag = <AeadTag<ChaCha20Poly1305> as Default>::default();
-            aead_ctx2
-                .open(&mut ciphertext[..], aad, &dummy_tag)
-                .expect_err("open() succeeded");
+            let mut dummy_ciphertext = [0u8; 32];
+            let dummy_tag = AeadTag::unmarshal(&[0; 16]).unwrap();
+
+            match aead_ctx2.open(&mut dummy_ciphertext[..], aad, &dummy_tag) {
+                Err(HpkeError::SeqOverflow) => {} // Good, this should have overflowed
+                Err(e) => panic!("open() should have overflowed. Instead got {}", e),
+                _ => panic!("open() should have overflowed. Instead it succeeded"),
+            }
         }
     }
 

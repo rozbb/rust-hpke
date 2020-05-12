@@ -15,11 +15,8 @@
 use hpke::{
     aead::{Aead, AeadCtx, AeadTag, AesGcm128, AesGcm256, ChaCha20Poly1305},
     kdf::{HkdfSha256, HkdfSha384, HkdfSha512, Kdf as KdfTrait},
-    kem::{Kem as KemTrait, MarshalledEncappedKey, X25519HkdfSha256},
-    kex::{
-        KeyExchange, Marshallable, MarshalledPrivateKey, MarshalledPublicKey, Unmarshallable,
-        X25519,
-    },
+    kem::{Kem as KemTrait, X25519HkdfSha256},
+    kex::{KeyExchange, Marshallable, Unmarshallable, X25519},
     op_mode::{Psk, PskBundle},
     setup_receiver, setup_sender, EncappedKey, HpkeError, OpModeR, OpModeS,
 };
@@ -44,9 +41,6 @@ type AgileAeadTag = Vec<u8>;
 #[derive(Debug)]
 enum AgileHpkeError {
     /// When you don't give an algorithm an array of the length it wants. Error is of the form
-    /// `(thing_with_wrong_len, expected_len, given_len)`.
-    LengthMismatch(&'static str, usize, usize),
-    /// When you don't give an algorithm an array of the length it wants. Error is of the form
     /// `((alg1, alg1_location) , (alg2, alg2_location))`.
     AlgMismatch((&'static str, &'static str), (&'static str, &'static str)),
     /// When you get an algorithm identifier you don't recognize. Error is of the form
@@ -65,7 +59,7 @@ impl From<HpkeError> for AgileHpkeError {
 
 impl<A: Aead, Kdf: KdfTrait> AgileAeadCtx for AeadCtx<A, Kdf> {
     fn seal(&mut self, plaintext: &mut [u8], aad: &[u8]) -> Result<Vec<u8>, HpkeError> {
-        self.seal(plaintext, aad).map(|tag| tag.to_vec())
+        self.seal(plaintext, aad).map(|tag| tag.marshal().to_vec())
     }
 
     fn open(
@@ -74,22 +68,8 @@ impl<A: Aead, Kdf: KdfTrait> AgileAeadCtx for AeadCtx<A, Kdf> {
         aad: &[u8],
         tag_bytes: &[u8],
     ) -> Result<(), AgileHpkeError> {
-        let tag = {
-            let mut tag_buf = <AeadTag<A> as Default>::default();
-            let expected_len = tag_buf.len();
-            let given_len = tag_bytes.len();
-            if expected_len != given_len {
-                return Err(AgileHpkeError::LengthMismatch(
-                    "tag",
-                    expected_len,
-                    given_len,
-                ));
-            }
-            tag_buf.clone_from_slice(tag_bytes);
-            tag_buf
-        };
-        self.open(ciphertext, aad, &tag)
-            .map_err(|e| AgileHpkeError::HpkeError(e))
+        let tag = AeadTag::<A>::unmarshal(tag_bytes)?;
+        self.open(ciphertext, aad, &tag).map_err(|e| e.into())
     }
 }
 
@@ -257,17 +237,7 @@ struct AgilePublicKey {
 
 impl AgilePublicKey {
     fn try_lift<Kex: KeyExchange>(self) -> Result<Kex::PublicKey, AgileHpkeError> {
-        let mut key_buf = <MarshalledPublicKey<Kex> as Default>::default();
-        if self.pubkey_bytes.len() != key_buf.len() {
-            return Err(AgileHpkeError::LengthMismatch(
-                "AgilePublicKey",
-                key_buf.len(),
-                self.pubkey_bytes.len(),
-            ));
-        }
-
-        key_buf.clone_from_slice(&self.pubkey_bytes);
-        Ok(Kex::PublicKey::unmarshal(key_buf))
+        Kex::PublicKey::unmarshal(&self.pubkey_bytes).map_err(|e| e.into())
     }
 }
 
@@ -279,17 +249,7 @@ struct AgileEncappedKey {
 
 impl AgileEncappedKey {
     fn try_lift<Kex: KeyExchange>(self) -> Result<EncappedKey<Kex>, AgileHpkeError> {
-        let mut key_buf = <MarshalledEncappedKey<Kex> as Default>::default();
-        if self.encapped_key_bytes.len() != key_buf.len() {
-            return Err(AgileHpkeError::LengthMismatch(
-                "AgileEncappedKey",
-                key_buf.len(),
-                self.encapped_key_bytes.len(),
-            ));
-        }
-
-        key_buf.clone_from_slice(&self.encapped_key_bytes);
-        Ok(EncappedKey::<Kex>::unmarshal(key_buf))
+        EncappedKey::<Kex>::unmarshal(&self.encapped_key_bytes).map_err(|e| e.into())
     }
 }
 
@@ -301,17 +261,7 @@ struct AgilePrivateKey {
 
 impl AgilePrivateKey {
     fn try_lift<Kex: KeyExchange>(self) -> Result<Kex::PrivateKey, AgileHpkeError> {
-        let mut key_buf = <MarshalledPrivateKey<Kex> as Default>::default();
-        if self.privkey_bytes.len() != key_buf.len() {
-            return Err(AgileHpkeError::LengthMismatch(
-                "AgilePrivateKey",
-                key_buf.len(),
-                self.privkey_bytes.len(),
-            ));
-        }
-
-        key_buf.clone_from_slice(&self.privkey_bytes);
-        Ok(Kex::PrivateKey::unmarshal(key_buf))
+        Kex::PrivateKey::unmarshal(&self.privkey_bytes).map_err(|e| e.into())
     }
 }
 

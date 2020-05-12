@@ -50,16 +50,11 @@ impl<Kex: KeyExchange> Marshallable for EncappedKey<Kex> {
 
 impl<Kex: KeyExchange> Unmarshallable for EncappedKey<Kex> {
     // Pass to underlying unmarshal() impl
-    fn unmarshal(encoded: GenericArray<u8, Self::OutputSize>) -> Self {
-        let pubkey = <Kex::PublicKey as Unmarshallable>::unmarshal(encoded);
-        EncappedKey(pubkey)
+    fn unmarshal(encoded: &[u8]) -> Result<Self, HpkeError> {
+        let pubkey = <Kex::PublicKey as Unmarshallable>::unmarshal(encoded)?;
+        Ok(EncappedKey(pubkey))
     }
 }
-
-/// A convenience type representing the fixed-size byte array that an encapped key gets serialized
-/// to/from.
-pub type MarshalledEncappedKey<Kex> =
-    GenericArray<u8, <EncappedKey<Kex> as Marshallable>::OutputSize>;
 
 /// A convenience type representing the fixed-size byte array of the same length as a serialized
 /// `KexResult`
@@ -309,7 +304,8 @@ mod tests {
         // Marshal it
         let encapped_key_bytes = encapped_key.marshal();
         // Unmarshal it
-        let new_encapped_key = EncappedKey::<<Ke as Kem>::Kex>::unmarshal(encapped_key_bytes);
+        let new_encapped_key =
+            EncappedKey::<<Ke as Kem>::Kex>::unmarshal(&encapped_key_bytes).unwrap();
 
         assert!(
             new_encapped_key.0 == encapped_key.0,

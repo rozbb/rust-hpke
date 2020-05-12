@@ -43,11 +43,9 @@ mod util;
 #[doc(inline)]
 pub use crate::aead::AeadCtx;
 #[doc(inline)]
-pub use kdf::Kdf;
+pub use kem::{EncappedKey, Kem};
 #[doc(inline)]
-pub use kem::{EncappedKey, Kem, MarshalledEncappedKey};
-#[doc(inline)]
-pub use kex::{KeyExchange, Marshallable, MarshalledPrivateKey, MarshalledPublicKey};
+pub use kex::{KeyExchange, Marshallable, Unmarshallable};
 #[doc(inline)]
 pub use op_mode::{OpModeR, OpModeS, Psk, PskBundle};
 #[doc(inline)]
@@ -70,6 +68,8 @@ pub enum HpkeError {
     InvalidKeyExchange,
     /// The KDF was asked to output too many bytes
     InvalidKdfLength,
+    /// The unmarshaller was given the wrong number of bytes
+    InvalidMarshalledLength,
 }
 
 impl core::fmt::Display for HpkeError {
@@ -80,6 +80,7 @@ impl core::fmt::Display for HpkeError {
             HpkeError::Encryption => "Encryption error",
             HpkeError::InvalidKeyExchange => "Key exchange validation error",
             HpkeError::InvalidKdfLength => "Too many bytes requested from KDF",
+            HpkeError::InvalidMarshalledLength => "Cannot unmarshal byte sequence of this length",
         };
         f.write_str(kind)
     }
