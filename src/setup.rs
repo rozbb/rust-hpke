@@ -36,7 +36,7 @@ pub(crate) type ExporterSecret<K> =
 // inputs, and secrets, and spits out a key-nonce pair to be used for symmetric encryption
 fn derive_enc_ctx<A, Kdf, Kem, O>(
     mode: &O,
-    shared_secret: SharedSecret<Kem::Kex>,
+    shared_secret: SharedSecret<Kem>,
     info: &[u8],
 ) -> AeadCtx<A, Kdf>
 where
