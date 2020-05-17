@@ -1,8 +1,8 @@
 use crate::prelude::*;
 use crate::{
     aead::{Aead, AeadTag, AesGcm128, AesGcm256, ChaCha20Poly1305},
-    kdf::{HkdfSha256, HkdfSha384, HkdfSha512, Kdf as KdfTrait},
-    kem::{encap_with_eph, Kem as KemTrait, X25519HkdfSha256},
+    kdf::{HkdfSha256, Kdf as KdfTrait},
+    kem::{encap_with_eph, Kem as KemTrait, P256HkdfSha256, X25519HkdfSha256},
     kex::{KeyExchange, Marshallable, Unmarshallable},
     op_mode::{OpModeR, Psk, PskBundle},
     setup::setup_receiver,
@@ -36,7 +36,7 @@ where
 }
 
 // Each individual test case looks like this
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 struct MainTestVector {
     // Parameters
     mode: u8,
@@ -89,7 +89,7 @@ struct MainTestVector {
     exports: Vec<ExporterTestVector>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 struct EncryptionTestVector {
     #[serde(deserialize_with = "bytes_from_hex")]
     plaintext: Vec<u8>,
@@ -101,7 +101,7 @@ struct EncryptionTestVector {
     ciphertext: Vec<u8>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 struct ExporterTestVector {
     #[serde(rename = "context", deserialize_with = "bytes_from_hex")]
     info: Vec<u8>,
@@ -158,11 +158,11 @@ fn make_op_mode_r<Kex: KeyExchange, Kdf: KdfTrait>(
 
 // Implements a test case for a given AEAD implementation
 macro_rules! test_case {
-    ($tv:ident, $aead_ty:ty, $kdf_ty:ty) => {{
+    ($tv:ident, $aead_ty:ty, $kdf_ty:ty, $kem_ty:ty) => {{
         type A = $aead_ty;
         type Kdf = $kdf_ty;
-        type Kem = X25519HkdfSha256;
-        type Kex = <X25519HkdfSha256 as KemTrait>::Kex;
+        type Kem = $kem_ty;
+        type Kex = <$kem_ty as KemTrait>::Kex;
 
         // First, unmarshall all the relevant keys so we can reconstruct the encapped key
         let (sk_recip, pk_recip) = get_and_assert_keypair::<Kex>(&$tv.sk_recip, &$tv.pk_recip);
@@ -180,9 +180,12 @@ macro_rules! test_case {
 
         // Now derive the encapped key with the deterministic encap function, using all the inputs
         // above
-        let (_, encapped_key) =
+        let (zz, encapped_key) =
             encap_with_eph::<Kem>(&pk_recip, sender_keypair.as_ref(), sk_eph.clone())
                 .expect("encap failed");
+        // Now assert that the derived shared secret key is identical to the one provided
+        assert_eq!(zz.as_slice(), $tv._shared_secret.as_slice());
+
         // Now assert that the derived encapped key is identical to the one provided
         assert_eq!(
             encapped_key.marshal().as_slice(),
@@ -242,30 +245,34 @@ fn kat_test() {
     let tvs: Vec<MainTestVector> = serde_json::from_reader(file).unwrap();
 
     for tv in tvs.into_iter() {
-        // Ignore everything that doesn't use X25519, since that's all we support right now
-        if tv.kem_id != X25519HkdfSha256::KEM_ID {
+        // Ignore everything that doesn't use X25519 or P256, since that's all we support right now
+        if tv.kem_id != P256HkdfSha256::KEM_ID || tv.kem_id != X25519HkdfSha256::KEM_ID {
             continue;
         }
 
-        match (tv.aead_id, tv.kdf_id) {
-            (AesGcm128::AEAD_ID, HkdfSha256::KDF_ID) => test_case!(tv, AesGcm128, HkdfSha256),
-            (AesGcm128::AEAD_ID, HkdfSha384::KDF_ID) => test_case!(tv, AesGcm128, HkdfSha384),
-            (AesGcm128::AEAD_ID, HkdfSha512::KDF_ID) => test_case!(tv, AesGcm128, HkdfSha512),
-            (AesGcm256::AEAD_ID, HkdfSha256::KDF_ID) => test_case!(tv, AesGcm256, HkdfSha256),
-            (AesGcm256::AEAD_ID, HkdfSha384::KDF_ID) => test_case!(tv, AesGcm256, HkdfSha384),
-            (AesGcm256::AEAD_ID, HkdfSha512::KDF_ID) => test_case!(tv, AesGcm256, HkdfSha512),
-            (ChaCha20Poly1305::AEAD_ID, HkdfSha256::KDF_ID) => {
-                test_case!(tv, ChaCha20Poly1305, HkdfSha256)
+        match (tv.aead_id, tv.kdf_id, tv.kem_id) {
+            (AesGcm128::AEAD_ID, HkdfSha256::KDF_ID, X25519HkdfSha256::KEM_ID) => {
+                test_case!(tv, AesGcm128, HkdfSha256, X25519HkdfSha256)
             }
-            (ChaCha20Poly1305::AEAD_ID, HkdfSha384::KDF_ID) => {
-                test_case!(tv, ChaCha20Poly1305, HkdfSha384)
+            (AesGcm128::AEAD_ID, HkdfSha256::KDF_ID, P256HkdfSha256::KEM_ID) => {
+                test_case!(tv, AesGcm128, HkdfSha256, P256HkdfSha256)
             }
-            (ChaCha20Poly1305::AEAD_ID, HkdfSha512::KDF_ID) => {
-                test_case!(tv, ChaCha20Poly1305, HkdfSha512)
+            (AesGcm256::AEAD_ID, HkdfSha256::KDF_ID, X25519HkdfSha256::KEM_ID) => {
+                test_case!(tv, AesGcm256, HkdfSha256, X25519HkdfSha256)
+            }
+            (AesGcm256::AEAD_ID, HkdfSha256::KDF_ID, P256HkdfSha256::KEM_ID) => {
+                test_case!(tv, AesGcm256, HkdfSha256, P256HkdfSha256)
+            }
+
+            (ChaCha20Poly1305::AEAD_ID, HkdfSha256::KDF_ID, X25519HkdfSha256::KEM_ID) => {
+                test_case!(tv, ChaCha20Poly1305, HkdfSha256, X25519HkdfSha256)
+            }
+            (ChaCha20Poly1305::AEAD_ID, HkdfSha256::KDF_ID, P256HkdfSha256::KEM_ID) => {
+                test_case!(tv, ChaCha20Poly1305, HkdfSha256, P256HkdfSha256)
             }
             _ => panic!(
-                "Invalid (AEAD ID, KDF ID) combo: ({}, {})",
-                tv.aead_id, tv.kdf_id
+                "Invalid (AEAD ID, KDF ID, KEM ID) combo: ({}, {}, {})",
+                tv.aead_id, tv.kdf_id, tv.kem_id
             ),
         };
     }

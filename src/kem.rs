@@ -1,9 +1,9 @@
 use crate::{
     kdf::{extract_and_expand, HkdfSha256, Kdf as KdfTrait},
-    kex::{KeyExchange, Marshallable, Unmarshallable, X25519},
+    kex::{KeyExchange, Marshallable, Unmarshallable, DHP256, X25519},
     HpkeError,
 };
-use digest::generic_array::GenericArray;
+use digest::{generic_array::GenericArray, FixedOutput};
 use rand::{CryptoRng, RngCore};
 
 /// Defines a combination of key exchange mechanism and a KDF, which together form a KEM
@@ -26,6 +26,17 @@ impl Kem for X25519HkdfSha256 {
 
     // Section 7.1: DHKEM(Curve25519, HKDF-SHA256)
     const KEM_ID: u16 = 0x0020;
+}
+
+/// Represents DHKEM(P256, HKDF-SHA256)
+pub struct P256HkdfSha256 {}
+
+impl Kem for P256HkdfSha256 {
+    type Kex = DHP256;
+    type Kdf = HkdfSha256;
+
+    // Section 7.1: DHKEM(P256, HKDF-SHA256)
+    const KEM_ID: u16 = 0x0010;
 }
 
 /// Convenience types representing public/private keys corresponding to a KEM's underlying DH alg
@@ -58,8 +69,8 @@ impl<Kex: KeyExchange> Unmarshallable for EncappedKey<Kex> {
 
 /// A convenience type representing the fixed-size byte array of the same length as a serialized
 /// `KexResult`
-pub(crate) type SharedSecret<Kex> =
-    GenericArray<u8, <<Kex as KeyExchange>::KexResult as Marshallable>::OutputSize>;
+pub(crate) type SharedSecret<Kem> =
+    GenericArray<u8, <<<Kem as KemTrait>::Kdf as KdfTrait>::HashImpl as FixedOutput>::OutputSize>;
 
 //  def Encap(pkR):
 //    skE, pkE = GenerateKeyPair()
@@ -95,7 +106,7 @@ pub(crate) fn encap_with_eph<Kem: KemTrait>(
     pk_recip: &KemPubkey<Kem>,
     sender_id_keypair: Option<&(KemPrivkey<Kem>, KemPubkey<Kem>)>,
     sk_eph: KemPrivkey<Kem>,
-) -> Result<(SharedSecret<Kem::Kex>, EncappedKey<Kem::Kex>), HpkeError> {
+) -> Result<(SharedSecret<Kem>, EncappedKey<Kem::Kex>), HpkeError> {
     // Compute the shared secret from the ephemeral inputs
     let kex_res_eph = Kem::Kex::kex(&sk_eph, pk_recip)?;
 
@@ -124,7 +135,7 @@ pub(crate) fn encap_with_eph<Kem: KemTrait>(
         // recipient pubkey, and the KEX of the identity input with the recipient pubkey. The
         // HKDF-Expand call only errors if the output values are 255x the digest size of the hash
         // function. Since these values are fixed at compile time, we don't worry about it.
-        let mut buf = <SharedSecret<Kem::Kex> as Default>::default();
+        let mut buf = <SharedSecret<Kem> as Default>::default();
         extract_and_expand::<Kem::Kdf>(&concatted_secrets, &kem_context, &mut buf)
             .expect("shared secret is way too big");
         buf
@@ -134,7 +145,7 @@ pub(crate) fn encap_with_eph<Kem: KemTrait>(
         // the recipient pubkey. The HKDF-Expand call only errors if the output values are 255x the
         // digest size of the hash function. Since these values are fixed at compile time, we don't
         // worry about it.
-        let mut buf = <SharedSecret<Kem::Kex> as Default>::default();
+        let mut buf = <SharedSecret<Kem> as Default>::default();
         extract_and_expand::<Kem::Kdf>(&kex_res_eph.marshal(), &kem_context, &mut buf)
             .expect("shared secret is way too big");
         buf
@@ -152,11 +163,11 @@ pub(crate) fn encap_with_eph<Kem: KemTrait>(
 /// ============
 /// Returns a shared secret and encapped key on success. If an error happened during key exchange,
 /// returns `Err(HpkeError::InvalidKeyExchange)`.
-pub(crate) fn encap<Kem, R>(
+pub(crate) fn encap<Kem: KemTrait, R>(
     pk_recip: &KemPubkey<Kem>,
     sender_id_keypair: Option<&(KemPrivkey<Kem>, KemPubkey<Kem>)>,
     csprng: &mut R,
-) -> Result<(SharedSecret<Kem::Kex>, EncappedKey<Kem::Kex>), HpkeError>
+) -> Result<(SharedSecret<Kem>, EncappedKey<Kem::Kex>), HpkeError>
 where
     Kem: KemTrait,
     R: CryptoRng + RngCore,
@@ -198,7 +209,7 @@ pub(crate) fn decap<Kem: KemTrait>(
     sk_recip: &KemPrivkey<Kem>,
     pk_sender_id: Option<&KemPubkey<Kem>>,
     encapped_key: &EncappedKey<Kem::Kex>,
-) -> Result<SharedSecret<Kem::Kex>, HpkeError> {
+) -> Result<SharedSecret<Kem>, HpkeError> {
     // Compute the shared secret from the ephemeral inputs
     let kex_res_eph = Kem::Kex::kex(&sk_recip, &encapped_key.0)?;
 
@@ -224,7 +235,7 @@ pub(crate) fn decap<Kem: KemTrait>(
         // recipient pubkey, and the kex of the identity input with the recipient pubkey. The
         // HKDF-Expand call only errors if the output values are 255x the digest size of the hash
         // function. Since these values are fixed at compile time, we don't worry about it.
-        let mut shared_secret = <SharedSecret<Kem::Kex> as Default>::default();
+        let mut shared_secret = <SharedSecret<Kem> as Default>::default();
         extract_and_expand::<Kem::Kdf>(&concatted_secrets, &kem_context, &mut shared_secret)
             .expect("shared secret is way too big");
         Ok(shared_secret)
@@ -234,7 +245,7 @@ pub(crate) fn decap<Kem: KemTrait>(
         // recipient pubkey. The HKDF-Expand call only errors if the output values are 255x the
         // digest size of the hash function. Since these values are fixed at compile time, we don't
         // worry about it.
-        let mut shared_secret = <SharedSecret<Kem::Kex> as Default>::default();
+        let mut shared_secret = <SharedSecret<Kem> as Default>::default();
         extract_and_expand::<Kem::Kdf>(&kex_res_eph.marshal(), &kem_context, &mut shared_secret)
             .expect("shared secret is way too big");
         Ok(shared_secret)
@@ -245,71 +256,85 @@ pub(crate) fn decap<Kem: KemTrait>(
 mod tests {
     use super::{decap, encap, EncappedKey, Marshallable, Unmarshallable};
     use crate::{
-        kem::{Kem, X25519HkdfSha256},
+        kem::{Kem, P256HkdfSha256, X25519HkdfSha256},
         kex::KeyExchange,
     };
+
+    macro_rules! test_case_encap_correctness {
+        ($kem_ty:ty) => {{
+            type Ke = $kem_ty;
+
+            let mut csprng = rand::thread_rng();
+            let (sk_recip, pk_recip) = <Ke as Kem>::Kex::gen_keypair(&mut csprng);
+
+            // Encapsulate a random shared secret
+            let (auth_shared_secret, encapped_key) =
+                encap::<Ke, _>(&pk_recip, None, &mut csprng).unwrap();
+
+            // Decap it
+            let decapped_auth_shared_secret = decap::<Ke>(&sk_recip, None, &encapped_key).unwrap();
+
+            // Ensure that the encapsulated secret is what decap() derives
+            assert_eq!(auth_shared_secret, decapped_auth_shared_secret);
+
+            //
+            // Now do it with the auth, i.e., using the sender's identity keys
+            //
+
+            // Make a sender identity keypair
+            let (sk_sender_id, pk_sender_id) = <Ke as Kem>::Kex::gen_keypair(&mut csprng);
+
+            // Encapsulate a random shared secret
+            let (auth_shared_secret, encapped_key) = encap::<Ke, _>(
+                &pk_recip,
+                Some(&(sk_sender_id, pk_sender_id.clone())),
+                &mut csprng,
+            )
+            .unwrap();
+
+            // Decap it
+            let decapped_auth_shared_secret =
+                decap::<Ke>(&sk_recip, Some(&pk_sender_id), &encapped_key).unwrap();
+
+            // Ensure that the encapsulated secret is what decap() derives
+            assert_eq!(auth_shared_secret, decapped_auth_shared_secret);
+        }};
+    }
+
+    macro_rules! test_case_encapped_marshal {
+        ($kem_ty:ty) => {{
+            type Ke = $kem_ty;
+
+            // Encapsulate a random shared secret
+            let encapped_key = {
+                let mut csprng = rand::thread_rng();
+                let (_, pk_recip) = <Ke as Kem>::Kex::gen_keypair(&mut csprng);
+                encap::<Ke, _>(&pk_recip, None, &mut csprng).unwrap().1
+            };
+            // Marshal it
+            let encapped_key_bytes = encapped_key.marshal();
+            // Unmarshal it
+            let new_encapped_key =
+                EncappedKey::<<Ke as Kem>::Kex>::unmarshal(&encapped_key_bytes).unwrap();
+
+            assert!(
+                new_encapped_key.0 == encapped_key.0,
+                "encapped key doesn't marshal correctly"
+            );
+        }};
+    }
 
     /// Tests that encap and decap produce the same shared secret when composed
     #[test]
     fn test_encap_correctness() {
-        type Ke = X25519HkdfSha256;
-
-        let mut csprng = rand::thread_rng();
-        let (sk_recip, pk_recip) = <Ke as Kem>::Kex::gen_keypair(&mut csprng);
-
-        // Encapsulate a random shared secret
-        let (auth_shared_secret, encapped_key) =
-            encap::<Ke, _>(&pk_recip, None, &mut csprng).unwrap();
-
-        // Decap it
-        let decapped_auth_shared_secret = decap::<Ke>(&sk_recip, None, &encapped_key).unwrap();
-
-        // Ensure that the encapsulated secret is what decap() derives
-        assert_eq!(auth_shared_secret, decapped_auth_shared_secret);
-
-        //
-        // Now do it with the auth, i.e., using the sender's identity keys
-        //
-
-        // Make a sender identity keypair
-        let (sk_sender_id, pk_sender_id) = <Ke as Kem>::Kex::gen_keypair(&mut csprng);
-
-        // Encapsulate a random shared secret
-        let (auth_shared_secret, encapped_key) = encap::<Ke, _>(
-            &pk_recip,
-            Some(&(sk_sender_id, pk_sender_id.clone())),
-            &mut csprng,
-        )
-        .unwrap();
-
-        // Decap it
-        let decapped_auth_shared_secret =
-            decap::<Ke>(&sk_recip, Some(&pk_sender_id), &encapped_key).unwrap();
-
-        // Ensure that the encapsulated secret is what decap() derives
-        assert_eq!(auth_shared_secret, decapped_auth_shared_secret);
+        test_case_encap_correctness!(X25519HkdfSha256);
+        test_case_encap_correctness!(P256HkdfSha256);
     }
 
     /// Tests that an unmarshal-marshal round-trip on an encapped key ends up at the same value
     #[test]
     fn test_encapped_marshal() {
-        type Ke = X25519HkdfSha256;
-
-        // Encapsulate a random shared secret
-        let encapped_key = {
-            let mut csprng = rand::thread_rng();
-            let (_, pk_recip) = <Ke as Kem>::Kex::gen_keypair(&mut csprng);
-            encap::<Ke, _>(&pk_recip, None, &mut csprng).unwrap().1
-        };
-        // Marshal it
-        let encapped_key_bytes = encapped_key.marshal();
-        // Unmarshal it
-        let new_encapped_key =
-            EncappedKey::<<Ke as Kem>::Kex>::unmarshal(&encapped_key_bytes).unwrap();
-
-        assert!(
-            new_encapped_key.0 == encapped_key.0,
-            "encapped key doesn't marshal correctly"
-        );
+        test_case_encapped_marshal!(X25519HkdfSha256);
+        test_case_encapped_marshal!(P256HkdfSha256);
     }
 }
