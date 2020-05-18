@@ -23,8 +23,8 @@ pub trait Unmarshallable: Marshallable + Sized {
     fn unmarshal(encoded: &[u8]) -> Result<Self, HpkeError>;
 }
 
-/// This trait captures the requirements of a DH-based KEM (draft02 §5.1). It must have a way to
-/// generate keypairs, perform the DH computation, and marshall/umarshall DH pubkeys
+/// This trait captures the requirements of a key exchange mechanism. It must have a way to
+/// generate keypairs, perform the KEX computation, and marshal/umarshal KEX pubkeys
 pub trait KeyExchange {
     type PublicKey: Clone + Marshallable + Unmarshallable;
     type PrivateKey: Clone + Marshallable + Unmarshallable;

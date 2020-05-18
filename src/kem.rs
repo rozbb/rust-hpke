@@ -29,9 +29,9 @@ impl Kem for X25519HkdfSha256 {
 }
 
 /// Represents DHKEM(P256, HKDF-SHA256)
-pub struct P256HkdfSha256 {}
+pub struct DhP256HkdfSha256 {}
 
-impl Kem for P256HkdfSha256 {
+impl Kem for DhP256HkdfSha256 {
     type Kex = DhP256;
     type Kdf = HkdfSha256;
 
@@ -256,7 +256,7 @@ pub(crate) fn decap<Kem: KemTrait>(
 mod tests {
     use super::{decap, encap, EncappedKey, Marshallable, Unmarshallable};
     use crate::{
-        kem::{Kem as KemTrait, P256HkdfSha256, X25519HkdfSha256},
+        kem::{DhP256HkdfSha256, Kem as KemTrait, X25519HkdfSha256},
         kex::KeyExchange,
     };
 
@@ -330,13 +330,13 @@ mod tests {
     #[test]
     fn test_encap_correctness() {
         test_case_encap_correctness!(X25519HkdfSha256);
-        test_case_encap_correctness!(P256HkdfSha256);
+        test_case_encap_correctness!(DhP256HkdfSha256);
     }
 
     /// Tests that an unmarshal-marshal round-trip on an encapped key ends up at the same value
     #[test]
     fn test_encapped_marshal() {
         test_case_encapped_marshal!(X25519HkdfSha256);
-        test_case_encapped_marshal!(P256HkdfSha256);
+        test_case_encapped_marshal!(DhP256HkdfSha256);
     }
 }

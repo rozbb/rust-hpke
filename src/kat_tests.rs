@@ -2,7 +2,7 @@ use crate::prelude::*;
 use crate::{
     aead::{Aead, AeadTag, AesGcm128, AesGcm256, ChaCha20Poly1305},
     kdf::{HkdfSha256, HkdfSha384, HkdfSha512, Kdf as KdfTrait},
-    kem::{encap_with_eph, Kem as KemTrait, P256HkdfSha256, X25519HkdfSha256},
+    kem::{encap_with_eph, DhP256HkdfSha256, Kem as KemTrait, X25519HkdfSha256},
     kex::{KeyExchange, Marshallable, Unmarshallable},
     op_mode::{OpModeR, Psk, PskBundle},
     setup::setup_receiver,
@@ -278,13 +278,13 @@ fn kat_test() {
         tv,
         (AesGcm128, AesGcm256, ChaCha20Poly1305),
         (HkdfSha256, HkdfSha384, HkdfSha512),
-        (X25519HkdfSha256, P256HkdfSha256)
+        (X25519HkdfSha256, DhDhP256HkdfSha256)
     );
     */
 
     for tv in tvs.into_iter() {
         // Ignore everything that doesn't use X25519 or P256, since that's all we support right now
-        if tv.kem_id != P256HkdfSha256::KEM_ID && tv.kem_id != X25519HkdfSha256::KEM_ID {
+        if tv.kem_id != DhP256HkdfSha256::KEM_ID && tv.kem_id != X25519HkdfSha256::KEM_ID {
             continue;
         }
 
@@ -292,56 +292,56 @@ fn kat_test() {
             (AesGcm128::AEAD_ID, HkdfSha256::KDF_ID, X25519HkdfSha256::KEM_ID) => {
                 test_case!(tv, AesGcm128, HkdfSha256, X25519HkdfSha256)
             }
-            (AesGcm128::AEAD_ID, HkdfSha256::KDF_ID, P256HkdfSha256::KEM_ID) => {
-                test_case!(tv, AesGcm128, HkdfSha256, P256HkdfSha256)
+            (AesGcm128::AEAD_ID, HkdfSha256::KDF_ID, DhP256HkdfSha256::KEM_ID) => {
+                test_case!(tv, AesGcm128, HkdfSha256, DhP256HkdfSha256)
             }
             (AesGcm128::AEAD_ID, HkdfSha384::KDF_ID, X25519HkdfSha256::KEM_ID) => {
                 test_case!(tv, AesGcm128, HkdfSha256, X25519HkdfSha256)
             }
-            (AesGcm128::AEAD_ID, HkdfSha384::KDF_ID, P256HkdfSha256::KEM_ID) => {
-                test_case!(tv, AesGcm128, HkdfSha256, P256HkdfSha256)
+            (AesGcm128::AEAD_ID, HkdfSha384::KDF_ID, DhP256HkdfSha256::KEM_ID) => {
+                test_case!(tv, AesGcm128, HkdfSha256, DhP256HkdfSha256)
             }
             (AesGcm128::AEAD_ID, HkdfSha512::KDF_ID, X25519HkdfSha256::KEM_ID) => {
                 test_case!(tv, AesGcm128, HkdfSha256, X25519HkdfSha256)
             }
-            (AesGcm128::AEAD_ID, HkdfSha512::KDF_ID, P256HkdfSha256::KEM_ID) => {
-                test_case!(tv, AesGcm128, HkdfSha256, P256HkdfSha256)
+            (AesGcm128::AEAD_ID, HkdfSha512::KDF_ID, DhP256HkdfSha256::KEM_ID) => {
+                test_case!(tv, AesGcm128, HkdfSha256, DhP256HkdfSha256)
             }
             (AesGcm256::AEAD_ID, HkdfSha256::KDF_ID, X25519HkdfSha256::KEM_ID) => {
                 test_case!(tv, AesGcm256, HkdfSha256, X25519HkdfSha256)
             }
-            (AesGcm256::AEAD_ID, HkdfSha256::KDF_ID, P256HkdfSha256::KEM_ID) => {
-                test_case!(tv, AesGcm256, HkdfSha256, P256HkdfSha256)
+            (AesGcm256::AEAD_ID, HkdfSha256::KDF_ID, DhP256HkdfSha256::KEM_ID) => {
+                test_case!(tv, AesGcm256, HkdfSha256, DhP256HkdfSha256)
             }
             (AesGcm256::AEAD_ID, HkdfSha384::KDF_ID, X25519HkdfSha256::KEM_ID) => {
                 test_case!(tv, AesGcm256, HkdfSha256, X25519HkdfSha256)
             }
-            (AesGcm256::AEAD_ID, HkdfSha384::KDF_ID, P256HkdfSha256::KEM_ID) => {
-                test_case!(tv, AesGcm256, HkdfSha256, P256HkdfSha256)
+            (AesGcm256::AEAD_ID, HkdfSha384::KDF_ID, DhP256HkdfSha256::KEM_ID) => {
+                test_case!(tv, AesGcm256, HkdfSha256, DhP256HkdfSha256)
             }
             (AesGcm256::AEAD_ID, HkdfSha512::KDF_ID, X25519HkdfSha256::KEM_ID) => {
                 test_case!(tv, AesGcm256, HkdfSha256, X25519HkdfSha256)
             }
-            (AesGcm256::AEAD_ID, HkdfSha512::KDF_ID, P256HkdfSha256::KEM_ID) => {
-                test_case!(tv, AesGcm256, HkdfSha256, P256HkdfSha256)
+            (AesGcm256::AEAD_ID, HkdfSha512::KDF_ID, DhP256HkdfSha256::KEM_ID) => {
+                test_case!(tv, AesGcm256, HkdfSha256, DhP256HkdfSha256)
             }
             (ChaCha20Poly1305::AEAD_ID, HkdfSha256::KDF_ID, X25519HkdfSha256::KEM_ID) => {
                 test_case!(tv, ChaCha20Poly1305, HkdfSha256, X25519HkdfSha256)
             }
-            (ChaCha20Poly1305::AEAD_ID, HkdfSha256::KDF_ID, P256HkdfSha256::KEM_ID) => {
-                test_case!(tv, ChaCha20Poly1305, HkdfSha256, P256HkdfSha256)
+            (ChaCha20Poly1305::AEAD_ID, HkdfSha256::KDF_ID, DhP256HkdfSha256::KEM_ID) => {
+                test_case!(tv, ChaCha20Poly1305, HkdfSha256, DhP256HkdfSha256)
             }
             (ChaCha20Poly1305::AEAD_ID, HkdfSha384::KDF_ID, X25519HkdfSha256::KEM_ID) => {
                 test_case!(tv, ChaCha20Poly1305, HkdfSha256, X25519HkdfSha256)
             }
-            (ChaCha20Poly1305::AEAD_ID, HkdfSha384::KDF_ID, P256HkdfSha256::KEM_ID) => {
-                test_case!(tv, ChaCha20Poly1305, HkdfSha256, P256HkdfSha256)
+            (ChaCha20Poly1305::AEAD_ID, HkdfSha384::KDF_ID, DhP256HkdfSha256::KEM_ID) => {
+                test_case!(tv, ChaCha20Poly1305, HkdfSha256, DhP256HkdfSha256)
             }
             (ChaCha20Poly1305::AEAD_ID, HkdfSha512::KDF_ID, X25519HkdfSha256::KEM_ID) => {
                 test_case!(tv, ChaCha20Poly1305, HkdfSha256, X25519HkdfSha256)
             }
-            (ChaCha20Poly1305::AEAD_ID, HkdfSha512::KDF_ID, P256HkdfSha256::KEM_ID) => {
-                test_case!(tv, ChaCha20Poly1305, HkdfSha256, P256HkdfSha256)
+            (ChaCha20Poly1305::AEAD_ID, HkdfSha512::KDF_ID, DhP256HkdfSha256::KEM_ID) => {
+                test_case!(tv, ChaCha20Poly1305, HkdfSha256, DhP256HkdfSha256)
             }
             (aead_id, kdf_id, kem_id) => panic!(
                 "Invalid (AEAD ID, KDF ID, KEM ID) combo: ({}, {}, {})",

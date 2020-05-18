@@ -15,8 +15,8 @@
 use hpke::{
     aead::{Aead, AeadCtx, AeadTag, AesGcm128, AesGcm256, ChaCha20Poly1305},
     kdf::{HkdfSha256, HkdfSha384, HkdfSha512, Kdf as KdfTrait},
-    kem::{Kem as KemTrait, X25519HkdfSha256},
-    kex::{KeyExchange, Marshallable, Unmarshallable, X25519},
+    kem::{DhP256HkdfSha256, Kem as KemTrait, X25519HkdfSha256},
+    kex::{DhP256, KeyExchange, Marshallable, Unmarshallable, X25519},
     op_mode::{Psk, PskBundle},
     setup_receiver, setup_sender, EncappedKey, HpkeError, OpModeR, OpModeS,
 };
@@ -157,9 +157,9 @@ impl KdfAlg {
 enum KexAlg {
     X25519,
     X448,
-    P256,
-    P384,
-    P521,
+    DhP256,
+    DhP384,
+    DhP521,
 }
 
 impl KexAlg {
@@ -167,9 +167,9 @@ impl KexAlg {
         match self {
             KexAlg::X25519 => "X25519",
             KexAlg::X448 => "X448",
-            KexAlg::P256 => "P256",
-            KexAlg::P384 => "P384",
-            KexAlg::P521 => "P521",
+            KexAlg::DhP256 => "P256",
+            KexAlg::DhP384 => "P384",
+            KexAlg::DhP521 => "P521",
         }
     }
 
@@ -177,9 +177,9 @@ impl KexAlg {
         match self {
             KexAlg::X25519 => 32,
             KexAlg::X448 => 56,
-            KexAlg::P256 => 65,
-            KexAlg::P384 => 97,
-            KexAlg::P521 => 133,
+            KexAlg::DhP256 => 65,
+            KexAlg::DhP384 => 97,
+            KexAlg::DhP521 => 133,
         }
     }
 }
@@ -193,15 +193,15 @@ impl KemAlg {
     fn try_from_u16(id: u16) -> Result<KemAlg, AgileHpkeError> {
         let res = match id {
             0x10 => KemAlg {
-                kex_alg: KexAlg::P256,
+                kex_alg: KexAlg::DhP256,
                 kdf_alg: KdfAlg::HkdfSha256,
             },
             0x11 => KemAlg {
-                kex_alg: KexAlg::P384,
+                kex_alg: KexAlg::DhP384,
                 kdf_alg: KdfAlg::HkdfSha384,
             },
             0x12 => KemAlg {
-                kex_alg: KexAlg::P521,
+                kex_alg: KexAlg::DhP521,
                 kdf_alg: KdfAlg::HkdfSha512,
             },
             0x20 => KemAlg {
@@ -220,9 +220,9 @@ impl KemAlg {
 
     fn to_u16(&self) -> u16 {
         match self.kex_alg {
-            KexAlg::P256 => 0x10,
-            KexAlg::P384 => 0x11,
-            KexAlg::P521 => 0x12,
+            KexAlg::DhP256 => 0x10,
+            KexAlg::DhP384 => 0x11,
+            KexAlg::DhP521 => 0x12,
             KexAlg::X25519 => 0x20,
             KexAlg::X448 => 0x21,
         }
@@ -311,6 +311,7 @@ macro_rules! do_gen_keypair {
 fn agile_gen_keypair<R: CryptoRng + RngCore>(kex_alg: KexAlg, csprng: &mut R) -> AgileKeypair {
     match kex_alg {
         KexAlg::X25519 => do_gen_keypair!(X25519, kex_alg, csprng),
+        KexAlg::DhP256 => do_gen_keypair!(DhP256, kex_alg, csprng),
         _ => unimplemented!(),
     }
 }
@@ -654,6 +655,87 @@ fn agile_setup_sender<R: CryptoRng + RngCore>(
             info,
             csprng
         ),
+        (AeadAlg::ChaCha20Poly1305, KexAlg::DhP256, KdfAlg::HkdfSha256) => do_setup_sender!(
+            ChaCha20Poly1305,
+            HkdfSha256,
+            DhP256HkdfSha256,
+            mode,
+            pk_recip,
+            info,
+            csprng
+        ),
+        (AeadAlg::ChaCha20Poly1305, KexAlg::DhP256, KdfAlg::HkdfSha384) => do_setup_sender!(
+            ChaCha20Poly1305,
+            HkdfSha384,
+            DhP256HkdfSha256,
+            mode,
+            pk_recip,
+            info,
+            csprng
+        ),
+        (AeadAlg::ChaCha20Poly1305, KexAlg::DhP256, KdfAlg::HkdfSha512) => do_setup_sender!(
+            ChaCha20Poly1305,
+            HkdfSha512,
+            DhP256HkdfSha256,
+            mode,
+            pk_recip,
+            info,
+            csprng
+        ),
+        (AeadAlg::AesGcm128, KexAlg::DhP256, KdfAlg::HkdfSha256) => do_setup_sender!(
+            AesGcm128,
+            HkdfSha256,
+            DhP256HkdfSha256,
+            mode,
+            pk_recip,
+            info,
+            csprng
+        ),
+        (AeadAlg::AesGcm128, KexAlg::DhP256, KdfAlg::HkdfSha384) => do_setup_sender!(
+            AesGcm128,
+            HkdfSha384,
+            DhP256HkdfSha256,
+            mode,
+            pk_recip,
+            info,
+            csprng
+        ),
+        (AeadAlg::AesGcm128, KexAlg::DhP256, KdfAlg::HkdfSha512) => do_setup_sender!(
+            AesGcm128,
+            HkdfSha512,
+            DhP256HkdfSha256,
+            mode,
+            pk_recip,
+            info,
+            csprng
+        ),
+        (AeadAlg::AesGcm256, KexAlg::DhP256, KdfAlg::HkdfSha256) => do_setup_sender!(
+            AesGcm256,
+            HkdfSha256,
+            DhP256HkdfSha256,
+            mode,
+            pk_recip,
+            info,
+            csprng
+        ),
+        (AeadAlg::AesGcm256, KexAlg::DhP256, KdfAlg::HkdfSha384) => do_setup_sender!(
+            AesGcm256,
+            HkdfSha384,
+            DhP256HkdfSha256,
+            mode,
+            pk_recip,
+            info,
+            csprng
+        ),
+        (AeadAlg::AesGcm256, KexAlg::DhP256, KdfAlg::HkdfSha512) => do_setup_sender!(
+            AesGcm256,
+            HkdfSha512,
+            DhP256HkdfSha256,
+            mode,
+            pk_recip,
+            info,
+            csprng
+        ),
         _ => unimplemented!(),
     }
 }
@@ -782,6 +864,87 @@ fn agile_setup_receiver(
             encapped_key,
             info
         ),
+        (AeadAlg::ChaCha20Poly1305, KexAlg::DhP256, KdfAlg::HkdfSha256) => do_setup_receiver!(
+            ChaCha20Poly1305,
+            HkdfSha256,
+            DhP256HkdfSha256,
+            mode,
+            recip_keypair,
+            encapped_key,
+            info
+        ),
+        (AeadAlg::ChaCha20Poly1305, KexAlg::DhP256, KdfAlg::HkdfSha384) => do_setup_receiver!(
+            ChaCha20Poly1305,
+            HkdfSha384,
+            DhP256HkdfSha256,
+            mode,
+            recip_keypair,
+            encapped_key,
+            info
+        ),
+        (AeadAlg::ChaCha20Poly1305, KexAlg::DhP256, KdfAlg::HkdfSha512) => do_setup_receiver!(
+            ChaCha20Poly1305,
+            HkdfSha512,
+            DhP256HkdfSha256,
+            mode,
+            recip_keypair,
+            encapped_key,
+            info
+        ),
+        (AeadAlg::AesGcm128, KexAlg::DhP256, KdfAlg::HkdfSha256) => do_setup_receiver!(
+            AesGcm128,
+            HkdfSha256,
+            DhP256HkdfSha256,
+            mode,
+            recip_keypair,
+            encapped_key,
+            info
+        ),
+        (AeadAlg::AesGcm128, KexAlg::DhP256, KdfAlg::HkdfSha384) => do_setup_receiver!(
+            AesGcm128,
+            HkdfSha384,
+            DhP256HkdfSha256,
+            mode,
+            recip_keypair,
+            encapped_key,
+            info
+        ),
+        (AeadAlg::AesGcm128, KexAlg::DhP256, KdfAlg::HkdfSha512) => do_setup_receiver!(
+            AesGcm128,
+            HkdfSha512,
+            DhP256HkdfSha256,
+            mode,
+            recip_keypair,
+            encapped_key,
+            info
+        ),
+        (AeadAlg::AesGcm256, KexAlg::DhP256, KdfAlg::HkdfSha256) => do_setup_receiver!(
+            AesGcm256,
+            HkdfSha256,
+            DhP256HkdfSha256,
+            mode,
+            recip_keypair,
+            encapped_key,
+            info
+        ),
+        (AeadAlg::AesGcm256, KexAlg::DhP256, KdfAlg::HkdfSha384) => do_setup_receiver!(
+            AesGcm256,
+            HkdfSha384,
+            DhP256HkdfSha256,
+            mode,
+            recip_keypair,
+            encapped_key,
+            info
+        ),
+        (AeadAlg::AesGcm256, KexAlg::DhP256, KdfAlg::HkdfSha512) => do_setup_receiver!(
+            AesGcm256,
+            HkdfSha512,
+            DhP256HkdfSha256,
+            mode,
+            recip_keypair,
+            encapped_key,
+            info
+        ),
         _ => unimplemented!(),
     }
 }
@@ -794,7 +957,7 @@ fn main() {
         AeadAlg::AesGcm256,
         AeadAlg::ChaCha20Poly1305,
     ];
-    let supported_kex_algs = &[KexAlg::X25519];
+    let supported_kex_algs = &[KexAlg::X25519, KexAlg::DhP256];
     let supported_kdf_algs = &[KdfAlg::HkdfSha256, KdfAlg::HkdfSha384, KdfAlg::HkdfSha512];
 
     // For every combination of supported algorithms, test an encryption-decryption round trip

@@ -10,6 +10,8 @@
 //!    types for more info
 //!  * The single-shot API. See the methods exposed in the `single_shot` module for more info. The
 //!    single-shot methods are basically just `setup` followed by `seal/open`.
+//!  * Proper error handling. Everything here just panics when an error is encountered. It is up to
+//!    the user of this library to do the appropriate thing when a function returns an error.
 
 use hpke::{
     aead::{AeadTag, ChaCha20Poly1305},
