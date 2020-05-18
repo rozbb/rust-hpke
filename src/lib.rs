@@ -68,8 +68,8 @@ pub enum HpkeError {
     InvalidKeyExchange,
     /// The KDF was asked to output too many bytes
     InvalidKdfLength,
-    /// The unmarshaller was given the wrong number of bytes
-    InvalidMarshalledLength,
+    /// The unmarshaller was given a bad encoding
+    InvalidEncoding,
 }
 
 impl core::fmt::Display for HpkeError {
@@ -80,7 +80,7 @@ impl core::fmt::Display for HpkeError {
             HpkeError::Encryption => "Encryption error",
             HpkeError::InvalidKeyExchange => "Key exchange validation error",
             HpkeError::InvalidKdfLength => "Too many bytes requested from KDF",
-            HpkeError::InvalidMarshalledLength => "Cannot unmarshal byte sequence of this length",
+            HpkeError::InvalidEncoding => "Cannot marshal byte sequence: invalid encoding",
         };
         f.write_str(kind)
     }

@@ -1,6 +1,6 @@
 use crate::{
     kdf::{extract_and_expand, HkdfSha256, Kdf as KdfTrait},
-    kex::{KeyExchange, Marshallable, Unmarshallable, DHP256, X25519},
+    kex::{DhP256, KeyExchange, Marshallable, Unmarshallable, X25519},
     HpkeError,
 };
 use digest::{generic_array::GenericArray, FixedOutput};
@@ -32,7 +32,7 @@ impl Kem for X25519HkdfSha256 {
 pub struct P256HkdfSha256 {}
 
 impl Kem for P256HkdfSha256 {
-    type Kex = DHP256;
+    type Kex = DhP256;
     type Kdf = HkdfSha256;
 
     // Section 7.1: DHKEM(P256, HKDF-SHA256)
@@ -256,23 +256,24 @@ pub(crate) fn decap<Kem: KemTrait>(
 mod tests {
     use super::{decap, encap, EncappedKey, Marshallable, Unmarshallable};
     use crate::{
-        kem::{Kem, P256HkdfSha256, X25519HkdfSha256},
+        kem::{Kem as KemTrait, P256HkdfSha256, X25519HkdfSha256},
         kex::KeyExchange,
     };
 
+    /// Tests that encap and decap produce the same shared secret when composed
     macro_rules! test_case_encap_correctness {
         ($kem_ty:ty) => {{
-            type Ke = $kem_ty;
+            type Kem = $kem_ty;
 
             let mut csprng = rand::thread_rng();
-            let (sk_recip, pk_recip) = <Ke as Kem>::Kex::gen_keypair(&mut csprng);
+            let (sk_recip, pk_recip) = <Kem as KemTrait>::Kex::gen_keypair(&mut csprng);
 
             // Encapsulate a random shared secret
             let (auth_shared_secret, encapped_key) =
-                encap::<Ke, _>(&pk_recip, None, &mut csprng).unwrap();
+                encap::<Kem, _>(&pk_recip, None, &mut csprng).unwrap();
 
             // Decap it
-            let decapped_auth_shared_secret = decap::<Ke>(&sk_recip, None, &encapped_key).unwrap();
+            let decapped_auth_shared_secret = decap::<Kem>(&sk_recip, None, &encapped_key).unwrap();
 
             // Ensure that the encapsulated secret is what decap() derives
             assert_eq!(auth_shared_secret, decapped_auth_shared_secret);
@@ -282,10 +283,10 @@ mod tests {
             //
 
             // Make a sender identity keypair
-            let (sk_sender_id, pk_sender_id) = <Ke as Kem>::Kex::gen_keypair(&mut csprng);
+            let (sk_sender_id, pk_sender_id) = <Kem as KemTrait>::Kex::gen_keypair(&mut csprng);
 
             // Encapsulate a random shared secret
-            let (auth_shared_secret, encapped_key) = encap::<Ke, _>(
+            let (auth_shared_secret, encapped_key) = encap::<Kem, _>(
                 &pk_recip,
                 Some(&(sk_sender_id, pk_sender_id.clone())),
                 &mut csprng,
@@ -294,28 +295,29 @@ mod tests {
 
             // Decap it
             let decapped_auth_shared_secret =
-                decap::<Ke>(&sk_recip, Some(&pk_sender_id), &encapped_key).unwrap();
+                decap::<Kem>(&sk_recip, Some(&pk_sender_id), &encapped_key).unwrap();
 
             // Ensure that the encapsulated secret is what decap() derives
             assert_eq!(auth_shared_secret, decapped_auth_shared_secret);
         }};
     }
 
+    /// Tests that an unmarshal-marshal round-trip on an encapped key ends up at the same value
     macro_rules! test_case_encapped_marshal {
         ($kem_ty:ty) => {{
-            type Ke = $kem_ty;
+            type Kem = $kem_ty;
 
             // Encapsulate a random shared secret
             let encapped_key = {
                 let mut csprng = rand::thread_rng();
-                let (_, pk_recip) = <Ke as Kem>::Kex::gen_keypair(&mut csprng);
-                encap::<Ke, _>(&pk_recip, None, &mut csprng).unwrap().1
+                let (_, pk_recip) = <Kem as KemTrait>::Kex::gen_keypair(&mut csprng);
+                encap::<Kem, _>(&pk_recip, None, &mut csprng).unwrap().1
             };
             // Marshal it
             let encapped_key_bytes = encapped_key.marshal();
             // Unmarshal it
             let new_encapped_key =
-                EncappedKey::<<Ke as Kem>::Kex>::unmarshal(&encapped_key_bytes).unwrap();
+                EncappedKey::<<Kem as KemTrait>::Kex>::unmarshal(&encapped_key_bytes).unwrap();
 
             assert!(
                 new_encapped_key.0 == encapped_key.0,

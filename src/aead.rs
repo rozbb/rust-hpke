@@ -128,7 +128,7 @@ impl<A: Aead> Marshallable for AeadTag<A> {
 impl<A: Aead> Unmarshallable for AeadTag<A> {
     fn unmarshal(encoded: &[u8]) -> Result<Self, HpkeError> {
         if encoded.len() != Self::size() {
-            Err(HpkeError::InvalidMarshalledLength)
+            Err(HpkeError::InvalidEncoding)
         } else {
             // Copy to a fixed-size array
             let mut arr = <GenericArray<u8, Self::OutputSize> as Default>::default();
