@@ -73,7 +73,7 @@ impl<A: Aead, Kdf: KdfTrait> AgileAeadCtx for AeadCtx<A, Kdf> {
     }
 }
 
-#[derive(Clone, Copy, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum AeadAlg {
     AesGcm128,
     AesGcm256,
@@ -109,7 +109,7 @@ impl AeadAlg {
     }
 }
 
-#[derive(Clone, Copy, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum KdfAlg {
     HkdfSha256,
     HkdfSha384,
@@ -153,7 +153,7 @@ impl KdfAlg {
     }
 }
 
-#[derive(Clone, Copy, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum KexAlg {
     X25519,
     X448,
@@ -184,34 +184,33 @@ impl KexAlg {
     }
 }
 
-struct KemAlg {
-    kex_alg: KexAlg,
-    kdf_alg: KdfAlg,
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum KemAlg {
+    X25519HkdfSha256,
+    X448HkdfSha512,
+    DhP256HkdfSha256,
+    DhP384HkdfSha384,
+    DhP521HkdfSha512,
 }
 
 impl KemAlg {
+    fn name(&self) -> &'static str {
+        match self {
+            KemAlg::DhP256HkdfSha256 => "DhP256HkdfSha256",
+            KemAlg::DhP384HkdfSha384 => "DhP384HkdfSha384",
+            KemAlg::DhP521HkdfSha512 => "DhP521HkdfSha512",
+            KemAlg::X25519HkdfSha256 => "X25519HkdfSha256",
+            KemAlg::X448HkdfSha512 => "X448HkdfSha512",
+        }
+    }
+
     fn try_from_u16(id: u16) -> Result<KemAlg, AgileHpkeError> {
         let res = match id {
-            0x10 => KemAlg {
-                kex_alg: KexAlg::DhP256,
-                kdf_alg: KdfAlg::HkdfSha256,
-            },
-            0x11 => KemAlg {
-                kex_alg: KexAlg::DhP384,
-                kdf_alg: KdfAlg::HkdfSha384,
-            },
-            0x12 => KemAlg {
-                kex_alg: KexAlg::DhP521,
-                kdf_alg: KdfAlg::HkdfSha512,
-            },
-            0x20 => KemAlg {
-                kex_alg: KexAlg::X25519,
-                kdf_alg: KdfAlg::HkdfSha256,
-            },
-            0x21 => KemAlg {
-                kex_alg: KexAlg::X448,
-                kdf_alg: KdfAlg::HkdfSha512,
-            },
+            0x10 => KemAlg::DhP256HkdfSha256,
+            0x11 => KemAlg::DhP384HkdfSha384,
+            0x12 => KemAlg::DhP521HkdfSha512,
+            0x20 => KemAlg::X25519HkdfSha256,
+            0x21 => KemAlg::X448HkdfSha512,
             _ => return Err(AgileHpkeError::UnknownAlgIdent("KemAlg", id)),
         };
 
@@ -219,12 +218,32 @@ impl KemAlg {
     }
 
     fn to_u16(&self) -> u16 {
-        match self.kex_alg {
-            KexAlg::DhP256 => 0x10,
-            KexAlg::DhP384 => 0x11,
-            KexAlg::DhP521 => 0x12,
-            KexAlg::X25519 => 0x20,
-            KexAlg::X448 => 0x21,
+        match self {
+            KemAlg::DhP256HkdfSha256 => 0x10,
+            KemAlg::DhP384HkdfSha384 => 0x11,
+            KemAlg::DhP521HkdfSha512 => 0x12,
+            KemAlg::X25519HkdfSha256 => 0x20,
+            KemAlg::X448HkdfSha512 => 0x21,
+        }
+    }
+
+    fn kex_alg(&self) -> KexAlg {
+        match self {
+            KemAlg::X25519HkdfSha256 => KexAlg::X25519,
+            KemAlg::X448HkdfSha512 => KexAlg::X448,
+            KemAlg::DhP256HkdfSha256 => KexAlg::DhP256,
+            KemAlg::DhP384HkdfSha384 => KexAlg::DhP384,
+            KemAlg::DhP521HkdfSha512 => KexAlg::DhP521,
+        }
+    }
+
+    fn kdf_alg(&self) -> KdfAlg {
+        match self {
+            KemAlg::X25519HkdfSha256 => KdfAlg::HkdfSha256,
+            KemAlg::X448HkdfSha512 => KdfAlg::HkdfSha512,
+            KemAlg::DhP256HkdfSha256 => KdfAlg::HkdfSha256,
+            KemAlg::DhP384HkdfSha384 => KdfAlg::HkdfSha384,
+            KemAlg::DhP521HkdfSha512 => KdfAlg::HkdfSha512,
         }
     }
 }
@@ -236,7 +255,7 @@ struct AgilePublicKey {
 }
 
 impl AgilePublicKey {
-    fn try_lift<Kex: KeyExchange>(self) -> Result<Kex::PublicKey, AgileHpkeError> {
+    fn try_lift<Kex: KeyExchange>(&self) -> Result<Kex::PublicKey, AgileHpkeError> {
         Kex::PublicKey::unmarshal(&self.pubkey_bytes).map_err(|e| e.into())
     }
 }
@@ -248,7 +267,7 @@ struct AgileEncappedKey {
 }
 
 impl AgileEncappedKey {
-    fn try_lift<Kex: KeyExchange>(self) -> Result<EncappedKey<Kex>, AgileHpkeError> {
+    fn try_lift<Kex: KeyExchange>(&self) -> Result<EncappedKey<Kex>, AgileHpkeError> {
         EncappedKey::<Kex>::unmarshal(&self.encapped_key_bytes).map_err(|e| e.into())
     }
 }
@@ -260,7 +279,7 @@ struct AgilePrivateKey {
 }
 
 impl AgilePrivateKey {
-    fn try_lift<Kex: KeyExchange>(self) -> Result<Kex::PrivateKey, AgileHpkeError> {
+    fn try_lift<Kex: KeyExchange>(&self) -> Result<Kex::PrivateKey, AgileHpkeError> {
         Kex::PrivateKey::unmarshal(&self.privkey_bytes).map_err(|e| e.into())
     }
 }
@@ -270,7 +289,7 @@ struct AgileKeypair(AgilePrivateKey, AgilePublicKey);
 
 impl AgileKeypair {
     fn try_lift<Kex: KeyExchange>(
-        self,
+        &self,
     ) -> Result<(Kex::PrivateKey, Kex::PublicKey), AgileHpkeError> {
         Ok((self.0.try_lift::<Kex>()?, self.1.try_lift::<Kex>()?))
     }
@@ -531,33 +550,104 @@ impl AgilePskBundle {
     }
 }
 
-// The leg work of agile_setup_sender
-macro_rules! do_setup_sender {
-    ($aead_ty:ty, $kdf_ty:ty, $kem_ty:ty, $mode:ident, $pk_recip:ident, $info:ident, $csprng:ident) => {{
-        type A = $aead_ty;
-        type Kdf = $kdf_ty;
-        type Kem = $kem_ty;
-        type Kex = <Kem as KemTrait>::Kex;
+// This macro takes in all the supported AEADs, KDFs, and KEMs, and dispatches the given test
+// vector to the test case with the appropriate types
+macro_rules! hpke_dispatch {
+    // Step 1: Roll up the AEAD, KDF, and KEM types into tuples. We'll unroll them later
+    ($to_set:ident, $to_match:ident,
+     ($( $aead_ty:ident ),*), ($( $kdf_ty:ident ),*), ($( $kem_ty:ident ),*), $rng_ty:ident,
+     $callback:ident, $( $callback_args:ident ),* ) => {
+        hpke_dispatch!(@tup1
+            $to_set, $to_match,
+            ($( $aead_ty ),*), ($( $kdf_ty ),*), ($( $kem_ty ),*), $rng_ty,
+            $callback, ($( $callback_args ),*)
+        )
+    };
 
-        let kex_alg = $mode.kex_alg;
-        let mode = $mode.clone().try_lift::<Kex, Kdf>()?;
-        let pk_recip = $pk_recip.clone().try_lift::<Kex>()?;
-        let info = $info;
-        let csprng = $csprng;
+    // Step 2: Expand with respect to every AEAD
+    (@tup1
+     $to_set:ident, $to_match:ident,
+     ($( $aead_ty:ident ),*), $kdf_tup:tt, $kem_tup:tt, $rng_ty:tt,
+     $callback:ident, $callback_args:tt) => {
+        $(
+            hpke_dispatch!(@tup2
+                $to_set, $to_match,
+                $aead_ty, $kdf_tup, $kem_tup, $rng_ty,
+                $callback, $callback_args
+            );
+        )*
+    };
 
-        let (encapped_key, aead_ctx) =
-            setup_sender::<A, _, Kem, _>(&mode, &pk_recip, info, csprng)?;
-        let encapped_key = AgileEncappedKey {
-            kex_alg: kex_alg,
-            encapped_key_bytes: encapped_key.marshal().to_vec(),
-        };
+    // Step 3: Expand with respect to every KDF
+    (@tup2
+     $to_set:ident, $to_match:ident,
+     $aead_ty:ident, ($( $kdf_ty:ident ),*), $kem_tup:tt, $rng_ty:tt,
+     $callback:ident, $callback_args:tt) => {
+        $(
+            hpke_dispatch!(@tup3
+                $to_set, $to_match,
+                $aead_ty, $kdf_ty, $kem_tup, $rng_ty,
+                $callback, $callback_args
+            );
+        )*
+    };
 
-        Ok((encapped_key, Box::new(aead_ctx)))
-    }};
+    // Step 4: Expand with respect to every KEM
+    (@tup3
+     $to_set:ident, $to_match:ident,
+     $aead_ty:ident, $kdf_ty:ident, ($( $kem_ty:ident ),*), $rng_ty:tt,
+     $callback:ident, $callback_args:tt) => {
+        $(
+            hpke_dispatch!(@base
+                $to_set, $to_match,
+                $aead_ty, $kdf_ty, $kem_ty, $rng_ty,
+                $callback, $callback_args
+            );
+        )*
+    };
+
+    // Step 5: Now that we're only dealing with 1 type of each kind, do the dispatch. If the test
+    // vector matches the IDs of these types, run the test case.
+    (@base
+     $to_set:ident, $to_match:ident,
+     $aead_ty:ident, $kdf_ty:ident, $kem_ty:ident, $rng_ty:ident,
+     $callback:ident, ($( $callback_args:ident ),*)) => {
+        if let (AeadAlg::$aead_ty, KemAlg::$kem_ty, KdfAlg::$kdf_ty) = $to_match
+        {
+            $to_set = Some($callback::<$aead_ty, $kdf_ty, $kem_ty, $rng_ty>($( $callback_args ),*));
+        }
+    };
+}
+
+// The leg work of agile_setup_receiver
+fn do_setup_sender<A, Kdf, Kem, R>(
+    mode: &AgileOpModeS,
+    pk_recip: &AgilePublicKey,
+    info: &[u8],
+    csprng: &mut R,
+) -> Result<(AgileEncappedKey, Box<dyn AgileAeadCtx>), AgileHpkeError>
+where
+    A: 'static + Aead,
+    Kdf: 'static + KdfTrait,
+    Kem: KemTrait,
+    R: CryptoRng + RngCore,
+{
+    let kex_alg = mode.kex_alg;
+    let mode = mode.clone().try_lift::<Kem::Kex, Kdf>()?;
+    let pk_recip = pk_recip.try_lift::<Kem::Kex>()?;
+
+    let (encapped_key, aead_ctx) = setup_sender::<A, _, Kem, _>(&mode, &pk_recip, info, csprng)?;
+    let encapped_key = AgileEncappedKey {
+        kex_alg: kex_alg,
+        encapped_key_bytes: encapped_key.marshal().to_vec(),
+    };
+
+    Ok((encapped_key, Box::new(aead_ctx)))
 }
 
 fn agile_setup_sender<R: CryptoRng + RngCore>(
     aead_alg: AeadAlg,
+    kem_alg: KemAlg,
     mode: &AgileOpModeS,
     pk_recip: &AgilePublicKey,
     info: &[u8],
@@ -571,195 +661,70 @@ fn agile_setup_sender<R: CryptoRng + RngCore>(
             (pk_recip.kex_alg.name(), "pk_recip::kex_alg"),
         ));
     }
-
-    // In a complete implementation, this would have 45 branches
-    match (aead_alg, mode.kex_alg, mode.kdf_alg) {
-        (AeadAlg::ChaCha20Poly1305, KexAlg::X25519, KdfAlg::HkdfSha256) => do_setup_sender!(
-            ChaCha20Poly1305,
-            HkdfSha256,
-            X25519HkdfSha256,
-            mode,
-            pk_recip,
-            info,
-            csprng
-        ),
-        (AeadAlg::ChaCha20Poly1305, KexAlg::X25519, KdfAlg::HkdfSha384) => do_setup_sender!(
-            ChaCha20Poly1305,
-            HkdfSha384,
-            X25519HkdfSha256,
-            mode,
-            pk_recip,
-            info,
-            csprng
-        ),
-        (AeadAlg::ChaCha20Poly1305, KexAlg::X25519, KdfAlg::HkdfSha512) => do_setup_sender!(
-            ChaCha20Poly1305,
-            HkdfSha512,
-            X25519HkdfSha256,
-            mode,
-            pk_recip,
-            info,
-            csprng
-        ),
-        (AeadAlg::AesGcm128, KexAlg::X25519, KdfAlg::HkdfSha256) => do_setup_sender!(
-            AesGcm128,
-            HkdfSha256,
-            X25519HkdfSha256,
-            mode,
-            pk_recip,
-            info,
-            csprng
-        ),
-        (AeadAlg::AesGcm128, KexAlg::X25519, KdfAlg::HkdfSha384) => do_setup_sender!(
-            AesGcm128,
-            HkdfSha384,
-            X25519HkdfSha256,
-            mode,
-            pk_recip,
-            info,
-            csprng
-        ),
-        (AeadAlg::AesGcm128, KexAlg::X25519, KdfAlg::HkdfSha512) => do_setup_sender!(
-            AesGcm128,
-            HkdfSha512,
-            X25519HkdfSha256,
-            mode,
-            pk_recip,
-            info,
-            csprng
-        ),
-        (AeadAlg::AesGcm256, KexAlg::X25519, KdfAlg::HkdfSha256) => do_setup_sender!(
-            AesGcm256,
-            HkdfSha256,
-            X25519HkdfSha256,
-            mode,
-            pk_recip,
-            info,
-            csprng
-        ),
-        (AeadAlg::AesGcm256, KexAlg::X25519, KdfAlg::HkdfSha384) => do_setup_sender!(
-            AesGcm256,
-            HkdfSha384,
-            X25519HkdfSha256,
-            mode,
-            pk_recip,
-            info,
-            csprng
-        ),
-        (AeadAlg::AesGcm256, KexAlg::X25519, KdfAlg::HkdfSha512) => do_setup_sender!(
-            AesGcm256,
-            HkdfSha512,
-            X25519HkdfSha256,
-            mode,
-            pk_recip,
-            info,
-            csprng
-        ),
-        (AeadAlg::ChaCha20Poly1305, KexAlg::DhP256, KdfAlg::HkdfSha256) => do_setup_sender!(
-            ChaCha20Poly1305,
-            HkdfSha256,
-            DhP256HkdfSha256,
-            mode,
-            pk_recip,
-            info,
-            csprng
-        ),
-        (AeadAlg::ChaCha20Poly1305, KexAlg::DhP256, KdfAlg::HkdfSha384) => do_setup_sender!(
-            ChaCha20Poly1305,
-            HkdfSha384,
-            DhP256HkdfSha256,
-            mode,
-            pk_recip,
-            info,
-            csprng
-        ),
-        (AeadAlg::ChaCha20Poly1305, KexAlg::DhP256, KdfAlg::HkdfSha512) => do_setup_sender!(
-            ChaCha20Poly1305,
-            HkdfSha512,
-            DhP256HkdfSha256,
-            mode,
-            pk_recip,
-            info,
-            csprng
-        ),
-        (AeadAlg::AesGcm128, KexAlg::DhP256, KdfAlg::HkdfSha256) => do_setup_sender!(
-            AesGcm128,
-            HkdfSha256,
-            DhP256HkdfSha256,
-            mode,
-            pk_recip,
-            info,
-            csprng
-        ),
-        (AeadAlg::AesGcm128, KexAlg::DhP256, KdfAlg::HkdfSha384) => do_setup_sender!(
-            AesGcm128,
-            HkdfSha384,
-            DhP256HkdfSha256,
-            mode,
-            pk_recip,
-            info,
-            csprng
-        ),
-        (AeadAlg::AesGcm128, KexAlg::DhP256, KdfAlg::HkdfSha512) => do_setup_sender!(
-            AesGcm128,
-            HkdfSha512,
-            DhP256HkdfSha256,
-            mode,
-            pk_recip,
-            info,
-            csprng
-        ),
-        (AeadAlg::AesGcm256, KexAlg::DhP256, KdfAlg::HkdfSha256) => do_setup_sender!(
-            AesGcm256,
-            HkdfSha256,
-            DhP256HkdfSha256,
-            mode,
-            pk_recip,
-            info,
-            csprng
-        ),
-        (AeadAlg::AesGcm256, KexAlg::DhP256, KdfAlg::HkdfSha384) => do_setup_sender!(
-            AesGcm256,
-            HkdfSha384,
-            DhP256HkdfSha256,
-            mode,
-            pk_recip,
-            info,
-            csprng
-        ),
-        (AeadAlg::AesGcm256, KexAlg::DhP256, KdfAlg::HkdfSha512) => do_setup_sender!(
-            AesGcm256,
-            HkdfSha512,
-            DhP256HkdfSha256,
-            mode,
-            pk_recip,
-            info,
-            csprng
-        ),
-        _ => unimplemented!(),
+    if kem_alg.kex_alg() != mode.kex_alg {
+        return Err(AgileHpkeError::AlgMismatch(
+            (kem_alg.kex_alg().name(), "kem_alg::kex_alg"),
+            (mode.kex_alg.name(), "mode::kex_alg"),
+        ));
     }
+    if pk_recip.kex_alg != mode.kex_alg {
+        return Err(AgileHpkeError::AlgMismatch(
+            (pk_recip.kex_alg.name(), "pk_recip::kex_alg"),
+            (mode.kex_alg.name(), "mode::kex_alg"),
+        ));
+    }
+
+    // The triple we dispatch on
+    let to_match = (aead_alg, kem_alg, mode.kdf_alg);
+
+    // This gets overwritten by the below macro call. It's None iff dispatch failed.
+    let mut res: Option<Result<(AgileEncappedKey, Box<dyn AgileAeadCtx>), AgileHpkeError>> = None;
+
+    #[rustfmt::skip]
+    hpke_dispatch!(
+        res, to_match,
+        (ChaCha20Poly1305, AesGcm128, AesGcm256),
+        (HkdfSha256, HkdfSha384, HkdfSha512),
+        (X25519HkdfSha256, DhP256HkdfSha256),
+        R,
+        do_setup_sender,
+            mode,
+            pk_recip,
+            info,
+            csprng
+    );
+
+    if res.is_none() {
+        panic!("DHKEM({}) isn't impelmented yet!", kem_alg.name());
+    }
+
+    res.unwrap()
 }
 
-// The leg work of agile_setup_receiver
-macro_rules! do_setup_receiver {
-    ($aead_ty:ty, $kdf_ty:ty, $kem_ty:ty, $mode:ident, $recip_keypair:ident, $encapped_key:ident, $info:ident) => {{
-        type A = $aead_ty;
-        type Kdf = $kdf_ty;
-        type Kem = $kem_ty;
-        type Kex = <Kem as KemTrait>::Kex;
+// The leg work of agile_setup_receiver. The Dummy type parameter is so that it can be used with
+// the hpke_dispatch! macro. The macro expects its callback function to have 4 type parameters
+fn do_setup_receiver<A, Kdf, Kem, Dummy>(
+    mode: &AgileOpModeR,
+    recip_keypair: &AgileKeypair,
+    encapped_key: &AgileEncappedKey,
+    info: &[u8],
+) -> Result<Box<dyn AgileAeadCtx>, AgileHpkeError>
+where
+    A: 'static + Aead,
+    Kdf: 'static + KdfTrait,
+    Kem: KemTrait,
+{
+    let mode = mode.clone().try_lift::<Kem::Kex, Kdf>()?;
+    let (sk_recip, _) = recip_keypair.try_lift::<Kem::Kex>()?;
+    let encapped_key = encapped_key.try_lift::<Kem::Kex>()?;
 
-        let mode = $mode.clone().try_lift::<Kex, Kdf>()?;
-        let (sk_recip, _) = $recip_keypair.clone().try_lift::<Kex>()?;
-        let encapped_key = $encapped_key.clone().try_lift::<Kex>()?;
-        let info = $info;
-
-        let aead_ctx = setup_receiver::<A, _, Kem>(&mode, &sk_recip, &encapped_key, info)?;
-        Ok(Box::new(aead_ctx))
-    }};
+    let aead_ctx = setup_receiver::<A, _, Kem>(&mode, &sk_recip, &encapped_key, info)?;
+    Ok(Box::new(aead_ctx))
 }
 
 fn agile_setup_receiver(
     aead_alg: AeadAlg,
+    kem_alg: KemAlg,
     mode: &AgileOpModeR,
     recip_keypair: &AgileKeypair,
     encapped_key: &AgileEncappedKey,
@@ -774,6 +739,12 @@ fn agile_setup_receiver(
             (recip_keypair.0.kex_alg.name(), "recip_keypair::kex_alg"),
         ));
     }
+    if kem_alg.kex_alg() != mode.kex_alg {
+        return Err(AgileHpkeError::AlgMismatch(
+            (kem_alg.kex_alg().name(), "kem_alg::kex_alg"),
+            (mode.kex_alg.name(), "mode::kex_alg"),
+        ));
+    }
     if recip_keypair.0.kex_alg != encapped_key.kex_alg {
         return Err(AgileHpkeError::AlgMismatch(
             (recip_keypair.0.kex_alg.name(), "recip_keypair::kex_alg"),
@@ -781,172 +752,35 @@ fn agile_setup_receiver(
         ));
     }
 
-    // In a complete implementation, this would have 45 branches
-    match (aead_alg, mode.kex_alg, mode.kdf_alg) {
-        (AeadAlg::ChaCha20Poly1305, KexAlg::X25519, KdfAlg::HkdfSha256) => do_setup_receiver!(
-            ChaCha20Poly1305,
-            HkdfSha256,
-            X25519HkdfSha256,
+    // The triple we dispatch on
+    let to_match = (aead_alg, kem_alg, mode.kdf_alg);
+
+    // This gets overwritten by the below macro call. It's None iff dispatch failed.
+    let mut res: Option<Result<Box<dyn AgileAeadCtx>, AgileHpkeError>> = None;
+
+    // Dummy type to give to the macro. do_setup_receiver doesn't use an RNG, so it doesn't need a
+    // concrete RNG type. We give it the unit type to make it happy.
+    type Unit = ();
+
+    #[rustfmt::skip]
+    hpke_dispatch!(
+        res, to_match,
+        (ChaCha20Poly1305, AesGcm128, AesGcm256),
+        (HkdfSha256, HkdfSha384, HkdfSha512),
+        (X25519HkdfSha256, DhP256HkdfSha256),
+        Unit,
+        do_setup_receiver,
             mode,
             recip_keypair,
             encapped_key,
             info
-        ),
-        (AeadAlg::ChaCha20Poly1305, KexAlg::X25519, KdfAlg::HkdfSha384) => do_setup_receiver!(
-            ChaCha20Poly1305,
-            HkdfSha384,
-            X25519HkdfSha256,
-            mode,
-            recip_keypair,
-            encapped_key,
-            info
-        ),
-        (AeadAlg::ChaCha20Poly1305, KexAlg::X25519, KdfAlg::HkdfSha512) => do_setup_receiver!(
-            ChaCha20Poly1305,
-            HkdfSha512,
-            X25519HkdfSha256,
-            mode,
-            recip_keypair,
-            encapped_key,
-            info
-        ),
-        (AeadAlg::AesGcm128, KexAlg::X25519, KdfAlg::HkdfSha256) => do_setup_receiver!(
-            AesGcm128,
-            HkdfSha256,
-            X25519HkdfSha256,
-            mode,
-            recip_keypair,
-            encapped_key,
-            info
-        ),
-        (AeadAlg::AesGcm128, KexAlg::X25519, KdfAlg::HkdfSha384) => do_setup_receiver!(
-            AesGcm128,
-            HkdfSha384,
-            X25519HkdfSha256,
-            mode,
-            recip_keypair,
-            encapped_key,
-            info
-        ),
-        (AeadAlg::AesGcm128, KexAlg::X25519, KdfAlg::HkdfSha512) => do_setup_receiver!(
-            AesGcm128,
-            HkdfSha512,
-            X25519HkdfSha256,
-            mode,
-            recip_keypair,
-            encapped_key,
-            info
-        ),
-        (AeadAlg::AesGcm256, KexAlg::X25519, KdfAlg::HkdfSha256) => do_setup_receiver!(
-            AesGcm256,
-            HkdfSha256,
-            X25519HkdfSha256,
-            mode,
-            recip_keypair,
-            encapped_key,
-            info
-        ),
-        (AeadAlg::AesGcm256, KexAlg::X25519, KdfAlg::HkdfSha384) => do_setup_receiver!(
-            AesGcm256,
-            HkdfSha384,
-            X25519HkdfSha256,
-            mode,
-            recip_keypair,
-            encapped_key,
-            info
-        ),
-        (AeadAlg::AesGcm256, KexAlg::X25519, KdfAlg::HkdfSha512) => do_setup_receiver!(
-            AesGcm256,
-            HkdfSha512,
-            X25519HkdfSha256,
-            mode,
-            recip_keypair,
-            encapped_key,
-            info
-        ),
-        (AeadAlg::ChaCha20Poly1305, KexAlg::DhP256, KdfAlg::HkdfSha256) => do_setup_receiver!(
-            ChaCha20Poly1305,
-            HkdfSha256,
-            DhP256HkdfSha256,
-            mode,
-            recip_keypair,
-            encapped_key,
-            info
-        ),
-        (AeadAlg::ChaCha20Poly1305, KexAlg::DhP256, KdfAlg::HkdfSha384) => do_setup_receiver!(
-            ChaCha20Poly1305,
-            HkdfSha384,
-            DhP256HkdfSha256,
-            mode,
-            recip_keypair,
-            encapped_key,
-            info
-        ),
-        (AeadAlg::ChaCha20Poly1305, KexAlg::DhP256, KdfAlg::HkdfSha512) => do_setup_receiver!(
-            ChaCha20Poly1305,
-            HkdfSha512,
-            DhP256HkdfSha256,
-            mode,
-            recip_keypair,
-            encapped_key,
-            info
-        ),
-        (AeadAlg::AesGcm128, KexAlg::DhP256, KdfAlg::HkdfSha256) => do_setup_receiver!(
-            AesGcm128,
-            HkdfSha256,
-            DhP256HkdfSha256,
-            mode,
-            recip_keypair,
-            encapped_key,
-            info
-        ),
-        (AeadAlg::AesGcm128, KexAlg::DhP256, KdfAlg::HkdfSha384) => do_setup_receiver!(
-            AesGcm128,
-            HkdfSha384,
-            DhP256HkdfSha256,
-            mode,
-            recip_keypair,
-            encapped_key,
-            info
-        ),
-        (AeadAlg::AesGcm128, KexAlg::DhP256, KdfAlg::HkdfSha512) => do_setup_receiver!(
-            AesGcm128,
-            HkdfSha512,
-            DhP256HkdfSha256,
-            mode,
-            recip_keypair,
-            encapped_key,
-            info
-        ),
-        (AeadAlg::AesGcm256, KexAlg::DhP256, KdfAlg::HkdfSha256) => do_setup_receiver!(
-            AesGcm256,
-            HkdfSha256,
-            DhP256HkdfSha256,
-            mode,
-            recip_keypair,
-            encapped_key,
-            info
-        ),
-        (AeadAlg::AesGcm256, KexAlg::DhP256, KdfAlg::HkdfSha384) => do_setup_receiver!(
-            AesGcm256,
-            HkdfSha384,
-            DhP256HkdfSha256,
-            mode,
-            recip_keypair,
-            encapped_key,
-            info
-        ),
-        (AeadAlg::AesGcm256, KexAlg::DhP256, KdfAlg::HkdfSha512) => do_setup_receiver!(
-            AesGcm256,
-            HkdfSha512,
-            DhP256HkdfSha256,
-            mode,
-            recip_keypair,
-            encapped_key,
-            info
-        ),
-        _ => unimplemented!(),
+    );
+
+    if res.is_none() {
+        panic!("DHKEM({}) isn't impelmented yet!", kem_alg.name());
     }
+
+    res.unwrap()
 }
 
 fn main() {
@@ -957,20 +791,21 @@ fn main() {
         AeadAlg::AesGcm256,
         AeadAlg::ChaCha20Poly1305,
     ];
-    let supported_kex_algs = &[KexAlg::X25519, KexAlg::DhP256];
+    let supported_kem_algs = &[KemAlg::X25519HkdfSha256, KemAlg::DhP256HkdfSha256];
     let supported_kdf_algs = &[KdfAlg::HkdfSha256, KdfAlg::HkdfSha384, KdfAlg::HkdfSha512];
 
     // For every combination of supported algorithms, test an encryption-decryption round trip
     for &aead_alg in supported_aead_algs {
-        for &kex_alg in supported_kex_algs {
+        for &kem_alg in supported_kem_algs {
             for &kdf_alg in supported_kdf_algs {
                 let info = b"we're gonna agile him in his clavicle";
+                let kex_alg = kem_alg.kex_alg();
 
                 // Make a random sender keypair and PSK bundle
                 let sender_keypair = agile_gen_keypair(kex_alg, &mut csprng);
                 let psk_bundle = {
                     let mut psk_bytes = vec![0u8; kdf_alg.get_digest_len()];
-                    let psk_id = b"preshared key attempt #5, take 2".to_vec();
+                    let psk_id = b"preshared key attempt #5, take 2. action".to_vec();
                     csprng.fill_bytes(&mut psk_bytes);
                     AgilePskBundle {
                         kex_alg,
@@ -1000,6 +835,7 @@ fn main() {
                 let recip_keypair = agile_gen_keypair(kex_alg, &mut csprng);
                 let (encapped_key, mut aead_ctx1) = agile_setup_sender(
                     aead_alg,
+                    kem_alg,
                     &op_mode_s,
                     &recip_keypair.1,
                     &info[..],
@@ -1010,6 +846,7 @@ fn main() {
                 // Set up the receivers's encryption context
                 let mut aead_ctx2 = agile_setup_receiver(
                     aead_alg,
+                    kem_alg,
                     &op_mode_r,
                     &recip_keypair,
                     &encapped_key,
