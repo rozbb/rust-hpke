@@ -17,7 +17,7 @@ Here are all the primitives listed in the spec. The primitives with checked boxe
 * KEMs
     - [X] DHKEM(Curve25519, HKDF-SHA256)
     - [ ] DHKEM(Curve448, HKDF-SHA512)
-    - [ ] DHKEM(P-256, HKDF-SHA256)
+    - [X] DHKEM(P-256, HKDF-SHA256)
     - [ ] DHKEM(P-384, HKDF-SHA384)
     - [ ] DHKEM(P-521, HKDF-SHA512)
 * KDFs
