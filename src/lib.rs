@@ -41,7 +41,7 @@ pub mod single_shot;
 mod util;
 
 #[doc(inline)]
-pub use crate::aead::AeadCtx;
+pub use crate::aead::{AeadCtxR, AeadCtxS};
 #[doc(inline)]
 pub use kem::{EncappedKey, Kem};
 #[doc(inline)]

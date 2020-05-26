@@ -13,7 +13,7 @@
 //! of runtime checks.
 
 use hpke::{
-    aead::{Aead, AeadCtx, AeadTag, AesGcm128, AesGcm256, ChaCha20Poly1305},
+    aead::{Aead, AeadCtxR, AeadCtxS, AeadTag, AesGcm128, AesGcm256, ChaCha20Poly1305},
     kdf::{HkdfSha256, HkdfSha384, HkdfSha512, Kdf as KdfTrait},
     kem::{DhP256HkdfSha256, Kem as KemTrait, X25519HkdfSha256},
     kex::{DhP256, KeyExchange, Marshallable, Unmarshallable, X25519},
@@ -23,11 +23,11 @@ use hpke::{
 
 use rand::{CryptoRng, RngCore};
 
-// In your head, just replace "agile" with "dangerous" :)
-
-trait AgileAeadCtx {
+trait AgileAeadCtxS {
     fn seal(&mut self, plaintext: &mut [u8], aad: &[u8]) -> Result<AgileAeadTag, HpkeError>;
+}
 
+trait AgileAeadCtxR {
     fn open(
         &mut self,
         ciphertext: &mut [u8],
@@ -57,11 +57,13 @@ impl From<HpkeError> for AgileHpkeError {
     }
 }
 
-impl<A: Aead, Kdf: KdfTrait> AgileAeadCtx for AeadCtx<A, Kdf> {
+impl<A: Aead, Kdf: KdfTrait> AgileAeadCtxS for AeadCtxS<A, Kdf> {
     fn seal(&mut self, plaintext: &mut [u8], aad: &[u8]) -> Result<Vec<u8>, HpkeError> {
         self.seal(plaintext, aad).map(|tag| tag.marshal().to_vec())
     }
+}
 
+impl<A: Aead, Kdf: KdfTrait> AgileAeadCtxR for AeadCtxR<A, Kdf> {
     fn open(
         &mut self,
         ciphertext: &mut [u8],
@@ -625,7 +627,7 @@ fn do_setup_sender<A, Kdf, Kem, R>(
     pk_recip: &AgilePublicKey,
     info: &[u8],
     csprng: &mut R,
-) -> Result<(AgileEncappedKey, Box<dyn AgileAeadCtx>), AgileHpkeError>
+) -> Result<(AgileEncappedKey, Box<dyn AgileAeadCtxS>), AgileHpkeError>
 where
     A: 'static + Aead,
     Kdf: 'static + KdfTrait,
@@ -652,7 +654,7 @@ fn agile_setup_sender<R: CryptoRng + RngCore>(
     pk_recip: &AgilePublicKey,
     info: &[u8],
     csprng: &mut R,
-) -> Result<(AgileEncappedKey, Box<dyn AgileAeadCtx>), AgileHpkeError> {
+) -> Result<(AgileEncappedKey, Box<dyn AgileAeadCtxS>), AgileHpkeError> {
     // Do all the necessary validation
     mode.validate()?;
     if mode.kex_alg != pk_recip.kex_alg {
@@ -678,7 +680,7 @@ fn agile_setup_sender<R: CryptoRng + RngCore>(
     let to_match = (aead_alg, kem_alg, mode.kdf_alg);
 
     // This gets overwritten by the below macro call. It's None iff dispatch failed.
-    let mut res: Option<Result<(AgileEncappedKey, Box<dyn AgileAeadCtx>), AgileHpkeError>> = None;
+    let mut res: Option<Result<(AgileEncappedKey, Box<dyn AgileAeadCtxS>), AgileHpkeError>> = None;
 
     #[rustfmt::skip]
     hpke_dispatch!(
@@ -708,7 +710,7 @@ fn do_setup_receiver<A, Kdf, Kem, Dummy>(
     recip_keypair: &AgileKeypair,
     encapped_key: &AgileEncappedKey,
     info: &[u8],
-) -> Result<Box<dyn AgileAeadCtx>, AgileHpkeError>
+) -> Result<Box<dyn AgileAeadCtxR>, AgileHpkeError>
 where
     A: 'static + Aead,
     Kdf: 'static + KdfTrait,
@@ -729,7 +731,7 @@ fn agile_setup_receiver(
     recip_keypair: &AgileKeypair,
     encapped_key: &AgileEncappedKey,
     info: &[u8],
-) -> Result<Box<dyn AgileAeadCtx>, AgileHpkeError> {
+) -> Result<Box<dyn AgileAeadCtxR>, AgileHpkeError> {
     // Do all the necessary validation
     recip_keypair.validate()?;
     mode.validate()?;
@@ -756,7 +758,7 @@ fn agile_setup_receiver(
     let to_match = (aead_alg, kem_alg, mode.kdf_alg);
 
     // This gets overwritten by the below macro call. It's None iff dispatch failed.
-    let mut res: Option<Result<Box<dyn AgileAeadCtx>, AgileHpkeError>> = None;
+    let mut res: Option<Result<Box<dyn AgileAeadCtxR>, AgileHpkeError>> = None;
 
     // Dummy type to give to the macro. do_setup_receiver doesn't use an RNG, so it doesn't need a
     // concrete RNG type. We give it the unit type to make it happy.

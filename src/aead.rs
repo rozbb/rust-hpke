@@ -139,7 +139,7 @@ impl<A: Aead> Unmarshallable for AeadTag<A> {
 }
 
 /// The HPKE encryption context. This is what you use to `seal` plaintexts and `open` ciphertexts.
-pub struct AeadCtx<A: Aead, K: Kdf> {
+pub(crate) struct AeadCtx<A: Aead, K: Kdf> {
     /// Records whether the nonce sequence counter has overflowed
     overflowed: bool,
     /// The underlying AEAD instance. This also does decryption.
@@ -181,46 +181,44 @@ impl<A: Aead, K: Kdf> AeadCtx<A, K> {
             seq: <Seq<A> as Default>::default(),
         }
     }
-    // def Context.Seal(aad, pt):
-    //   ct = Seal(self.key, self.Nonce(self.seq), aad, pt)
-    //   self.IncrementSeq()
-    //   return ct
-    /// Does a "detached seal in place", meaning it overwrites `plaintext` with the resulting
-    /// ciphertext, and returns the resulting authentication tag
-    ///
-    /// Return Value
-    /// ============
-    /// Returns `Ok(tag)` on success.  If this context has been used for so many encryptions that
-    /// the sequence number overflowed, returns `Err(Hpkeerror::SeqOverflow)`. If this happens,
-    /// `plaintext` will be unmodified. If an unspecified error happened during encryption, returns
-    /// `Err(HpkeError::Encryption)`. If this happens, the contents of `plaintext` is undefined.
-    pub fn seal(&mut self, plaintext: &mut [u8], aad: &[u8]) -> Result<AeadTag<A>, HpkeError> {
-        if self.overflowed {
-            // If the sequence counter overflowed, we've been used for far too long. Shut down.
-            Err(HpkeError::SeqOverflow)
-        } else {
-            // Compute the nonce and do the encryption in place
-            let nonce = mix_nonce(&self.nonce, &self.seq);
-            let tag_res = self
-                .encryptor
-                .encrypt_in_place_detached(&nonce, &aad, plaintext);
 
-            // Check if an error occurred when encrypting
-            let tag = match tag_res {
-                Err(_) => return Err(HpkeError::Encryption),
-                Ok(t) => t,
-            };
+    // def Context.Export(exporter_context, L):
+    //     return Expand(self.exporter_secret, exporter_context, L)
+    /// Fills a given buffer with secret bytes derived from this encryption context. This value
+    /// does not depend on sequence number, so it is constant for the lifetime of this context.
+    pub fn export(&self, info: &[u8], out_buf: &mut [u8]) -> Result<(), HpkeError> {
+        // Use our exporter secret as the PRK for an HKDF-Expand op. The only time this fails is
+        // when the length of the PRK is not the the underlying hash function's digest size. But
+        // that's guaranteed by the type system, so we can unwrap().
+        let hkdf_ctx = Hkdf::<K::HashImpl>::from_prk(self.exporter_secret.as_slice()).unwrap();
 
-            // Try to increment the sequence counter. If it fails, this was our last encryption.
-            if increment_seq(&mut self.seq).is_err() {
-                self.overflowed = true;
-            }
-
-            // Return the tag
-            Ok(AeadTag(tag))
-        }
+        // This call either succeeds or returns hkdf::InvalidLength (iff the buffer length is more
+        // than 255x the digest size of the underlying hash function)
+        hkdf_ctx
+            .expand(info, out_buf)
+            .map_err(|_| HpkeError::InvalidKdfLength)
     }
+}
 
+/// The HPKE receiver's context. This is what you use to `open` ciphertexts.
+pub struct AeadCtxR<A: Aead, K: Kdf>(AeadCtx<A, K>);
+
+// AeadCtx -> AeadCtxR via wrapping
+impl<A: Aead, K: Kdf> From<AeadCtx<A, K>> for AeadCtxR<A, K> {
+    fn from(ctx: AeadCtx<A, K>) -> AeadCtxR<A, K> {
+        AeadCtxR(ctx)
+    }
+}
+
+// Necessary for test_setup_soundness
+#[cfg(test)]
+impl<A: Aead, K: Kdf> Clone for AeadCtxR<A, K> {
+    fn clone(&self) -> AeadCtxR<A, K> {
+        self.0.clone().into()
+    }
+}
+
+impl<A: Aead, K: Kdf> AeadCtxR<A, K> {
     // def Context.Open(aad, ct):
     //   pt = Open(self.key, self.Nonce(self.seq), aad, ct)
     //   if pt == OpenError:
@@ -242,13 +240,14 @@ impl<A: Aead, K: Kdf> AeadCtx<A, K> {
         aad: &[u8],
         tag: &AeadTag<A>,
     ) -> Result<(), HpkeError> {
-        if self.overflowed {
+        if self.0.overflowed {
             // If the sequence counter overflowed, we've been used for far too long. Shut down.
             Err(HpkeError::SeqOverflow)
         } else {
             // Compute the nonce and do the encryption in place
-            let nonce = mix_nonce(&self.nonce, &self.seq);
+            let nonce = mix_nonce(&self.0.nonce, &self.0.seq);
             let decrypt_res = self
+                .0
                 .encryptor
                 .decrypt_in_place_detached(&nonce, &aad, ciphertext, &tag.0);
 
@@ -260,16 +259,14 @@ impl<A: Aead, K: Kdf> AeadCtx<A, K> {
             // Opening was a success
             // Try to increment the sequence counter. If it fails, this was our last
             // decryption.
-            if increment_seq(&mut self.seq).is_err() {
-                self.overflowed = true;
+            if increment_seq(&mut self.0.seq).is_err() {
+                self.0.overflowed = true;
             }
 
             Ok(())
         }
     }
 
-    // def Context.Export(exporter_context, L):
-    //     return Expand(self.exporter_secret, exporter_context, L)
     /// Fills a given buffer with secret bytes derived from this encryption context. This value
     /// does not depend on sequence number, so it is constant for the lifetime of this context.
     ///
@@ -278,15 +275,81 @@ impl<A: Aead, K: Kdf> AeadCtx<A, K> {
     /// Returns `Ok(())` on success. If the buffer length is more than 255x the digest size of the
     /// underlying hash function, returns an `Err(HpkeError::InvalidKdfLength)`.
     pub fn export(&self, info: &[u8], out_buf: &mut [u8]) -> Result<(), HpkeError> {
-        // Use our exporter secret as the PRK for an HKDF-Expand op. The only time this fails is
-        // when the length of the PRK is not the the underlying hash function's digest size. But
-        // that's guaranteed by the type system, so we can unwrap().
-        let hkdf_ctx = Hkdf::<K::HashImpl>::from_prk(self.exporter_secret.as_slice()).unwrap();
+        // Pass to AeadCtx
+        self.0.export(info, out_buf)
+    }
+}
 
-        // This call either succeeds or returns hkdf::InvalidLength
-        hkdf_ctx
-            .expand(info, out_buf)
-            .map_err(|_| HpkeError::InvalidKdfLength)
+/// The HPKE senders's context. This is what you use to `seal` plaintexts.
+pub struct AeadCtxS<A: Aead, K: Kdf>(AeadCtx<A, K>);
+
+// AeadCtx -> AeadCtxS via wrapping
+impl<A: Aead, K: Kdf> From<AeadCtx<A, K>> for AeadCtxS<A, K> {
+    fn from(ctx: AeadCtx<A, K>) -> AeadCtxS<A, K> {
+        AeadCtxS(ctx)
+    }
+}
+
+// Necessary for test_setup_soundness
+#[cfg(test)]
+impl<A: Aead, K: Kdf> Clone for AeadCtxS<A, K> {
+    fn clone(&self) -> AeadCtxS<A, K> {
+        self.0.clone().into()
+    }
+}
+
+impl<A: Aead, K: Kdf> AeadCtxS<A, K> {
+    // def Context.Seal(aad, pt):
+    //   ct = Seal(self.key, self.Nonce(self.seq), aad, pt)
+    //   self.IncrementSeq()
+    //   return ct
+    /// Does a "detached seal in place", meaning it overwrites `plaintext` with the resulting
+    /// ciphertext, and returns the resulting authentication tag
+    ///
+    /// Return Value
+    /// ============
+    /// Returns `Ok(tag)` on success.  If this context has been used for so many encryptions that
+    /// the sequence number overflowed, returns `Err(HpkeError::SeqOverflow)`. If this happens,
+    /// `plaintext` will be unmodified. If an unspecified error happened during encryption, returns
+    /// `Err(HpkeError::Encryption)`. If this happens, the contents of `plaintext` is undefined.
+    pub fn seal(&mut self, plaintext: &mut [u8], aad: &[u8]) -> Result<AeadTag<A>, HpkeError> {
+        if self.0.overflowed {
+            // If the sequence counter overflowed, we've been used for far too long. Shut down.
+            Err(HpkeError::SeqOverflow)
+        } else {
+            // Compute the nonce and do the encryption in place
+            let nonce = mix_nonce(&self.0.nonce, &self.0.seq);
+            let tag_res = self
+                .0
+                .encryptor
+                .encrypt_in_place_detached(&nonce, &aad, plaintext);
+
+            // Check if an error occurred when encrypting
+            let tag = match tag_res {
+                Err(_) => return Err(HpkeError::Encryption),
+                Ok(t) => t,
+            };
+
+            // Try to increment the sequence counter. If it fails, this was our last encryption.
+            if increment_seq(&mut self.0.seq).is_err() {
+                self.0.overflowed = true;
+            }
+
+            // Return the tag
+            Ok(AeadTag(tag))
+        }
+    }
+
+    /// Fills a given buffer with secret bytes derived from this encryption context. This value
+    /// does not depend on sequence number, so it is constant for the lifetime of this context.
+    ///
+    /// Return Value
+    /// ============
+    /// Returns `Ok(())` on success. If the buffer length is more than 255x the digest size of the
+    /// underlying hash function, returns an `Err(HpkeError::InvalidKdfLength)`.
+    pub fn export(&self, info: &[u8], out_buf: &mut [u8]) -> Result<(), HpkeError> {
+        // Pass to AeadCtx
+        self.0.export(info, out_buf)
     }
 }
 
@@ -302,23 +365,23 @@ mod test {
     #[test]
     fn test_export_idempotence() {
         // Set up a context. Logic is algorithm-independent, so we don't care about the types here
-        let (mut aead_ctx, _) = gen_ctx_simple_pair::<ChaCha20Poly1305, HkdfSha256>();
+        let (mut sender_ctx, _) = gen_ctx_simple_pair::<ChaCha20Poly1305, HkdfSha256>();
 
         // Get an initial export secret
         let mut secret1 = [0u8; 16];
-        aead_ctx
+        sender_ctx
             .export(b"test_export_idempotence", &mut secret1)
             .unwrap();
 
         // Modify the context by encrypting something
         let mut plaintext = *b"back hand";
-        aead_ctx
+        sender_ctx
             .seal(&mut plaintext[..], b"")
             .expect("seal() failed");
 
         // Get a second export secret
         let mut secret2 = [0u8; 16];
-        aead_ctx
+        sender_ctx
             .export(b"test_export_idempotence", &mut secret2)
             .unwrap();
 
@@ -339,9 +402,10 @@ mod test {
             buf
         };
 
-        let (mut aead_ctx1, mut aead_ctx2) = gen_ctx_simple_pair::<ChaCha20Poly1305, HkdfSha256>();
-        aead_ctx1.seq = big_seq.clone();
-        aead_ctx2.seq = big_seq.clone();
+        let (mut sender_ctx, mut receiver_ctx) =
+            gen_ctx_simple_pair::<ChaCha20Poly1305, HkdfSha256>();
+        sender_ctx.0.seq = big_seq.clone();
+        receiver_ctx.0.seq = big_seq.clone();
 
         // These should support precisely one more encryption before it registers an overflow
 
@@ -352,14 +416,14 @@ mod test {
         {
             let mut plaintext = *msg;
             // Encrypt the plaintext
-            let tag = aead_ctx1
+            let tag = sender_ctx
                 .seal(&mut plaintext[..], aad)
                 .expect("seal() failed");
             // Rename for clarity
             let mut ciphertext = plaintext;
 
             // Now to decrypt on the other side
-            aead_ctx2
+            receiver_ctx
                 .open(&mut ciphertext[..], aad, &tag)
                 .expect("open() failed");
             // Rename for clarity
@@ -373,7 +437,7 @@ mod test {
         {
             let mut plaintext = *msg;
             // Try to encrypt the plaintext
-            match aead_ctx1.seal(&mut plaintext[..], aad) {
+            match sender_ctx.seal(&mut plaintext[..], aad) {
                 Err(HpkeError::SeqOverflow) => {} // Good, this should have overflowed
                 Err(e) => panic!("seal() should have overflowed. Instead got {}", e),
                 _ => panic!("seal() should have overflowed. Instead it succeeded"),
@@ -384,7 +448,7 @@ mod test {
             let mut dummy_ciphertext = [0u8; 32];
             let dummy_tag = AeadTag::unmarshal(&[0; 16]).unwrap();
 
-            match aead_ctx2.open(&mut dummy_ciphertext[..], aad, &dummy_tag) {
+            match receiver_ctx.open(&mut dummy_ciphertext[..], aad, &dummy_tag) {
                 Err(HpkeError::SeqOverflow) => {} // Good, this should have overflowed
                 Err(e) => panic!("open() should have overflowed. Instead got {}", e),
                 _ => panic!("open() should have overflowed. Instead it succeeded"),
@@ -400,20 +464,23 @@ mod test {
                 type A = $aead_ty;
                 type K = HkdfSha256;
 
-                let (mut ctx1, mut ctx2) = gen_ctx_simple_pair::<A, K>();
+                let (mut sender_ctx, mut receiver_ctx) = gen_ctx_simple_pair::<A, K>();
 
                 let msg = b"Love it or leave it, you better gain way";
                 let aad = b"You better hit bull's eye, the kid don't play";
 
-                // Encrypt with the first context
+                // Encrypt with the sender context
                 let mut ciphertext = msg.clone();
-                let tag = ctx1.seal(&mut ciphertext[..], aad).expect("seal() failed");
+                let tag = sender_ctx
+                    .seal(&mut ciphertext[..], aad)
+                    .expect("seal() failed");
 
                 // Make sure seal() isn't a no-op
                 assert!(&ciphertext[..] != &msg[..]);
 
-                // Decrypt with the second context
-                ctx2.open(&mut ciphertext[..], aad, &tag)
+                // Decrypt with the receiver context
+                receiver_ctx
+                    .open(&mut ciphertext[..], aad, &tag)
                     .expect("open() failed");
                 // Change name for clarity
                 let decrypted = ciphertext;

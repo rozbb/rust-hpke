@@ -1,6 +1,6 @@
 use crate::prelude::*;
 use crate::{
-    aead::{Aead, AeadCtx},
+    aead::{Aead, AeadCtx, AeadCtxR, AeadCtxS},
     kdf::{labeled_extract, Kdf as KdfTrait, LabeledExpand},
     kem::{self, EncappedKey, Kem as KemTrait, SharedSecret},
     kex::KeyExchange,
@@ -126,7 +126,7 @@ pub fn setup_sender<A, Kdf, Kem, R>(
     pk_recip: &<Kem::Kex as KeyExchange>::PublicKey,
     info: &[u8],
     csprng: &mut R,
-) -> Result<(EncappedKey<Kem::Kex>, AeadCtx<A, Kdf>), HpkeError>
+) -> Result<(EncappedKey<Kem::Kex>, AeadCtxS<A, Kdf>), HpkeError>
 where
     A: Aead,
     Kdf: KdfTrait,
@@ -140,7 +140,7 @@ where
     // Use everything to derive an encryption context
     let enc_ctx = derive_enc_ctx::<_, _, Kem, _>(mode, shared_secret, info);
 
-    Ok((encapped_key, enc_ctx))
+    Ok((encapped_key, enc_ctx.into()))
 }
 
 //  From draft02 §6.5:
@@ -161,7 +161,7 @@ pub fn setup_receiver<A, Kdf, Kem>(
     sk_recip: &<Kem::Kex as KeyExchange>::PrivateKey,
     encapped_key: &EncappedKey<Kem::Kex>,
     info: &[u8],
-) -> Result<AeadCtx<A, Kdf>, HpkeError>
+) -> Result<AeadCtxR<A, Kdf>, HpkeError>
 where
     A: Aead,
     Kdf: KdfTrait,
@@ -173,7 +173,8 @@ where
     let shared_secret = kem::decap::<Kem>(sk_recip, pk_sender_id, encapped_key)?;
 
     // Use everything to derive an encryption context
-    Ok(derive_enc_ctx::<_, _, Kem, _>(mode, shared_secret, info))
+    let enc_ctx = derive_enc_ctx::<_, _, Kem, _>(mode, shared_secret, info);
+    Ok(enc_ctx.into())
 }
 
 #[cfg(test)]
@@ -314,21 +315,21 @@ mod test {
         let (sender_mode, receiver_mode) = gen_op_mode_pair::<Kex, Kdf>(OpModeKind::Base);
 
         // Construct the sender's encryption context normally
-        let (encapped_key, aead_ctx1) =
+        let (encapped_key, sender_ctx) =
             setup_sender::<A, _, Kem, _>(&sender_mode, &pk_recip, &info[..], &mut csprng).unwrap();
 
         // Now make a receiver with the wrong info string and ensure it doesn't match the sender
         let bad_info = b"something else";
-        let mut aead_ctx2 =
+        let mut receiver_ctx =
             setup_receiver::<_, _, Kem>(&receiver_mode, &sk_recip, &encapped_key, &bad_info[..])
                 .unwrap();
-        assert!(!aead_ctx_eq(&mut aead_ctx1.clone(), &mut aead_ctx2));
+        assert!(!aead_ctx_eq(&mut sender_ctx.clone(), &mut receiver_ctx));
 
         // Now make a receiver with the wrong secret key and ensure it doesn't match the sender
         let (bad_sk, _) = <Kex as KeyExchange>::gen_keypair(&mut csprng);
         let mut aead_ctx2 =
             setup_receiver::<_, _, Kem>(&receiver_mode, &bad_sk, &encapped_key, &info[..]).unwrap();
-        assert!(!aead_ctx_eq(&mut aead_ctx1.clone(), &mut aead_ctx2));
+        assert!(!aead_ctx_eq(&mut sender_ctx.clone(), &mut aead_ctx2));
 
         // Now make a receiver with the wrong encapped key and ensure it doesn't match the sender.
         // The reason `bad_encapped_key` is bad is because its underlying key is uniformly random,
@@ -338,13 +339,13 @@ mod test {
         let mut aead_ctx2 =
             setup_receiver::<_, _, Kem>(&receiver_mode, &sk_recip, &bad_encapped_key, &info[..])
                 .unwrap();
-        assert!(!aead_ctx_eq(&mut aead_ctx1.clone(), &mut aead_ctx2));
+        assert!(!aead_ctx_eq(&mut sender_ctx.clone(), &mut aead_ctx2));
 
         // Now make sure that this test was a valid test by ensuring that doing everything the
         // right way makes it pass
         let mut aead_ctx2 =
             setup_receiver::<_, _, Kem>(&receiver_mode, &sk_recip, &encapped_key, &info[..])
                 .unwrap();
-        assert!(aead_ctx_eq(&mut aead_ctx1.clone(), &mut aead_ctx2));
+        assert!(aead_ctx_eq(&mut sender_ctx.clone(), &mut aead_ctx2));
     }
 }

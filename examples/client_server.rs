@@ -52,13 +52,13 @@ fn client_encrypt_msg(
 
     // Encapsulate a key and use the resulting shared secret to encrypt a message. The AEAD context
     // is what you use to encrypt.
-    let (encapped_key, mut aead_ctx) =
+    let (encapped_key, mut sender_ctx) =
         hpke::setup_sender::<Aead, Kdf, Kem, _>(&OpModeS::Base, server_pk, INFO_STR, &mut csprng)
             .expect("invalid server pubkey!");
 
     // On success, seal() will encrypt the plaintext in place
     let mut msg_copy = msg.to_vec();
-    let tag = aead_ctx
+    let tag = sender_ctx
         .seal(&mut msg_copy, associated_data)
         .expect("encryption failed!");
 
@@ -85,13 +85,13 @@ fn server_decrypt_msg(
         .expect("could not deserialize the encapsulated pubkey!");
 
     // Decapsulate and derive the shared secret. This creates a shared AEAD context.
-    let mut aead_ctx =
+    let mut receiver_ctx =
         hpke::setup_receiver::<Aead, Kdf, Kem>(&OpModeR::Base, &server_sk, &encapped_key, INFO_STR)
             .expect("failed to set up receiver!");
 
     // On success, open() will decrypt the ciphertext in place
     let mut ciphertext_copy = ciphertext.to_vec();
-    aead_ctx
+    receiver_ctx
         .open(&mut ciphertext_copy, associated_data, &tag)
         .expect("invalid ciphertext!");
 

@@ -1,5 +1,5 @@
 use crate::{
-    aead::{Aead, AeadCtx, AeadKey, AeadNonce},
+    aead::{Aead, AeadCtx, AeadCtxR, AeadCtxS, AeadKey, AeadNonce},
     kdf::Kdf as KdfTrait,
     kex::KeyExchange,
     op_mode::{OpModeR, OpModeS, Psk, PskBundle},
@@ -27,7 +27,8 @@ pub(crate) fn gen_psk_bundle<Kdf: KdfTrait>() -> PskBundle<Kdf> {
 }
 
 /// Creates a pair of `AeadCtx`s without doing a key exchange
-pub(crate) fn gen_ctx_simple_pair<A: Aead, Kdf: KdfTrait>() -> (AeadCtx<A, Kdf>, AeadCtx<A, Kdf>) {
+pub(crate) fn gen_ctx_simple_pair<A: Aead, Kdf: KdfTrait>() -> (AeadCtxS<A, Kdf>, AeadCtxR<A, Kdf>)
+{
     let mut csprng = rand::thread_rng();
 
     // Initialize the key and nonce
@@ -50,7 +51,7 @@ pub(crate) fn gen_ctx_simple_pair<A: Aead, Kdf: KdfTrait>() -> (AeadCtx<A, Kdf>,
     let ctx1 = AeadCtx::new(key.clone(), nonce.clone(), exporter_secret.clone());
     let ctx2 = AeadCtx::new(key.clone(), nonce.clone(), exporter_secret.clone());
 
-    (ctx1, ctx2)
+    (ctx1.into(), ctx2.into())
 }
 
 #[derive(Clone, Copy)]
@@ -97,8 +98,8 @@ pub(crate) fn gen_op_mode_pair<Kex: KeyExchange, Kdf: KdfTrait>(
 /// Evaluates the equivalence of two encryption contexts by doing some encryption-decryption
 /// round trips. Returns `true` iff the contexts are equal after 1000 iterations
 pub(crate) fn aead_ctx_eq<A: Aead, K: KdfTrait>(
-    ctx1: &mut AeadCtx<A, K>,
-    ctx2: &mut AeadCtx<A, K>,
+    sender: &mut AeadCtxS<A, K>,
+    receiver: &mut AeadCtxR<A, K>,
 ) -> bool {
     let mut csprng = rand::thread_rng();
 
@@ -121,14 +122,14 @@ pub(crate) fn aead_ctx_eq<A: Aead, K: KdfTrait>(
     for i in 0..1000 {
         let mut plaintext = msg.clone();
         // Encrypt the plaintext
-        let tag = ctx1
+        let tag = sender
             .seal(&mut plaintext[..], &aad)
             .expect(&format!("seal() #{} failed", i));
         // Rename for clarity
         let mut ciphertext = plaintext;
 
         // Now to decrypt on the other side
-        if let Err(_) = ctx2.open(&mut ciphertext[..], &aad, &tag) {
+        if let Err(_) = receiver.open(&mut ciphertext[..], &aad, &tag) {
             // An error occurred in decryption. These encryption contexts are not identical.
             return false;
         }
