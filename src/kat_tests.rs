@@ -50,11 +50,11 @@ struct MainTestVector {
     info: Vec<u8>,
 
     // Private keys
-    #[serde(rename = "skR", deserialize_with = "bytes_from_hex")]
+    #[serde(rename = "skRm", deserialize_with = "bytes_from_hex")]
     sk_recip: Vec<u8>,
-    #[serde(default, rename = "skS", deserialize_with = "bytes_from_hex_opt")]
+    #[serde(default, rename = "skSm", deserialize_with = "bytes_from_hex_opt")]
     sk_sender: Option<Vec<u8>>,
-    #[serde(rename = "skE", deserialize_with = "bytes_from_hex")]
+    #[serde(rename = "skEm", deserialize_with = "bytes_from_hex")]
     sk_eph: Vec<u8>,
     #[serde(default, deserialize_with = "bytes_from_hex_opt")]
     psk: Option<Vec<u8>>,
@@ -62,11 +62,11 @@ struct MainTestVector {
     psk_id: Option<Vec<u8>>,
 
     // Public Keys
-    #[serde(rename = "pkR", deserialize_with = "bytes_from_hex")]
+    #[serde(rename = "pkRm", deserialize_with = "bytes_from_hex")]
     pk_recip: Vec<u8>,
-    #[serde(default, rename = "pkS", deserialize_with = "bytes_from_hex_opt")]
+    #[serde(default, rename = "pkSm", deserialize_with = "bytes_from_hex_opt")]
     pk_sender: Option<Vec<u8>>,
-    #[serde(rename = "pkE", deserialize_with = "bytes_from_hex")]
+    #[serde(rename = "pkEm", deserialize_with = "bytes_from_hex")]
     pk_eph: Vec<u8>,
 
     // Key schedule inputs and computations
@@ -74,7 +74,7 @@ struct MainTestVector {
     encapped_key: Vec<u8>,
     #[serde(rename = "zz", deserialize_with = "bytes_from_hex")]
     shared_secret: Vec<u8>,
-    #[serde(rename = "context", deserialize_with = "bytes_from_hex")]
+    #[serde(rename = "key_schedule_context", deserialize_with = "bytes_from_hex")]
     _hpke_context: Vec<u8>,
     #[serde(rename = "secret", deserialize_with = "bytes_from_hex")]
     _key_schedule_secret: Vec<u8>,
@@ -103,7 +103,7 @@ struct EncryptionTestVector {
 
 #[derive(Clone, Deserialize, Debug)]
 struct ExporterTestVector {
-    #[serde(rename = "context", deserialize_with = "bytes_from_hex")]
+    #[serde(rename = "exportContext", deserialize_with = "bytes_from_hex")]
     info: Vec<u8>,
     #[serde(rename = "exportLength")]
     export_len: usize,
@@ -156,95 +156,89 @@ fn make_op_mode_r<Kex: KeyExchange, Kdf: KdfTrait>(
     }
 }
 
-// Implements a test case for a given AEAD implementation
-macro_rules! test_case {
-    ($tv:ident, $aead_ty:ty, $kdf_ty:ty, $kem_ty:ty) => {{
-        println!(
-            "Running test case on {}, {}, {}",
-            stringify!($aead_ty),
-            stringify!($kdf_ty),
-            stringify!($kem_ty)
-        );
+// This does all the legwork
+fn test_case<A: Aead, Kdf: KdfTrait, Kem: KemTrait>(tv: MainTestVector) {
+    // First, unmarshall all the relevant keys so we can reconstruct the encapped key
+    let (sk_recip, pk_recip) = get_and_assert_keypair::<Kem::Kex>(&tv.sk_recip, &tv.pk_recip);
+    let (sk_eph, _) = get_and_assert_keypair::<Kem::Kex>(&tv.sk_eph, &tv.pk_eph);
 
-        type A = $aead_ty;
-        type Kdf = $kdf_ty;
-        type Kem = $kem_ty;
-        type Kex = <$kem_ty as KemTrait>::Kex;
+    let sk_sender = tv
+        .sk_sender
+        .map(|bytes| <Kem::Kex as KeyExchange>::PrivateKey::unmarshal(&bytes).unwrap());
+    let pk_sender = tv
+        .pk_sender
+        .clone()
+        .map(|bytes| <Kem::Kex as KeyExchange>::PublicKey::unmarshal(&bytes).unwrap());
+    // If sk_sender is Some, then so is pk_sender
+    let sender_keypair = sk_sender.map(|sk| (sk, pk_sender.unwrap()));
 
-        // First, unmarshall all the relevant keys so we can reconstruct the encapped key
-        let (sk_recip, pk_recip) = get_and_assert_keypair::<Kex>(&$tv.sk_recip, &$tv.pk_recip);
-        let (sk_eph, _) = get_and_assert_keypair::<Kex>(&$tv.sk_eph, &$tv.pk_eph);
+    // Now derive the encapped key with the deterministic encap function, using all the inputs
+    // above
+    let (zz, encapped_key) =
+        encap_with_eph::<Kem>(&pk_recip, sender_keypair.as_ref(), sk_eph.clone())
+            .expect("encap failed");
 
-        let sk_sender = $tv
-            .sk_sender
-            .map(|bytes| <Kex as KeyExchange>::PrivateKey::unmarshal(&bytes).unwrap());
-        let pk_sender = $tv
-            .pk_sender
-            .clone()
-            .map(|bytes| <Kex as KeyExchange>::PublicKey::unmarshal(&bytes).unwrap());
-        // If sk_sender is Some, then so is pk_sender
-        let sender_keypair = sk_sender.map(|sk| (sk, pk_sender.unwrap()));
+    // Assert that the derived shared secret key is identical to the one provided
+    assert_eq!(
+        zz.as_slice(),
+        tv.shared_secret.as_slice(),
+        "zz doesn't match"
+    );
 
-        // Now derive the encapped key with the deterministic encap function, using all the inputs
-        // above
-        let (zz, encapped_key) =
-            encap_with_eph::<Kem>(&pk_recip, sender_keypair.as_ref(), sk_eph.clone())
-                .expect("encap failed");
+    // Assert that the derived encapped key is identical to the one provided
+    assert_eq!(
+        encapped_key.marshal().as_slice(),
+        tv.encapped_key.as_slice(),
+        "encapped keys don't match"
+    );
 
-        // Assert that the derived shared secret key is identical to the one provided
-        assert_eq!(zz.as_slice(), $tv.shared_secret.as_slice());
+    // We're going to test the encryption contexts. First, construct the appropriate OpMode.
+    let mode = make_op_mode_r(tv.mode, tv.pk_sender, tv.psk, tv.psk_id);
+    let mut aead_ctx = setup_receiver::<A, Kdf, Kem>(&mode, &sk_recip, &encapped_key, &tv.info)
+        .expect("setup_receiver failed");
 
-        // Assert that the derived encapped key is identical to the one provided
+    // Go through all the plaintext-ciphertext pairs of this test vector and assert the
+    // ciphertext decrypts to the corresponding plaintext
+    for enc_packet in tv.encryptions {
+        let aad = enc_packet.aad;
+
+        // The test vector's ciphertext is of the form ciphertext || tag. Break it up into two
+        // pieces so we can call open() on it.
+        let (mut ciphertext, tag) = {
+            let mut ciphertext_and_tag = enc_packet.ciphertext;
+            let total_len = ciphertext_and_tag.len();
+
+            let tag_size = AeadTag::<A>::size();
+            let (ciphertext_bytes, tag_bytes) =
+                ciphertext_and_tag.split_at_mut(total_len - tag_size);
+
+            (
+                ciphertext_bytes.to_vec(),
+                AeadTag::unmarshal(tag_bytes).unwrap(),
+            )
+        };
+
+        // Open the ciphertext in place and assert that this succeeds
+        aead_ctx
+            .open(&mut ciphertext, &aad, &tag)
+            .expect("open failed");
+        // Rename for clarity
+        let plaintext = ciphertext;
+
+        // Assert the plaintext equals the expected plaintext
         assert_eq!(
-            encapped_key.marshal().as_slice(),
-            $tv.encapped_key.as_slice()
+            plaintext,
+            enc_packet.plaintext.as_slice(),
+            "plaintexts don't match"
         );
+    }
 
-        // We're going to test the encryption contexts. First, construct the appropriate OpMode.
-        let mode = make_op_mode_r($tv.mode, $tv.pk_sender, $tv.psk, $tv.psk_id);
-        let mut aead_ctx =
-            setup_receiver::<A, Kdf, Kem>(&mode, &sk_recip, &encapped_key, &$tv.info)
-                .expect("setup_receiver failed");
-
-        // Go through all the plaintext-ciphertext pairs of this test vector and assert the
-        // ciphertext decrypts to the corresponding plaintext
-        for enc_packet in $tv.encryptions {
-            let aad = enc_packet.aad;
-
-            // The test vector's ciphertext is of the form ciphertext || tag. Break it up into two
-            // pieces so we can call open() on it.
-            let (mut ciphertext, tag) = {
-                let mut ciphertext_and_tag = enc_packet.ciphertext;
-                let total_len = ciphertext_and_tag.len();
-
-                let tag_size = AeadTag::<A>::size();
-                let (ciphertext_bytes, tag_bytes) =
-                    ciphertext_and_tag.split_at_mut(total_len - tag_size);
-
-                (
-                    ciphertext_bytes.to_vec(),
-                    AeadTag::unmarshal(tag_bytes).unwrap(),
-                )
-            };
-
-            // Open the ciphertext in place and assert that this succeeds
-            aead_ctx
-                .open(&mut ciphertext, &aad, &tag)
-                .expect("open failed");
-            // Rename for clarity
-            let plaintext = ciphertext;
-
-            // Assert the plaintext equals the expected plaintext
-            assert_eq!(plaintext, enc_packet.plaintext.as_slice());
-        }
-
-        // Now check that AeadCtx::export returns the expected values
-        for export in $tv.exports {
-            let mut exported_val = vec![0u8; export.export_len];
-            aead_ctx.export(&export.info, &mut exported_val).unwrap();
-            assert_eq!(exported_val, export.export_val);
-        }
-    }};
+    // Now check that AeadCtx::export returns the expected values
+    for export in tv.exports {
+        let mut exported_val = vec![0u8; export.export_len];
+        aead_ctx.export(&export.info, &mut exported_val).unwrap();
+        assert_eq!(exported_val, export.export_val, "export values don't match");
+    }
 }
 
 // This macro takes in all the supported AEADs, KDFs, and KEMs, and dispatches the given test
@@ -278,10 +272,18 @@ macro_rules! dispatch_testcase {
         if let (<$aead_ty>::AEAD_ID, <$kdf_ty>::KDF_ID, <$kem_ty>::KEM_ID) =
             ($tv.aead_id, $tv.kdf_id, $tv.kem_id)
         {
-            let tv = $tv.clone();
-            test_case!(tv, $aead_ty, $kdf_ty, $kem_ty);
+            println!(
+                "Running test case on {}, {}, {}",
+                stringify!($aead_ty),
+                stringify!($kdf_ty),
+                stringify!($kem_ty)
+            );
 
-            // This is so that anything that comes after this macro indicates failure to match
+            let tv = $tv.clone();
+            test_case::<$aead_ty, $kdf_ty, $kem_ty>(tv);
+
+            // This is so that code that comes after a dispatch_testcase! invocation will know that
+            // the test vector matched no known ciphersuites
             continue;
         }
     };
@@ -289,7 +291,7 @@ macro_rules! dispatch_testcase {
 
 #[test]
 fn kat_test() {
-    let file = File::open("test-vectors-325c94f.json").unwrap();
+    let file = File::open("test-vectors-f0be13a.json").unwrap();
     let tvs: Vec<MainTestVector> = serde_json::from_reader(file).unwrap();
 
     for tv in tvs.into_iter() {
@@ -307,9 +309,9 @@ fn kat_test() {
         );
 
         // The above macro has a `continue` in every branch. We only get to this line if it failed
-        // to match.
+        // to match every combination of the above primitives.
         panic!(
-            "Invalid (AEAD ID, KDF ID, KEM ID) combo: ({}, {}, {})",
+            "Unrecognized (AEAD ID, KDF ID, KEM ID) combo: ({}, {}, {})",
             tv.aead_id, tv.kdf_id, tv.kem_id
         );
     }

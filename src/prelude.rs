@@ -4,7 +4,6 @@
 
 #[cfg(not(feature = "std"))]
 mod reexports {
-    pub use alloc::string::String;
     pub use alloc::vec::Vec;
 }
 

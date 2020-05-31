@@ -6,11 +6,11 @@ use crate::{
     setup::ExporterSecret,
 };
 
-use rand::{Rng, RngCore};
+use rand::{rngs::StdRng, Rng, RngCore, SeedableRng};
 
 /// Makes an random PSK bundle
 pub(crate) fn gen_psk_bundle<Kdf: KdfTrait>() -> PskBundle<Kdf> {
-    let mut csprng = rand::thread_rng();
+    let mut csprng = StdRng::from_entropy();
 
     let psk = {
         let mut buf = vec![0u8; 32];
@@ -29,7 +29,7 @@ pub(crate) fn gen_psk_bundle<Kdf: KdfTrait>() -> PskBundle<Kdf> {
 /// Creates a pair of `AeadCtx`s without doing a key exchange
 pub(crate) fn gen_ctx_simple_pair<A: Aead, Kdf: KdfTrait>() -> (AeadCtxS<A, Kdf>, AeadCtxR<A, Kdf>)
 {
-    let mut csprng = rand::thread_rng();
+    let mut csprng = StdRng::from_entropy();
 
     // Initialize the key and nonce
     let key = {
@@ -66,7 +66,7 @@ pub(crate) enum OpModeKind {
 pub(crate) fn gen_op_mode_pair<Kex: KeyExchange, Kdf: KdfTrait>(
     kind: OpModeKind,
 ) -> (OpModeS<Kex, Kdf>, OpModeR<Kex, Kdf>) {
-    let mut csprng = rand::thread_rng();
+    let mut csprng = StdRng::from_entropy();
     let (sk_sender_id, pk_sender_id) = Kex::gen_keypair(&mut csprng);
     let psk_bundle = gen_psk_bundle::<Kdf>();
 
@@ -101,7 +101,7 @@ pub(crate) fn aead_ctx_eq<A: Aead, K: KdfTrait>(
     sender: &mut AeadCtxS<A, K>,
     receiver: &mut AeadCtxR<A, K>,
 ) -> bool {
-    let mut csprng = rand::thread_rng();
+    let mut csprng = StdRng::from_entropy();
 
     // Some random input data
     let msg = {

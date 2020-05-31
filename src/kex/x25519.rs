@@ -118,7 +118,7 @@ mod tests {
         x25519::{PrivateKey, PublicKey, X25519},
         KeyExchange, Marshallable, Unmarshallable,
     };
-    use rand::RngCore;
+    use rand::{rngs::StdRng, RngCore, SeedableRng};
 
     // We need this in our marshal-unmarshal tests
     impl PartialEq for PrivateKey {
@@ -139,7 +139,7 @@ mod tests {
     fn test_pubkey_marshal_correctness() {
         type Kex = X25519;
 
-        let mut csprng = rand::thread_rng();
+        let mut csprng = StdRng::from_entropy();
 
         // Fill a buffer with randomness
         let orig_bytes = {
@@ -162,7 +162,7 @@ mod tests {
     fn test_dh_marshal_correctness() {
         type Kex = X25519;
 
-        let mut csprng = rand::thread_rng();
+        let mut csprng = StdRng::from_entropy();
 
         // Make a random keypair and marshal it
         let (sk, pk) = Kex::gen_keypair(&mut csprng);

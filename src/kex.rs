@@ -1,6 +1,3 @@
-mod ecdh_nistp;
-mod x25519;
-
 use crate::HpkeError;
 
 use digest::generic_array::{typenum::marker_traits::Unsigned, ArrayLength, GenericArray};
@@ -37,5 +34,12 @@ pub trait KeyExchange {
     fn kex(sk: &Self::PrivateKey, pk: &Self::PublicKey) -> Result<Self::KexResult, HpkeError>;
 }
 
+#[cfg(feature = "p256")]
+mod ecdh_nistp;
+#[cfg(feature = "p256")]
 pub use ecdh_nistp::DhP256;
+
+#[cfg(feature = "x25519-dalek")]
+mod x25519;
+#[cfg(feature = "x25519-dalek")]
 pub use x25519::X25519;

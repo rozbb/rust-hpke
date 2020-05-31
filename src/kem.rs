@@ -1,6 +1,6 @@
 use crate::{
     kdf::{extract_and_expand, HkdfSha256, Kdf as KdfTrait},
-    kex::{DhP256, KeyExchange, Marshallable, Unmarshallable, X25519},
+    kex::{KeyExchange, Marshallable, Unmarshallable},
     HpkeError,
 };
 use digest::{generic_array::GenericArray, FixedOutput};
@@ -17,22 +17,26 @@ pub trait Kem {
 // Kem is also used as a type parameter everywhere. To avoid confusion, alias it
 use Kem as KemTrait;
 
+#[cfg(feature = "x25519-dalek")]
 /// Represents DHKEM(Curve25519, HKDF-SHA256)
 pub struct X25519HkdfSha256 {}
 
+#[cfg(feature = "x25519-dalek")]
 impl Kem for X25519HkdfSha256 {
-    type Kex = X25519;
+    type Kex = crate::kex::X25519;
     type Kdf = HkdfSha256;
 
     // Section 7.1: DHKEM(Curve25519, HKDF-SHA256)
     const KEM_ID: u16 = 0x0020;
 }
 
+#[cfg(feature = "p256")]
 /// Represents DHKEM(P256, HKDF-SHA256)
 pub struct DhP256HkdfSha256 {}
 
+#[cfg(feature = "p256")]
 impl Kem for DhP256HkdfSha256 {
-    type Kex = DhP256;
+    type Kex = crate::kex::DhP256;
     type Kdf = HkdfSha256;
 
     // Section 7.1: DHKEM(P256, HKDF-SHA256)
@@ -255,88 +259,90 @@ pub(crate) fn decap<Kem: KemTrait>(
 #[cfg(test)]
 mod tests {
     use super::{decap, encap, EncappedKey, Marshallable, Unmarshallable};
-    use crate::{
-        kem::{DhP256HkdfSha256, Kem as KemTrait, X25519HkdfSha256},
-        kex::KeyExchange,
-    };
+    use crate::{kem::Kem as KemTrait, kex::KeyExchange};
 
-    /// Tests that encap and decap produce the same shared secret when composed
-    macro_rules! test_case_encap_correctness {
-        ($kem_ty:ty) => {{
-            type Kem = $kem_ty;
+    use rand::{rngs::StdRng, SeedableRng};
 
-            let mut csprng = rand::thread_rng();
-            let (sk_recip, pk_recip) = <Kem as KemTrait>::Kex::gen_keypair(&mut csprng);
+    macro_rules! test_encap_correctness {
+        ($test_name:ident, $kem_ty:ty) => {
+            /// Tests that encap and decap produce the same shared secret when composed
+            #[test]
+            fn $test_name() {
+                type Kem = $kem_ty;
 
-            // Encapsulate a random shared secret
-            let (auth_shared_secret, encapped_key) =
-                encap::<Kem, _>(&pk_recip, None, &mut csprng).unwrap();
+                let mut csprng = StdRng::from_entropy();
+                let (sk_recip, pk_recip) = <Kem as KemTrait>::Kex::gen_keypair(&mut csprng);
 
-            // Decap it
-            let decapped_auth_shared_secret = decap::<Kem>(&sk_recip, None, &encapped_key).unwrap();
+                // Encapsulate a random shared secret
+                let (auth_shared_secret, encapped_key) =
+                    encap::<Kem, _>(&pk_recip, None, &mut csprng).unwrap();
 
-            // Ensure that the encapsulated secret is what decap() derives
-            assert_eq!(auth_shared_secret, decapped_auth_shared_secret);
+                // Decap it
+                let decapped_auth_shared_secret =
+                    decap::<Kem>(&sk_recip, None, &encapped_key).unwrap();
 
-            //
-            // Now do it with the auth, i.e., using the sender's identity keys
-            //
+                // Ensure that the encapsulated secret is what decap() derives
+                assert_eq!(auth_shared_secret, decapped_auth_shared_secret);
 
-            // Make a sender identity keypair
-            let (sk_sender_id, pk_sender_id) = <Kem as KemTrait>::Kex::gen_keypair(&mut csprng);
+                //
+                // Now do it with the auth, i.e., using the sender's identity keys
+                //
 
-            // Encapsulate a random shared secret
-            let (auth_shared_secret, encapped_key) = encap::<Kem, _>(
-                &pk_recip,
-                Some(&(sk_sender_id, pk_sender_id.clone())),
-                &mut csprng,
-            )
-            .unwrap();
+                // Make a sender identity keypair
+                let (sk_sender_id, pk_sender_id) = <Kem as KemTrait>::Kex::gen_keypair(&mut csprng);
 
-            // Decap it
-            let decapped_auth_shared_secret =
-                decap::<Kem>(&sk_recip, Some(&pk_sender_id), &encapped_key).unwrap();
+                // Encapsulate a random shared secret
+                let (auth_shared_secret, encapped_key) = encap::<Kem, _>(
+                    &pk_recip,
+                    Some(&(sk_sender_id, pk_sender_id.clone())),
+                    &mut csprng,
+                )
+                .unwrap();
 
-            // Ensure that the encapsulated secret is what decap() derives
-            assert_eq!(auth_shared_secret, decapped_auth_shared_secret);
-        }};
+                // Decap it
+                let decapped_auth_shared_secret =
+                    decap::<Kem>(&sk_recip, Some(&pk_sender_id), &encapped_key).unwrap();
+
+                // Ensure that the encapsulated secret is what decap() derives
+                assert_eq!(auth_shared_secret, decapped_auth_shared_secret);
+            }
+        };
     }
+
+    #[cfg(feature = "x25519-dalek")]
+    test_encap_correctness!(test_encap_correctness_x25519, crate::kem::X25519HkdfSha256);
+    #[cfg(feature = "p256")]
+    test_encap_correctness!(test_encap_correctness_p256, crate::kem::DhP256HkdfSha256);
 
     /// Tests that an unmarshal-marshal round-trip on an encapped key ends up at the same value
-    macro_rules! test_case_encapped_marshal {
-        ($kem_ty:ty) => {{
-            type Kem = $kem_ty;
+    macro_rules! test_encapped_marshal {
+        ($test_name:ident, $kem_ty:ty) => {
+            #[test]
+            fn $test_name() {
+                type Kem = $kem_ty;
 
-            // Encapsulate a random shared secret
-            let encapped_key = {
-                let mut csprng = rand::thread_rng();
-                let (_, pk_recip) = <Kem as KemTrait>::Kex::gen_keypair(&mut csprng);
-                encap::<Kem, _>(&pk_recip, None, &mut csprng).unwrap().1
-            };
-            // Marshal it
-            let encapped_key_bytes = encapped_key.marshal();
-            // Unmarshal it
-            let new_encapped_key =
-                EncappedKey::<<Kem as KemTrait>::Kex>::unmarshal(&encapped_key_bytes).unwrap();
+                // Encapsulate a random shared secret
+                let encapped_key = {
+                    let mut csprng = StdRng::from_entropy();
+                    let (_, pk_recip) = <Kem as KemTrait>::Kex::gen_keypair(&mut csprng);
+                    encap::<Kem, _>(&pk_recip, None, &mut csprng).unwrap().1
+                };
+                // Marshal it
+                let encapped_key_bytes = encapped_key.marshal();
+                // Unmarshal it
+                let new_encapped_key =
+                    EncappedKey::<<Kem as KemTrait>::Kex>::unmarshal(&encapped_key_bytes).unwrap();
 
-            assert!(
-                new_encapped_key.0 == encapped_key.0,
-                "encapped key doesn't marshal correctly"
-            );
-        }};
+                assert!(
+                    new_encapped_key.0 == encapped_key.0,
+                    "encapped key doesn't marshal correctly"
+                );
+            }
+        };
     }
 
-    /// Tests that encap and decap produce the same shared secret when composed
-    #[test]
-    fn test_encap_correctness() {
-        test_case_encap_correctness!(X25519HkdfSha256);
-        test_case_encap_correctness!(DhP256HkdfSha256);
-    }
-
-    /// Tests that an unmarshal-marshal round-trip on an encapped key ends up at the same value
-    #[test]
-    fn test_encapped_marshal() {
-        test_case_encapped_marshal!(X25519HkdfSha256);
-        test_case_encapped_marshal!(DhP256HkdfSha256);
-    }
+    #[cfg(feature = "x25519-dalek")]
+    test_encapped_marshal!(test_encapped_marshal_x25519, crate::kem::X25519HkdfSha256);
+    #[cfg(feature = "p256")]
+    test_encapped_marshal!(test_encapped_marshal_p256, crate::kem::DhP256HkdfSha256);
 }

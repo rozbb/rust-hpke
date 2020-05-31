@@ -1,4 +1,3 @@
-use crate::prelude::*;
 use crate::{
     aead::{Aead, AeadCtx, AeadCtxR, AeadCtxS},
     kdf::{labeled_extract, Kdf as KdfTrait, LabeledExpand},
@@ -9,7 +8,7 @@ use crate::{
     HpkeError,
 };
 
-use byteorder::{BigEndian, WriteBytesExt};
+use byteorder::{BigEndian, ByteOrder};
 use digest::{generic_array::GenericArray, Digest};
 use rand::{CryptoRng, RngCore};
 
@@ -45,31 +44,47 @@ where
     Kem: KemTrait,
     O: OpMode<Kem::Kex>,
 {
+    // A helper function that writes to a buffer and returns a slice containing the unwritten
+    // portion. If this crate were allowed to use std, we'd just use std::io::Write instead.
+    fn write_to_buf<'a>(buf: &'a mut [u8], to_write: &[u8]) -> &'a mut [u8] {
+        buf[..to_write.len()].copy_from_slice(to_write);
+        &mut buf[to_write.len()..]
+    }
+
     // In KeySchedule(),
     //     ciphersuite = concat(encode_big_endian(kem_id, 2),
     //                          encode_big_endian(kdf_id, 2),
     //                          encode_big_endian(aead_id, 2))
     //     pskID_hash = LabeledExtract(zero(Nh), "pskID", pskID)
-    //     info_hash = LabeledExtract(zero(Nh), "info", info)
-    //     context = concat(ciphersuite, mode, pskID_hash, info_hash)
-    let context_bytes: Vec<u8> = {
-        let mut buf = Vec::new();
+    //     info_hash = LabeledExtract(zero(Nh), "info_hash", info)
+    //     schedule_context = concat(ciphersuite, mode, pskID_hash, info_hash)
 
-        // This relies on <Vec<u8> as Write>, which never errors, so unwrap() is justified
-        buf.write_u16::<BigEndian>(Kem::KEM_ID).unwrap();
-        buf.write_u16::<BigEndian>(Kdf::KDF_ID).unwrap();
-        buf.write_u16::<BigEndian>(A::AEAD_ID).unwrap();
+    // Pick a buffer to hold 3 u16s, a u8, and 2 digests, as described above
+    let mut buf = [0u8; 3 * 2 + 1 + 2 * 512];
+    let buf_len = buf.len();
 
-        buf.write_u8(mode.mode_id()).unwrap();
+    let sched_context: &[u8] = {
+        // Write the ciphersuite identifiers to the buffer. Forgive the explicit indexing.
+        BigEndian::write_u16(&mut buf[..2], Kem::KEM_ID);
+        BigEndian::write_u16(&mut buf[2..4], Kdf::KDF_ID);
+        BigEndian::write_u16(&mut buf[4..6], A::AEAD_ID);
+
+        //  Define a cursor with which to write to the above buffer
+        let mut cursor = &mut buf[6..];
+
+        // Use the helper function to write the mode identifier (1 byte, so endianness doesn't
+        // matter)
+        cursor = write_to_buf(cursor, &[mode.mode_id()]);
 
         let zeros = static_zeros::<Kdf>();
         let (psk_id_hash, _) = labeled_extract::<Kdf>(zeros, b"pskID_hash", mode.get_psk_id());
-        let (info_hash, _) = labeled_extract::<Kdf>(zeros, b"info", info);
+        let (info_hash, _) = labeled_extract::<Kdf>(zeros, b"info_hash", info);
 
-        buf.extend(psk_id_hash.as_slice());
-        buf.extend(info_hash.as_slice());
+        cursor = write_to_buf(cursor, psk_id_hash.as_slice());
+        cursor = write_to_buf(cursor, info_hash.as_slice());
 
-        buf
+        let bytes_written = buf_len - cursor.len();
+        &buf[..bytes_written]
     };
 
     // In KeySchedule(),
@@ -84,7 +99,7 @@ where
     // key-nonce pair.
     let (extracted_psk, _) =
         labeled_extract::<Kdf>(static_zeros::<Kdf>(), b"psk_hash", mode.get_psk_bytes());
-    let (_, secret_ctx) = labeled_extract::<Kdf>(&extracted_psk, b"zz", &shared_secret);
+    let (_, secret_ctx) = labeled_extract::<Kdf>(&extracted_psk, b"secret", &shared_secret);
 
     // Empty fixed-size buffers
     let mut key = crate::aead::AeadKey::<A>::default();
@@ -95,13 +110,13 @@ where
     // digest size of the hash function. Since these values are fixed at compile time, we don't
     // worry about it.
     secret_ctx
-        .labeled_expand(b"key", &context_bytes, key.as_mut_slice())
+        .labeled_expand(b"key", &sched_context, key.as_mut_slice())
         .expect("aead key len is way too big");
     secret_ctx
-        .labeled_expand(b"nonce", &context_bytes, nonce.as_mut_slice())
+        .labeled_expand(b"nonce", &sched_context, nonce.as_mut_slice())
         .expect("nonce len is way too big");
     secret_ctx
-        .labeled_expand(b"exp", &context_bytes, exporter_secret.as_mut_slice())
+        .labeled_expand(b"exp", &sched_context, exporter_secret.as_mut_slice())
         .expect("exporter secret len is way too big");
 
     AeadCtx::new(key, nonce, exporter_secret)
@@ -181,12 +196,9 @@ where
 mod test {
     use super::{setup_receiver, setup_sender};
     use crate::test_util::{aead_ctx_eq, gen_op_mode_pair, OpModeKind};
-    use crate::{
-        aead::{AesGcm128, AesGcm256, ChaCha20Poly1305},
-        kdf::{HkdfSha256, HkdfSha384, HkdfSha512},
-        kem::{Kem as KemTrait, X25519HkdfSha256},
-        kex::KeyExchange,
-    };
+    use crate::{aead::ChaCha20Poly1305, kdf::HkdfSha256, kem::Kem as KemTrait, kex::KeyExchange};
+
+    use rand::{rngs::StdRng, SeedableRng};
 
     /// This tests that `setup_sender` and `setup_receiver` derive the same context. We do this by
     /// testing that `gen_ctx_kem_pair` returns identical encryption contexts
@@ -199,7 +211,7 @@ mod test {
                 type Kem = $kem_ty;
                 type Kex = <Kem as KemTrait>::Kex;
 
-                let mut csprng = rand::thread_rng();
+                let mut csprng = StdRng::from_entropy();
 
                 let info = b"why would you think in a million years that that would actually work";
 
@@ -241,111 +253,109 @@ mod test {
         };
     }
 
+    #[cfg(feature = "x25519-dalek")]
     test_setup_correctness!(
-        test_setup_correctness_chacha_sha256,
+        test_setup_correctness_x25519,
         ChaCha20Poly1305,
         HkdfSha256,
-        X25519HkdfSha256
+        crate::kem::X25519HkdfSha256
     );
+
+    #[cfg(feature = "p256")]
     test_setup_correctness!(
-        test_setup_correctness_aes128_sha256,
-        AesGcm128,
-        HkdfSha256,
-        X25519HkdfSha256
-    );
-    test_setup_correctness!(
-        test_setup_correctness_aes256_sha256,
-        AesGcm256,
-        HkdfSha256,
-        X25519HkdfSha256
-    );
-    test_setup_correctness!(
-        test_setup_correctness_chacha_sha384,
+        test_setup_correctness_p256,
         ChaCha20Poly1305,
-        HkdfSha384,
-        X25519HkdfSha256
-    );
-    test_setup_correctness!(
-        test_setup_correctness_aes128_sha384,
-        AesGcm128,
-        HkdfSha384,
-        X25519HkdfSha256
-    );
-    test_setup_correctness!(
-        test_setup_correctness_aes256_sha384,
-        AesGcm256,
-        HkdfSha384,
-        X25519HkdfSha256
-    );
-    test_setup_correctness!(
-        test_setup_correctness_chacha_sha512,
-        ChaCha20Poly1305,
-        HkdfSha512,
-        X25519HkdfSha256
-    );
-    test_setup_correctness!(
-        test_setup_correctness_aes128_sha512,
-        AesGcm128,
-        HkdfSha512,
-        X25519HkdfSha256
-    );
-    test_setup_correctness!(
-        test_setup_correctness_aes256_sha512,
-        AesGcm256,
-        HkdfSha512,
-        X25519HkdfSha256
+        HkdfSha256,
+        crate::kem::DhP256HkdfSha256
     );
 
     /// Tests that using different input data gives you different encryption contexts
-    #[test]
-    fn test_setup_soundness() {
-        type A = ChaCha20Poly1305;
-        type Kdf = HkdfSha256;
-        type Kem = X25519HkdfSha256;
-        type Kex = <Kem as KemTrait>::Kex;
+    macro_rules! test_setup_soundness {
+        ($test_name:ident, $aead:ty, $kdf:ty, $kem:ty) => {
+            #[test]
+            fn $test_name() {
+                type A = $aead;
+                type Kdf = $kdf;
+                type Kem = $kem;
+                type Kex = <Kem as KemTrait>::Kex;
 
-        let mut csprng = rand::thread_rng();
+                let mut csprng = StdRng::from_entropy();
 
-        let info = b"why would you think in a million years that that would actually work";
+                let info = b"why would you think in a million years that that would actually work";
 
-        // Generate the receiver's long-term keypair
-        let (sk_recip, pk_recip) = <Kex as KeyExchange>::gen_keypair(&mut csprng);
+                // Generate the receiver's long-term keypair
+                let (sk_recip, pk_recip) = <Kex as KeyExchange>::gen_keypair(&mut csprng);
 
-        // Generate a mutually agreeing op mode pair
-        let (sender_mode, receiver_mode) = gen_op_mode_pair::<Kex, Kdf>(OpModeKind::Base);
+                // Generate a mutually agreeing op mode pair
+                let (sender_mode, receiver_mode) = gen_op_mode_pair::<Kex, Kdf>(OpModeKind::Base);
 
-        // Construct the sender's encryption context normally
-        let (encapped_key, sender_ctx) =
-            setup_sender::<A, _, Kem, _>(&sender_mode, &pk_recip, &info[..], &mut csprng).unwrap();
+                // Construct the sender's encryption context normally
+                let (encapped_key, sender_ctx) =
+                    setup_sender::<A, _, Kem, _>(&sender_mode, &pk_recip, &info[..], &mut csprng)
+                        .unwrap();
 
-        // Now make a receiver with the wrong info string and ensure it doesn't match the sender
-        let bad_info = b"something else";
-        let mut receiver_ctx =
-            setup_receiver::<_, _, Kem>(&receiver_mode, &sk_recip, &encapped_key, &bad_info[..])
+                // Now make a receiver with the wrong info string and ensure it doesn't match the
+                // sender
+                let bad_info = b"something else";
+                let mut receiver_ctx = setup_receiver::<_, _, Kem>(
+                    &receiver_mode,
+                    &sk_recip,
+                    &encapped_key,
+                    &bad_info[..],
+                )
                 .unwrap();
-        assert!(!aead_ctx_eq(&mut sender_ctx.clone(), &mut receiver_ctx));
+                assert!(!aead_ctx_eq(&mut sender_ctx.clone(), &mut receiver_ctx));
 
-        // Now make a receiver with the wrong secret key and ensure it doesn't match the sender
-        let (bad_sk, _) = <Kex as KeyExchange>::gen_keypair(&mut csprng);
-        let mut aead_ctx2 =
-            setup_receiver::<_, _, Kem>(&receiver_mode, &bad_sk, &encapped_key, &info[..]).unwrap();
-        assert!(!aead_ctx_eq(&mut sender_ctx.clone(), &mut aead_ctx2));
+                // Now make a receiver with the wrong secret key and ensure it doesn't match the
+                // sender
+                let (bad_sk, _) = <Kex as KeyExchange>::gen_keypair(&mut csprng);
+                let mut aead_ctx2 =
+                    setup_receiver::<_, _, Kem>(&receiver_mode, &bad_sk, &encapped_key, &info[..])
+                        .unwrap();
+                assert!(!aead_ctx_eq(&mut sender_ctx.clone(), &mut aead_ctx2));
 
-        // Now make a receiver with the wrong encapped key and ensure it doesn't match the sender.
-        // The reason `bad_encapped_key` is bad is because its underlying key is uniformly random,
-        // and therefore different from the key that the sender sent.
-        let (bad_encapped_key, _) =
-            setup_sender::<A, _, Kem, _>(&sender_mode, &pk_recip, &info[..], &mut csprng).unwrap();
-        let mut aead_ctx2 =
-            setup_receiver::<_, _, Kem>(&receiver_mode, &sk_recip, &bad_encapped_key, &info[..])
+                // Now make a receiver with the wrong encapped key and ensure it doesn't match the
+                // sender. The reason `bad_encapped_key` is bad is because its underlying key is
+                // uniformly random, and therefore different from the key that the sender sent.
+                let (bad_encapped_key, _) =
+                    setup_sender::<A, _, Kem, _>(&sender_mode, &pk_recip, &info[..], &mut csprng)
+                        .unwrap();
+                let mut aead_ctx2 = setup_receiver::<_, _, Kem>(
+                    &receiver_mode,
+                    &sk_recip,
+                    &bad_encapped_key,
+                    &info[..],
+                )
                 .unwrap();
-        assert!(!aead_ctx_eq(&mut sender_ctx.clone(), &mut aead_ctx2));
+                assert!(!aead_ctx_eq(&mut sender_ctx.clone(), &mut aead_ctx2));
 
-        // Now make sure that this test was a valid test by ensuring that doing everything the
-        // right way makes it pass
-        let mut aead_ctx2 =
-            setup_receiver::<_, _, Kem>(&receiver_mode, &sk_recip, &encapped_key, &info[..])
+                // Now make sure that this test was a valid test by ensuring that doing everything
+                // the right way makes it pass
+                let mut aead_ctx2 = setup_receiver::<_, _, Kem>(
+                    &receiver_mode,
+                    &sk_recip,
+                    &encapped_key,
+                    &info[..],
+                )
                 .unwrap();
-        assert!(aead_ctx_eq(&mut sender_ctx.clone(), &mut aead_ctx2));
+                assert!(aead_ctx_eq(&mut sender_ctx.clone(), &mut aead_ctx2));
+            }
+        };
     }
+
+    #[cfg(feature = "x25519-dalek")]
+    test_setup_soundness!(
+        test_setup_soundness_x25519,
+        ChaCha20Poly1305,
+        HkdfSha256,
+        crate::kem::X25519HkdfSha256
+    );
+
+    #[cfg(feature = "p256")]
+    test_setup_soundness!(
+        test_setup_soundness_p256,
+        ChaCha20Poly1305,
+        HkdfSha256,
+        crate::kem::DhP256HkdfSha256
+    );
 }

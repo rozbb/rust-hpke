@@ -1,6 +1,6 @@
 use crate::{prelude::*, util::static_zeros};
 
-use byteorder::{BigEndian, WriteBytesExt};
+use byteorder::{BigEndian, ByteOrder};
 use digest::{generic_array::GenericArray, BlockInput, Digest, FixedOutput, Input, Reset};
 use sha2::{Sha256, Sha384, Sha512};
 
@@ -115,9 +115,7 @@ impl<D: Input + BlockInput + FixedOutput + Reset + Default + Clone> LabeledExpan
 
         // Encode the output length in the info string
         let mut len_buf = [0u8; 2];
-        (&mut len_buf[..])
-            .write_u16::<BigEndian>(out.len() as u16)
-            .unwrap();
+        BigEndian::write_u16(&mut len_buf, out.len() as u16);
 
         let labeled_info: Vec<u8> = [&len_buf, RFC_STR, label, info].concat();
         self.expand(&labeled_info, out)

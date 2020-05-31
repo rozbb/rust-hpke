@@ -21,7 +21,7 @@ use hpke::{
     setup_receiver, setup_sender, EncappedKey, HpkeError, OpModeR, OpModeS,
 };
 
-use rand::{CryptoRng, RngCore};
+use rand::{rngs::StdRng, CryptoRng, RngCore, SeedableRng};
 
 trait AgileAeadCtxS {
     fn seal(&mut self, plaintext: &mut [u8], aad: &[u8]) -> Result<AgileAeadTag, HpkeError>;
@@ -786,7 +786,7 @@ fn agile_setup_receiver(
 }
 
 fn main() {
-    let mut csprng = rand::thread_rng();
+    let mut csprng = StdRng::from_entropy();
 
     let supported_aead_algs = &[
         AeadAlg::AesGcm128,

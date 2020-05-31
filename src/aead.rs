@@ -1,5 +1,5 @@
 use crate::{
-    kdf::Kdf,
+    kdf::{Kdf, LabeledExpand},
     kex::{Marshallable, Unmarshallable},
     setup::ExporterSecret,
     HpkeError,
@@ -195,7 +195,7 @@ impl<A: Aead, K: Kdf> AeadCtx<A, K> {
         // This call either succeeds or returns hkdf::InvalidLength (iff the buffer length is more
         // than 255x the digest size of the underlying hash function)
         hkdf_ctx
-            .expand(info, out_buf)
+            .labeled_expand(b"sec", info, out_buf)
             .map_err(|_| HpkeError::InvalidKdfLength)
     }
 }

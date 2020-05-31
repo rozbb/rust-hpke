@@ -16,14 +16,15 @@ extern crate alloc;
 // Re-export this version of generic_array, since that's what's used everywhere in this crate
 pub use digest::generic_array;
 
-// kat_tests requries "std" and serde
-#[cfg(all(test, feature = "std"))]
+// kat_tests tests all the implemented ciphersuites, and thus needs all the dependencies. It also
+// needs std for file IO.
+#[cfg(all(test, feature = "std", feature = "x25519-dalek", feature = "p256"))]
+mod kat_tests;
+
+// kat_tests requires serde
+#[cfg(all(test, feature = "std", feature = "x25519-dalek", feature = "p256"))]
 #[macro_use]
 extern crate serde_derive;
-
-// kat_tests requries "std" for file IO
-#[cfg(all(test, feature = "std"))]
-mod kat_tests;
 
 #[cfg(test)]
 mod test_util;

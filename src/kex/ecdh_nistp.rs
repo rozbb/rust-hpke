@@ -186,6 +186,8 @@ mod tests {
         KeyExchange, Marshallable, Unmarshallable,
     };
 
+    use rand::{rngs::StdRng, SeedableRng};
+
     // We need this in our marshal-unmarshal tests
     impl PartialEq for PrivateKey {
         fn eq(&self, other: &PrivateKey) -> bool {
@@ -281,7 +283,7 @@ mod tests {
     fn test_pubkey_marshal_correctness() {
         type Kex = DhP256;
 
-        let mut csprng = rand::thread_rng();
+        let mut csprng = StdRng::from_entropy();
 
         // We can't do the same thing as in the X25519 tests, since a completely random point is
         // not likely to lie on the curve. Instead, we just generate a random point, marshal it,
@@ -300,7 +302,7 @@ mod tests {
     fn test_dh_marshal_correctness() {
         type Kex = DhP256;
 
-        let mut csprng = rand::thread_rng();
+        let mut csprng = StdRng::from_entropy();
 
         // Make a random keypair and marshal it
         let (sk, pk) = Kex::gen_keypair(&mut csprng);

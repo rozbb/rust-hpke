@@ -16,16 +16,15 @@
 use hpke::{
     aead::{AeadTag, ChaCha20Poly1305},
     kdf::HkdfSha384,
-    kem::X25519HkdfSha256,
     EncappedKey, Kem as KemTrait, KeyExchange, Marshallable, OpModeR, OpModeS, Unmarshallable,
 };
 
-use rand;
+use rand::{rngs::StdRng, SeedableRng};
 
 const INFO_STR: &'static [u8] = b"example session";
 
 // These are the only algorithms we're gonna use for this example
-type Kem = X25519HkdfSha256;
+type Kem = hpke::kem::X25519HkdfSha256;
 type Aead = ChaCha20Poly1305;
 type Kdf = HkdfSha384;
 
@@ -37,7 +36,7 @@ fn server_init() -> (
     <Kex as KeyExchange>::PrivateKey,
     <Kex as KeyExchange>::PublicKey,
 ) {
-    let mut csprng = rand::thread_rng();
+    let mut csprng = StdRng::from_entropy();
     Kex::gen_keypair(&mut csprng)
 }
 
@@ -48,7 +47,7 @@ fn client_encrypt_msg(
     associated_data: &[u8],
     server_pk: &<Kex as KeyExchange>::PublicKey,
 ) -> (EncappedKey<Kex>, Vec<u8>, AeadTag<Aead>) {
-    let mut csprng = rand::thread_rng();
+    let mut csprng = StdRng::from_entropy();
 
     // Encapsulate a key and use the resulting shared secret to encrypt a message. The AEAD context
     // is what you use to encrypt.

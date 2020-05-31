@@ -84,70 +84,94 @@ mod test {
     use crate::{
         aead::ChaCha20Poly1305,
         kdf::HkdfSha256,
-        kem::{Kem as KemTrait, X25519HkdfSha256},
+        kem::Kem as KemTrait,
         kex::KeyExchange,
         op_mode::{OpModeR, OpModeS},
         test_util::gen_psk_bundle,
     };
 
-    /// Tests that `single_shot_open` can open a `single_shot_seal` ciphertext. This doens't need
-    /// to be tested for all ciphersuite combinations, since its correctness follows from the
-    /// correctness of `seal/open` and `setup_sender/setup_receiver`.
-    #[test]
-    fn test_single_shot_correctness() {
-        type A = ChaCha20Poly1305;
-        type Kd = HkdfSha256;
-        type Ke = X25519HkdfSha256;
-        type Kex = <Ke as KemTrait>::Kex;
+    use rand::{rngs::StdRng, SeedableRng};
 
-        let msg = b"Good night, a-ding ding ding ding ding";
-        let aad = b"Five four three two one";
+    macro_rules! test_single_shot_correctness {
+        ($test_name:ident, $aead:ty, $kdf:ty, $kem:ty) => {
+            /// Tests that `single_shot_open` can open a `single_shot_seal` ciphertext. This
+            /// doens't need to be tested for all ciphersuite combinations, since its correctness
+            /// follows from the correctness of `seal/open` and `setup_sender/setup_receiver`.
+            #[test]
+            fn $test_name() {
+                type A = $aead;
+                type Kdf = $kdf;
+                type Kem = $kem;
+                type Kex = <Kem as KemTrait>::Kex;
 
-        let mut csprng = rand::thread_rng();
+                let msg = b"Good night, a-ding ding ding ding ding";
+                let aad = b"Five four three two one";
 
-        // Set up an arbitrary info string, a random PSK, and an arbitrary PSK ID
-        let info = b"why would you think in a million years that that would actually work";
-        let psk_bundle = gen_psk_bundle::<Kd>();
+                let mut csprng = StdRng::from_entropy();
 
-        // Generate the sender's and receiver's long-term keypairs
-        let (sk_sender_id, pk_sender_id) = Kex::gen_keypair(&mut csprng);
-        let (sk_recip, pk_recip) = Kex::gen_keypair(&mut csprng);
+                // Set up an arbitrary info string, a random PSK, and an arbitrary PSK ID
+                let info = b"why would you think in a million years that that would actually work";
+                let psk_bundle = gen_psk_bundle::<Kdf>();
 
-        // Construct the sender's encryption context, and get an encapped key
-        let sender_mode =
-            OpModeS::<Kex, _>::AuthPsk((sk_sender_id, pk_sender_id.clone()), psk_bundle.clone());
+                // Generate the sender's and receiver's long-term keypairs
+                let (sk_sender_id, pk_sender_id) = Kex::gen_keypair(&mut csprng);
+                let (sk_recip, pk_recip) = Kex::gen_keypair(&mut csprng);
 
-        // Use the encapped key to derive the reciever's encryption context
-        let receiver_mode = OpModeR::<Kex, _>::AuthPsk(pk_sender_id, psk_bundle);
+                // Construct the sender's encryption context, and get an encapped key
+                let sender_mode = OpModeS::<Kex, _>::AuthPsk(
+                    (sk_sender_id, pk_sender_id.clone()),
+                    psk_bundle.clone(),
+                );
 
-        // Encrypt with the first context
-        let mut ciphertext = msg.clone();
-        let (encapped_key, tag) = single_shot_seal::<A, _, Ke, _>(
-            &sender_mode,
-            &pk_recip,
-            &info[..],
-            &mut ciphertext[..],
-            aad,
-            &mut csprng,
-        )
-        .expect("single_shot_seal() failed");
+                // Use the encapped key to derive the reciever's encryption context
+                let receiver_mode = OpModeR::<Kex, _>::AuthPsk(pk_sender_id, psk_bundle);
 
-        // Make sure seal() isn't a no-op
-        assert!(&ciphertext[..] != &msg[..]);
+                // Encrypt with the first context
+                let mut ciphertext = msg.clone();
+                let (encapped_key, tag) = single_shot_seal::<A, _, Kem, _>(
+                    &sender_mode,
+                    &pk_recip,
+                    &info[..],
+                    &mut ciphertext[..],
+                    aad,
+                    &mut csprng,
+                )
+                .expect("single_shot_seal() failed");
 
-        // Decrypt with the second context
-        single_shot_open::<A, _, Ke>(
-            &receiver_mode,
-            &sk_recip,
-            &encapped_key,
-            info,
-            &mut ciphertext[..],
-            aad,
-            &tag,
-        )
-        .expect("single_shot_open() failed");
-        // Change name for clarity
-        let decrypted = ciphertext;
-        assert_eq!(&decrypted[..], &msg[..]);
+                // Make sure seal() isn't a no-op
+                assert!(&ciphertext[..] != &msg[..]);
+
+                // Decrypt with the second context
+                single_shot_open::<A, _, Kem>(
+                    &receiver_mode,
+                    &sk_recip,
+                    &encapped_key,
+                    info,
+                    &mut ciphertext[..],
+                    aad,
+                    &tag,
+                )
+                .expect("single_shot_open() failed");
+                // Change name for clarity
+                let decrypted = ciphertext;
+                assert_eq!(&decrypted[..], &msg[..]);
+            }
+        };
     }
+
+    #[cfg(feature = "x25519-dalek")]
+    test_single_shot_correctness!(
+        test_single_shot_correctness_x25519,
+        ChaCha20Poly1305,
+        HkdfSha256,
+        crate::kem::X25519HkdfSha256
+    );
+
+    #[cfg(feature = "p256")]
+    test_single_shot_correctness!(
+        test_single_shot_correctness_p256,
+        ChaCha20Poly1305,
+        HkdfSha256,
+        crate::kem::DhP256HkdfSha256
+    );
 }
