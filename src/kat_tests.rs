@@ -3,7 +3,8 @@ use crate::{
     kdf::{HkdfSha256, HkdfSha384, HkdfSha512, Kdf as KdfTrait},
     kem::{encap_with_eph, DhP256HkdfSha256, Kem as KemTrait, X25519HkdfSha256},
     kex::{KeyExchange, Marshallable, Unmarshallable},
-    op_mode::{OpModeR, Psk, PskBundle},
+    op_mode::{OpModeR, PskBundle},
+    prelude::*,
     setup::setup_receiver,
 };
 
@@ -131,18 +132,18 @@ fn get_and_assert_keypair<Kex: KeyExchange>(
 /// Constructs an `OpModeR` from the given components. The variant constructed is determined solely
 /// by `mode_id`. This will panic if there is insufficient data to construct the variants specified
 /// by `mode_id`.
-fn make_op_mode_r<Kex: KeyExchange, Kdf: KdfTrait>(
+fn make_op_mode_r<'a, Kex: KeyExchange>(
     mode_id: u8,
     pk_sender_bytes: Option<Vec<u8>>,
-    psk: Option<Vec<u8>>,
-    psk_id: Option<Vec<u8>>,
-) -> OpModeR<Kex, Kdf> {
+    psk: Option<&'a [u8]>,
+    psk_id: Option<&'a [u8]>,
+) -> OpModeR<'a, Kex> {
     // Unmarshal the optional pubkey
     let pk =
         pk_sender_bytes.map(|bytes| <Kex as KeyExchange>::PublicKey::unmarshal(&bytes).unwrap());
     // Unmarshal the optinoal bundle
-    let bundle = psk.map(|bytes| PskBundle::<Kdf> {
-        psk: Psk::<Kdf>::from_bytes(bytes),
+    let bundle = psk.map(|bytes| PskBundle {
+        psk: bytes,
         psk_id: psk_id.unwrap(),
     });
 
@@ -193,7 +194,12 @@ fn test_case<A: Aead, Kdf: KdfTrait, Kem: KemTrait>(tv: MainTestVector) {
     );
 
     // We're going to test the encryption contexts. First, construct the appropriate OpMode.
-    let mode = make_op_mode_r(tv.mode, tv.pk_sender, tv.psk, tv.psk_id);
+    let mode = make_op_mode_r(
+        tv.mode,
+        tv.pk_sender,
+        tv.psk.as_ref().map(Vec::as_slice),
+        tv.psk_id.as_ref().map(Vec::as_slice),
+    );
     let mut aead_ctx = setup_receiver::<A, Kdf, Kem>(&mode, &sk_recip, &encapped_key, &tv.info)
         .expect("setup_receiver failed");
 
