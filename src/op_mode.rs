@@ -1,73 +1,30 @@
-use crate::prelude::*;
 use crate::{kdf::Kdf as KdfTrait, kex::KeyExchange, util::static_zeros};
 
-use core::marker::PhantomData;
-
-use zeroize::Zeroizing;
-
-/// A preshared key, i.e., a secret that the sender and recipient both know before any exchange has
-/// happened
-pub struct Psk<Kdf: KdfTrait> {
-    bytes: Zeroizing<Vec<u8>>,
-    marker: PhantomData<Kdf>,
-}
-
-impl<Kdf: KdfTrait> Psk<Kdf> {
-    /// Constructs a preshared key from bytes
-    pub fn from_bytes(bytes: Vec<u8>) -> Psk<Kdf> {
-        Psk {
-            bytes: Zeroizing::new(bytes),
-            marker: PhantomData,
-        }
-    }
-}
-
-// We can't use #[derive(Clone)] because the compiler thinks that K has to be Clone.
-impl<Kdf: KdfTrait> Clone for Psk<Kdf> {
-    fn clone(&self) -> Self {
-        // Do the obvious thing
-        Psk {
-            bytes: self.bytes.clone(),
-            marker: self.marker,
-        }
-    }
-}
-
 /// Contains preshared key bytes and an identifier
-pub struct PskBundle<Kdf: KdfTrait> {
+#[derive(Clone, Copy)]
+pub struct PskBundle<'a> {
     /// The preshared key
-    pub psk: Psk<Kdf>,
-    /// An bytestring that uniquely identifies this PSK
-    pub psk_id: Vec<u8>,
-}
-
-// We can't use #[derive(Clone)] because the compiler thinks that K has to be Clone.
-impl<Kdf: KdfTrait> Clone for PskBundle<Kdf> {
-    fn clone(&self) -> Self {
-        // Do the obvious thing
-        PskBundle {
-            psk: self.psk.clone(),
-            psk_id: self.psk_id.clone(),
-        }
-    }
+    pub psk: &'a [u8],
+    /// A bytestring that uniquely identifies this PSK
+    pub psk_id: &'a [u8],
 }
 
 /// The operation mode of the receiver's side of HPKE. This determines what information is folded
 /// into the encryption context derived in the `setup_receiver` functions. You can include a
 /// preshared key, the identity key of the sender, both, or neither.
-pub enum OpModeR<Kex: KeyExchange, Kdf: KdfTrait> {
+pub enum OpModeR<'a, Kex: KeyExchange> {
     /// No extra information included
     Base,
     /// A preshared key known to the sender and receiver
-    Psk(PskBundle<Kdf>),
+    Psk(PskBundle<'a>),
     /// The identity public key of the sender
     Auth(Kex::PublicKey),
     /// Both of the above
-    AuthPsk(Kex::PublicKey, PskBundle<Kdf>),
+    AuthPsk(Kex::PublicKey, PskBundle<'a>),
 }
 
 // Helper function for setup_receiver
-impl<'a, Kex: KeyExchange, Kdf: KdfTrait> OpModeR<Kex, Kdf> {
+impl<'a, Kex: KeyExchange> OpModeR<'a, Kex> {
     /// Returns the sender's identity pubkey if it's specified
     pub(crate) fn get_pk_sender_id(&self) -> Option<&Kex::PublicKey> {
         match self {
@@ -81,19 +38,19 @@ impl<'a, Kex: KeyExchange, Kdf: KdfTrait> OpModeR<Kex, Kdf> {
 /// The operation mode of the sender's side of HPKE. This determines what information is folded
 /// into the encryption context derived in the `setup_sender` functions. You can include a
 /// preshared key, the identity key of the sender, both, or neither.
-pub enum OpModeS<Kex: KeyExchange, Kdf: KdfTrait> {
+pub enum OpModeS<'a, Kex: KeyExchange> {
     /// No extra information included
     Base,
     /// A preshared key known to the sender and receiver
-    Psk(PskBundle<Kdf>),
+    Psk(PskBundle<'a>),
     /// The identity keypair of the sender
     Auth((Kex::PrivateKey, Kex::PublicKey)),
     /// Both of the above
-    AuthPsk((Kex::PrivateKey, Kex::PublicKey), PskBundle<Kdf>),
+    AuthPsk((Kex::PrivateKey, Kex::PublicKey), PskBundle<'a>),
 }
 
 // Helpers functions for setup_sender and testing
-impl<Kex: KeyExchange, Kdf: KdfTrait> OpModeS<Kex, Kdf> {
+impl<'a, Kex: KeyExchange> OpModeS<'a, Kex> {
     /// Returns the sender's identity pubkey if it's specified
     pub(crate) fn get_sender_id_keypair(&self) -> Option<&(Kex::PrivateKey, Kex::PublicKey)> {
         match self {
@@ -110,12 +67,12 @@ pub(crate) trait OpMode<Kex: KeyExchange> {
     /// Gets the mode ID (hardcoded based on variant)
     fn mode_id(&self) -> u8;
     /// If this is a PSK mode, returns the PSK. Otherwise returns zeros.
-    fn get_psk_bytes(&self) -> &[u8];
+    fn get_psk_bytes<Kdf: KdfTrait>(&self) -> &[u8];
     /// If this is a PSK mode, returns the PSK ID. Otherwise returns the empty string.
     fn get_psk_id(&self) -> &[u8];
 }
 
-impl<Kex: KeyExchange, Kdf: KdfTrait> OpMode<Kex> for OpModeR<Kex, Kdf> {
+impl<'a, Kex: KeyExchange> OpMode<Kex> for OpModeR<'a, Kex> {
     // Defined in draft02 §5.0
     fn mode_id(&self) -> u8 {
         match self {
@@ -128,11 +85,11 @@ impl<Kex: KeyExchange, Kdf: KdfTrait> OpMode<Kex> for OpModeR<Kex, Kdf> {
 
     // Returns the preshared key bytes if it's set in the mode, otherwise returns
     // [0u8; Kdf::HashImpl::OutputSize]
-    fn get_psk_bytes(&self) -> &[u8] {
+    fn get_psk_bytes<Kdf: KdfTrait>(&self) -> &[u8] {
         // draft02 §6.1: default_psk = zero(Nh)
         match self {
-            OpModeR::Psk(bundle) => &bundle.psk.bytes,
-            OpModeR::AuthPsk(_, bundle) => &bundle.psk.bytes,
+            OpModeR::Psk(bundle) => &bundle.psk,
+            OpModeR::AuthPsk(_, bundle) => &bundle.psk,
             _ => static_zeros::<Kdf>(),
         }
     }
@@ -150,7 +107,7 @@ impl<Kex: KeyExchange, Kdf: KdfTrait> OpMode<Kex> for OpModeR<Kex, Kdf> {
 
 // I know there's a bunch of code reuse here, but it's not so much that I feel the need to abstract
 // something away
-impl<Kex: KeyExchange, Kdf: KdfTrait> OpMode<Kex> for OpModeS<Kex, Kdf> {
+impl<'a, Kex: KeyExchange> OpMode<Kex> for OpModeS<'a, Kex> {
     // Defined in draft02 §5.0
     fn mode_id(&self) -> u8 {
         match self {
@@ -163,11 +120,11 @@ impl<Kex: KeyExchange, Kdf: KdfTrait> OpMode<Kex> for OpModeS<Kex, Kdf> {
 
     // Returns the preshared key bytes if it's set in the mode, otherwise returns
     // [0u8; Kdf::Hashfunction::OutputSize]
-    fn get_psk_bytes(&self) -> &[u8] {
+    fn get_psk_bytes<Kdf: KdfTrait>(&self) -> &[u8] {
         // draft02 §6.1: default_psk = zero(Nh)
         match self {
-            OpModeS::Psk(bundle) => &bundle.psk.bytes,
-            OpModeS::AuthPsk(_, bundle) => &bundle.psk.bytes,
+            OpModeS::Psk(bundle) => &bundle.psk,
+            OpModeS::AuthPsk(_, bundle) => &bundle.psk,
             _ => static_zeros::<Kdf>(),
         }
     }

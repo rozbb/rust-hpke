@@ -97,8 +97,11 @@ where
     //
     // Instead of `secret` we derive an HKDF context which we run .expand() on to derive the
     // key-nonce pair.
-    let (extracted_psk, _) =
-        labeled_extract::<Kdf>(static_zeros::<Kdf>(), b"psk_hash", mode.get_psk_bytes());
+    let (extracted_psk, _) = labeled_extract::<Kdf>(
+        static_zeros::<Kdf>(),
+        b"psk_hash",
+        mode.get_psk_bytes::<Kdf>(),
+    );
     let (_, secret_ctx) = labeled_extract::<Kdf>(&extracted_psk, b"secret", &shared_secret);
 
     // Empty fixed-size buffers
@@ -137,7 +140,7 @@ where
 /// encryption context. If an error happened during key exchange, returns
 /// `Err(HpkeError::InvalidKeyExchange)`. This is the only possible error.
 pub fn setup_sender<A, Kdf, Kem, R>(
-    mode: &OpModeS<Kem::Kex, Kdf>,
+    mode: &OpModeS<Kem::Kex>,
     pk_recip: &<Kem::Kex as KeyExchange>::PublicKey,
     info: &[u8],
     csprng: &mut R,
@@ -172,7 +175,7 @@ where
 /// On success, returns an encryption context. If an error happened during key exchange, returns
 /// `Err(HpkeError::InvalidKeyExchange)`. This is the only possible error.
 pub fn setup_receiver<A, Kdf, Kem>(
-    mode: &OpModeR<Kem::Kex, Kdf>,
+    mode: &OpModeR<Kem::Kex>,
     sk_recip: &<Kem::Kex as KeyExchange>::PrivateKey,
     encapped_key: &EncappedKey<Kem::Kex>,
     info: &[u8],
@@ -195,7 +198,7 @@ where
 #[cfg(test)]
 mod test {
     use super::{setup_receiver, setup_sender};
-    use crate::test_util::{aead_ctx_eq, gen_op_mode_pair, OpModeKind};
+    use crate::test_util::{aead_ctx_eq, gen_rand_buf, new_op_mode_pair, OpModeKind};
     use crate::{aead::ChaCha20Poly1305, kdf::HkdfSha256, kem::Kem as KemTrait, kex::KeyExchange};
 
     use rand::{rngs::StdRng, SeedableRng};
@@ -226,10 +229,12 @@ mod test {
                     OpModeKind::AuthPsk,
                 ] {
                     // Generate a mutually agreeing op mode pair
-                    let (sender_mode, receiver_mode) = gen_op_mode_pair::<Kex, Kdf>(*op_mode_kind);
+                    let (psk, psk_id) = (gen_rand_buf(), gen_rand_buf());
+                    let (sender_mode, receiver_mode) =
+                        new_op_mode_pair::<Kex, Kdf>(*op_mode_kind, &psk, &psk_id);
 
                     // Construct the sender's encryption context, and get an encapped key
-                    let (encapped_key, mut aead_ctx1) = setup_sender::<A, _, Kem, _>(
+                    let (encapped_key, mut aead_ctx1) = setup_sender::<A, Kdf, Kem, _>(
                         &sender_mode,
                         &pk_recip,
                         &info[..],
@@ -287,11 +292,13 @@ mod test {
                 let (sk_recip, pk_recip) = <Kex as KeyExchange>::gen_keypair(&mut csprng);
 
                 // Generate a mutually agreeing op mode pair
-                let (sender_mode, receiver_mode) = gen_op_mode_pair::<Kex, Kdf>(OpModeKind::Base);
+                let (psk, psk_id) = (gen_rand_buf(), gen_rand_buf());
+                let (sender_mode, receiver_mode) =
+                    new_op_mode_pair::<Kex, Kdf>(OpModeKind::Base, &psk, &psk_id);
 
                 // Construct the sender's encryption context normally
                 let (encapped_key, sender_ctx) =
-                    setup_sender::<A, _, Kem, _>(&sender_mode, &pk_recip, &info[..], &mut csprng)
+                    setup_sender::<A, Kdf, Kem, _>(&sender_mode, &pk_recip, &info[..], &mut csprng)
                         .unwrap();
 
                 // Now make a receiver with the wrong info string and ensure it doesn't match the
@@ -318,7 +325,7 @@ mod test {
                 // sender. The reason `bad_encapped_key` is bad is because its underlying key is
                 // uniformly random, and therefore different from the key that the sender sent.
                 let (bad_encapped_key, _) =
-                    setup_sender::<A, _, Kem, _>(&sender_mode, &pk_recip, &info[..], &mut csprng)
+                    setup_sender::<A, Kdf, Kem, _>(&sender_mode, &pk_recip, &info[..], &mut csprng)
                         .unwrap();
                 let mut aead_ctx2 = setup_receiver::<_, _, Kem>(
                     &receiver_mode,

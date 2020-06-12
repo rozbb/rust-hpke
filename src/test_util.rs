@@ -2,28 +2,18 @@ use crate::{
     aead::{Aead, AeadCtx, AeadCtxR, AeadCtxS, AeadKey, AeadNonce},
     kdf::Kdf as KdfTrait,
     kex::KeyExchange,
-    op_mode::{OpModeR, OpModeS, Psk, PskBundle},
+    op_mode::{OpModeR, OpModeS, PskBundle},
     setup::ExporterSecret,
 };
 
 use rand::{rngs::StdRng, Rng, RngCore, SeedableRng};
 
-/// Makes an random PSK bundle
-pub(crate) fn gen_psk_bundle<Kdf: KdfTrait>() -> PskBundle<Kdf> {
+/// Returns a random 32-byte buffer
+pub(crate) fn gen_rand_buf() -> [u8; 32] {
     let mut csprng = StdRng::from_entropy();
-
-    let psk = {
-        let mut buf = vec![0u8; 32];
-        csprng.fill_bytes(buf.as_mut_slice());
-        Psk::<Kdf>::from_bytes(buf)
-    };
-    let psk_id = {
-        let mut buf = [0u8; 32];
-        csprng.fill_bytes(&mut buf);
-        buf.to_vec()
-    };
-
-    PskBundle::<Kdf> { psk, psk_id }
+    let mut buf = [0u8; 32];
+    csprng.fill_bytes(&mut buf);
+    buf
 }
 
 /// Creates a pair of `AeadCtx`s without doing a key exchange
@@ -63,12 +53,14 @@ pub(crate) enum OpModeKind {
 }
 
 /// Makes an agreeing pair of `OpMode`s of the specified variant
-pub(crate) fn gen_op_mode_pair<Kex: KeyExchange, Kdf: KdfTrait>(
+pub(crate) fn new_op_mode_pair<'a, Kex: KeyExchange, Kdf: KdfTrait>(
     kind: OpModeKind,
-) -> (OpModeS<Kex, Kdf>, OpModeR<Kex, Kdf>) {
+    psk: &'a [u8],
+    psk_id: &'a [u8],
+) -> (OpModeS<'a, Kex>, OpModeR<'a, Kex>) {
     let mut csprng = StdRng::from_entropy();
     let (sk_sender_id, pk_sender_id) = Kex::gen_keypair(&mut csprng);
-    let psk_bundle = gen_psk_bundle::<Kdf>();
+    let psk_bundle = PskBundle { psk, psk_id };
 
     match kind {
         OpModeKind::Base => {
@@ -77,7 +69,7 @@ pub(crate) fn gen_op_mode_pair<Kex: KeyExchange, Kdf: KdfTrait>(
             (sender_mode, receiver_mode)
         }
         OpModeKind::Psk => {
-            let sender_mode = OpModeS::Psk(psk_bundle.clone());
+            let sender_mode = OpModeS::Psk(psk_bundle);
             let receiver_mode = OpModeR::Psk(psk_bundle);
             (sender_mode, receiver_mode)
         }
@@ -87,8 +79,7 @@ pub(crate) fn gen_op_mode_pair<Kex: KeyExchange, Kdf: KdfTrait>(
             (sender_mode, receiver_mode)
         }
         OpModeKind::AuthPsk => {
-            let sender_mode =
-                OpModeS::AuthPsk((sk_sender_id, pk_sender_id.clone()), psk_bundle.clone());
+            let sender_mode = OpModeS::AuthPsk((sk_sender_id, pk_sender_id.clone()), psk_bundle);
             let receiver_mode = OpModeR::AuthPsk(pk_sender_id, psk_bundle);
             (sender_mode, receiver_mode)
         }

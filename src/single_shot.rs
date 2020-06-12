@@ -24,7 +24,7 @@ use rand::{CryptoRng, RngCore};
 /// `Err(HpkeError::InvalidKeyExchange)`. If an unspecified error happened during encryption,
 /// returns `Err(HpkeError::Encryption)`. In this case, the contents of `plaintext` is undefined.
 pub fn single_shot_seal<A, Kdf, Kem, R>(
-    mode: &OpModeS<Kem::Kex, Kdf>,
+    mode: &OpModeS<Kem::Kex>,
     pk_recip: &<Kem::Kex as KeyExchange>::PublicKey,
     info: &[u8],
     plaintext: &mut [u8],
@@ -59,7 +59,7 @@ where
 /// `Err(HpkeError::InvalidKeyExchange)`. If an unspecified error happened during decryption,
 /// returns `Err(HpkeError::Encryption)`. In this case, the contents of `ciphertext` is undefined.
 pub fn single_shot_open<A, Kdf, Kem>(
-    mode: &OpModeR<Kem::Kex, Kdf>,
+    mode: &OpModeR<Kem::Kex>,
     sk_recip: &<Kem::Kex as KeyExchange>::PrivateKey,
     encapped_key: &EncappedKey<Kem::Kex>,
     info: &[u8],
@@ -86,8 +86,8 @@ mod test {
         kdf::HkdfSha256,
         kem::Kem as KemTrait,
         kex::KeyExchange,
-        op_mode::{OpModeR, OpModeS},
-        test_util::gen_psk_bundle,
+        op_mode::{OpModeR, OpModeS, PskBundle},
+        test_util::gen_rand_buf,
     };
 
     use rand::{rngs::StdRng, SeedableRng};
@@ -111,24 +111,28 @@ mod test {
 
                 // Set up an arbitrary info string, a random PSK, and an arbitrary PSK ID
                 let info = b"why would you think in a million years that that would actually work";
-                let psk_bundle = gen_psk_bundle::<Kdf>();
+                let (psk, psk_id) = (gen_rand_buf(), gen_rand_buf());
+                let psk_bundle = PskBundle {
+                    psk: &psk,
+                    psk_id: &psk_id,
+                };
 
                 // Generate the sender's and receiver's long-term keypairs
                 let (sk_sender_id, pk_sender_id) = Kex::gen_keypair(&mut csprng);
                 let (sk_recip, pk_recip) = Kex::gen_keypair(&mut csprng);
 
                 // Construct the sender's encryption context, and get an encapped key
-                let sender_mode = OpModeS::<Kex, _>::AuthPsk(
+                let sender_mode = OpModeS::<Kex>::AuthPsk(
                     (sk_sender_id, pk_sender_id.clone()),
                     psk_bundle.clone(),
                 );
 
                 // Use the encapped key to derive the reciever's encryption context
-                let receiver_mode = OpModeR::<Kex, _>::AuthPsk(pk_sender_id, psk_bundle);
+                let receiver_mode = OpModeR::<Kex>::AuthPsk(pk_sender_id, psk_bundle);
 
                 // Encrypt with the first context
                 let mut ciphertext = msg.clone();
-                let (encapped_key, tag) = single_shot_seal::<A, _, Kem, _>(
+                let (encapped_key, tag) = single_shot_seal::<A, Kdf, Kem, _>(
                     &sender_mode,
                     &pk_recip,
                     &info[..],
@@ -142,7 +146,7 @@ mod test {
                 assert!(&ciphertext[..] != &msg[..]);
 
                 // Decrypt with the second context
-                single_shot_open::<A, _, Kem>(
+                single_shot_open::<A, Kdf, Kem>(
                     &receiver_mode,
                     &sk_recip,
                     &encapped_key,

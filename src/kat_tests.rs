@@ -1,4 +1,3 @@
-use crate::prelude::*;
 use crate::{
     aead::{Aead, AeadTag, AesGcm128, AesGcm256, ChaCha20Poly1305},
     kdf::{HkdfSha256, HkdfSha384, HkdfSha512, Kdf as KdfTrait},
@@ -8,6 +7,7 @@ use crate::{
     setup::setup_receiver,
 };
 
+extern crate std;
 use std::fs::File;
 
 use hex;

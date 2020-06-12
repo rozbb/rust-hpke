@@ -48,7 +48,7 @@ pub use kem::{EncappedKey, Kem};
 #[doc(inline)]
 pub use kex::{KeyExchange, Marshallable, Unmarshallable};
 #[doc(inline)]
-pub use op_mode::{OpModeR, OpModeS, Psk, PskBundle};
+pub use op_mode::{OpModeR, OpModeS, PskBundle};
 #[doc(inline)]
 pub use setup::{setup_receiver, setup_sender};
 #[doc(inline)]

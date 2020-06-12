@@ -1,5 +1,5 @@
 use crate::{
-    kdf::{extract_and_expand, HkdfSha256, Kdf as KdfTrait},
+    kdf::{extract_and_expand, Kdf as KdfTrait},
     kex::{KeyExchange, Marshallable, Unmarshallable},
     HpkeError,
 };
@@ -24,7 +24,7 @@ pub struct X25519HkdfSha256 {}
 #[cfg(feature = "x25519-dalek")]
 impl Kem for X25519HkdfSha256 {
     type Kex = crate::kex::X25519;
-    type Kdf = HkdfSha256;
+    type Kdf = crate::kdf::HkdfSha256;
 
     // Section 7.1: DHKEM(Curve25519, HKDF-SHA256)
     const KEM_ID: u16 = 0x0020;
@@ -37,7 +37,7 @@ pub struct DhP256HkdfSha256 {}
 #[cfg(feature = "p256")]
 impl Kem for DhP256HkdfSha256 {
     type Kex = crate::kex::DhP256;
-    type Kdf = HkdfSha256;
+    type Kdf = crate::kdf::HkdfSha256;
 
     // Section 7.1: DHKEM(P256, HKDF-SHA256)
     const KEM_ID: u16 = 0x0010;
