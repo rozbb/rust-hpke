@@ -32,14 +32,20 @@ Here are all the primitives listed in the spec. The primitives with checked boxe
 Crate Features
 --------------
 
-This crate supports `no_std`. However, the `std` feature is enabled by default.
+Default flags: `x25519`, `p256`.
+
+Flag list:
+
+* `x25519` - Enables X25519-based KEMs
+* `p256` - Enables NIST P-256-based KEMs
+* `std` - Necessary for running known-answer tests. No need to enable unless you're debugging this crate.
 
 For info on how to omit or include feature flags, see the [cargo docs on features](https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html#choosing-features).
 
 Tests
 -----
 
-To run tests, execute `cargo test`. This includes known-answer tests, which test against `test-vector-COMMIT_ID.json`,where `COMMIT_ID` is the short commit of the version of the [spec](https://github.com/cfrg/draft-irtf-cfrg-hpke) that the test vectors came from. See the [reference implementation](https://github.com/bifurcation/hpke) for information on how to generate a test vector.
+To run all tests, execute `cargo test --all-features`. This includes known-answer tests, which test against `test-vector-COMMIT_ID.json`,where `COMMIT_ID` is the short commit of the version of the [spec](https://github.com/cfrg/draft-irtf-cfrg-hpke) that the test vectors came from. See the [reference implementation](https://github.com/bifurcation/hpke) for information on how to generate a test vector.
 
 Examples
 --------
@@ -57,7 +63,7 @@ What's next
 -----------
 
 * Add support for more KEMs
-* Make feature flags for primitives, so you don't have bloat from algorithms you don't need
+* Remove allocation once and for all
 
 License
 -------
