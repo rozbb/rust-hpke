@@ -12,6 +12,22 @@ pub trait Kem {
     type Kdf: KdfTrait;
 
     const KEM_ID: u16;
+
+    /// Deterministically derives a keypair from the given input keying material
+    ///
+    /// Requirements
+    /// ============
+    /// This keying material SHOULD have as many bits of entropy as the bit length of a secret key,
+    /// i.e., `8* Self::Kex::PrivateKey::size()`. For X25519 and P-256, this is 32 bytes of
+    /// entropy.
+    fn derive_keypair(
+        ikm: &[u8],
+    ) -> (
+        <Self::Kex as KeyExchange>::PrivateKey,
+        <Self::Kex as KeyExchange>::PublicKey,
+    ) {
+        Self::Kex::derive_keypair::<Self::Kdf>(ikm)
+    }
 }
 
 // Kem is also used as a type parameter everywhere. To avoid confusion, alias it

@@ -1,10 +1,10 @@
 use crate::{
+    kdf::{labeled_extract, Kdf as KdfTrait},
     kex::{KeyExchange, Marshallable, Unmarshallable},
     HpkeError,
 };
 
 use digest::generic_array::{typenum, GenericArray};
-use rand::{CryptoRng, RngCore};
 use subtle::ConstantTimeEq;
 
 // We wrap the types in order to abstract away the dalek dep
@@ -85,14 +85,6 @@ impl KeyExchange for X25519 {
     type PrivateKey = PrivateKey;
     type KexResult = KexResult;
 
-    /// Generates an X25519 keypair
-    fn gen_keypair<R: CryptoRng + RngCore>(csprng: &mut R) -> (PrivateKey, PublicKey) {
-        let sk = x25519_dalek::StaticSecret::new(csprng);
-        let pk = x25519_dalek::PublicKey::from(&sk);
-
-        (PrivateKey(sk), PublicKey(pk))
-    }
-
     /// Converts an X25519 private key to a public key
     fn sk_to_pk(sk: &PrivateKey) -> PublicKey {
         PublicKey(x25519_dalek::PublicKey::from(&sk.0))
@@ -109,6 +101,30 @@ impl KeyExchange for X25519 {
         } else {
             Ok(KexResult(res))
         }
+    }
+
+    // From the DeriveKeyPair section:
+    //   def DeriveKeyPair(ikm):
+    //     prk = LabeledExtract(zero(0), desc, ikm)
+    //     sk = Expand(prk, zero(0), Nsk)
+    //     return (sk, pk(sk))
+    /// PRIVATE USE ONLY
+    ///
+    /// For a function you can actually use, see `kem::Kem::derive_keypair`.
+    ///
+    /// Deterministically derives a keypair from the given input keying material. This keying
+    /// material SHOULD have as many bits of entropy as the bit length of a secret key, i.e., 256.
+    fn derive_keypair<Kdf: KdfTrait>(ikm: &[u8]) -> (PrivateKey, PublicKey) {
+        let desc = b"x25519";
+        let (_, hkdf_ctx) = labeled_extract::<Kdf>(&[], desc, ikm);
+        // The buffer we hold the candidate scalar bytes in. This is the size of a private key.
+        let mut buf = [0u8; 32];
+        hkdf_ctx.expand(&[], &mut buf).unwrap();
+
+        let sk = x25519_dalek::StaticSecret::from(buf);
+        let pk = x25519_dalek::PublicKey::from(&sk);
+
+        (PrivateKey(sk), PublicKey(pk))
     }
 }
 

@@ -1,7 +1,10 @@
 use crate::{
+    kdf::{labeled_extract, Kdf as KdfTrait},
     kex::{KeyExchange, Marshallable, Unmarshallable},
     HpkeError,
 };
+
+use core::convert::TryInto;
 
 use digest::generic_array::GenericArray;
 use p256::{
@@ -12,7 +15,6 @@ use p256::{
     },
     NistP256,
 };
-use rand::{CryptoRng, RngCore};
 use subtle::ConstantTimeEq;
 
 /// An ECDH-P256 public key
@@ -135,27 +137,6 @@ impl KeyExchange for DhP256 {
     type PrivateKey = PrivateKey;
     type KexResult = KexResult;
 
-    /// Generates an P256 keypair
-    fn gen_keypair<R: CryptoRng + RngCore>(csprng: &mut R) -> (PrivateKey, PublicKey) {
-        // Generate a random scalar. Since some choices might be out of range, just keep generating
-        // until we get a valid one.
-        let mut scalar;
-        loop {
-            let mut bytes = [0u8; 32];
-            csprng.fill_bytes(&mut bytes);
-            scalar = Scalar::from_bytes(bytes);
-            if scalar.is_some().into() {
-                break;
-            }
-        }
-
-        // Wrap the scalar and derive its pubkey
-        let sk = PrivateKey(scalar.unwrap());
-        let pk = Self::sk_to_pk(&sk);
-
-        (sk, pk)
-    }
-
     /// Converts an P256 private key to a public key
     fn sk_to_pk(sk: &PrivateKey) -> PublicKey {
         let pk = p256::arithmetic::ProjectivePoint::generator() * &sk.0;
@@ -176,6 +157,61 @@ impl KeyExchange for DhP256 {
         // affine representation), and sk is not 0 mod p (due to the invariant we keep on
         // PrivateKeys)
         Ok(KexResult(dh_res_proj.to_affine().unwrap()))
+    }
+
+    // From the DeriveKeyPair section
+    //   def DeriveKeyPair(ikm):
+    //     prk = LabeledExtract(zero(0), desc, ikm)
+    //     sk = 0
+    //     counter = 1
+    //     while sk == 0 or sk >= order:
+    //       label = concat("candidate ", encode_big_endian(counter, 1))
+    //       bytes = Expand(prk, label, Nsk)
+    //       bytes[0] = bytes[0] & bitmask
+    //       sk = decode_big_endian(bytes)
+    //       counter = counter + 1
+    //     return (sk, pk(sk))
+    //
+    /// PRIVATE USE ONLY
+    ///
+    /// For a function you can actually use, see `kem::Kem::derive_keypair`.
+    ///
+    /// Deterministically derives a keypair from the given input keying material. This keying
+    /// material SHOULD have as many bits of entropy as the bit length of a secret key, i.e., 256.
+    fn derive_keypair<Kdf: KdfTrait>(ikm: &[u8]) -> (PrivateKey, PublicKey) {
+        let desc = b"p-256";
+        let (_, hkdf_ctx) = labeled_extract::<Kdf>(&[], desc, ikm);
+
+        // Iteration counter
+        let mut counter = 1usize;
+        // HKDF label. The X is replaced with the iteration number
+        let mut label = [0u8; 11];
+        label.copy_from_slice(b"candidate X");
+        // The buffer we hold the candidate scalar bytes in. This is the size of a private key.
+        let mut buf = [0u8; 32];
+
+        loop {
+            // Construct the HDKF label. The last character the counter as a byte.
+            // This unwrap() should never ever trigger. The likelihood that we get 255 bad samples in a
+            // row for p256 is 2^-8160.
+            label[label.len() - 1] = counter.try_into().unwrap();
+            // This unwrap is fine too. It only triggers if buf is way too big. It's only 32 bytes.
+            hkdf_ctx.expand(&label, &mut buf).unwrap();
+
+            // Try to convert to a scalar
+            let sk = Scalar::from_bytes(buf);
+
+            // If the conversion succeeded, return the keypair
+            if sk.is_some().into() {
+                let sk = PrivateKey(sk.unwrap());
+                let pk = Self::sk_to_pk(&sk);
+                return (sk, pk);
+            } else {
+                // The conversion failed. Increment the counter and try again. It is really
+                // unlikely (2^-32) that the inside of this loop ever runs more than once.
+                counter += 1;
+            }
+        }
     }
 }
 
