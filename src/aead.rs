@@ -7,7 +7,7 @@ use crate::{
 
 use core::u8;
 
-use aead::{Aead as BaseAead, NewAead as BaseNewAead};
+use aead::{AeadInPlace as BaseAead, NewAead as BaseNewAead};
 use digest::generic_array::GenericArray;
 use hkdf::Hkdf;
 
@@ -175,7 +175,7 @@ impl<A: Aead, K: Kdf> AeadCtx<A, K> {
     ) -> AeadCtx<A, K> {
         AeadCtx {
             overflowed: false,
-            encryptor: <A::AeadImpl as aead::NewAead>::new(key),
+            encryptor: <A::AeadImpl as aead::NewAead>::new(&key),
             nonce,
             exporter_secret,
             seq: <Seq<A> as Default>::default(),
