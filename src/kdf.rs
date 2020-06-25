@@ -1,7 +1,7 @@
 use crate::{prelude::*, util::static_zeros};
 
 use byteorder::{BigEndian, ByteOrder};
-use digest::{generic_array::GenericArray, BlockInput, Digest, FixedOutput, Input, Reset};
+use digest::{generic_array::GenericArray, BlockInput, Digest, FixedOutput, Reset, Update};
 use sha2::{Sha256, Sha384, Sha512};
 
 // This has a space because LabeledExtract calls for a space between the RFC string and the label
@@ -12,7 +12,7 @@ const RFC_STR: &[u8] = b"RFCXXXX ";
 /// Represents key derivation functionality
 pub trait Kdf {
     /// The underlying hash function
-    type HashImpl: Digest + Input + BlockInput + FixedOutput + Reset + Default + Clone;
+    type HashImpl: Digest + Update + BlockInput + FixedOutput + Reset + Default + Clone;
 
     /// The algorithm identifier for a KDF implementation
     const KDF_ID: u16;
@@ -97,7 +97,7 @@ pub(crate) trait LabeledExpand {
     ) -> Result<(), hkdf::InvalidLength>;
 }
 
-impl<D: Input + BlockInput + FixedOutput + Reset + Default + Clone> LabeledExpand
+impl<D: Update + BlockInput + FixedOutput + Reset + Default + Clone> LabeledExpand
     for hkdf::Hkdf<D>
 {
     // def LabeledExpand(PRK, label, info, L):
