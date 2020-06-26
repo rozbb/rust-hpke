@@ -169,13 +169,13 @@ impl<A: Aead, K: Kdf> Clone for AeadCtx<A, K> {
 impl<A: Aead, K: Kdf> AeadCtx<A, K> {
     /// Makes an AeadCtx from a raw key and nonce
     pub(crate) fn new(
-        key: AeadKey<A>,
+        key: &AeadKey<A>,
         nonce: AeadNonce<A>,
         exporter_secret: ExporterSecret<K>,
     ) -> AeadCtx<A, K> {
         AeadCtx {
             overflowed: false,
-            encryptor: <A::AeadImpl as aead::NewAead>::new(&key),
+            encryptor: <A::AeadImpl as aead::NewAead>::new(key),
             nonce,
             exporter_secret,
             seq: <Seq<A> as Default>::default(),

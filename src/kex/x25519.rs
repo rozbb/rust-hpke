@@ -1,9 +1,10 @@
 use crate::{
-    kdf::{labeled_extract, Kdf as KdfTrait},
+    kdf::{labeled_extract, Kdf as KdfTrait, LabeledExpand},
     kex::{KeyExchange, Marshallable, Unmarshallable},
     HpkeError,
 };
 
+use byteorder::{BigEndian, ByteOrder};
 use digest::generic_array::{typenum, GenericArray};
 use subtle::ConstantTimeEq;
 
@@ -103,23 +104,32 @@ impl KeyExchange for X25519 {
         }
     }
 
-    // From the DeriveKeyPair section:
-    //   def DeriveKeyPair(ikm):
-    //     prk = LabeledExtract(zero(0), desc, ikm)
-    //     sk = Expand(prk, zero(0), Nsk)
-    //     return (sk, pk(sk))
+    // def DeriveKeyPair(ikm):
+    //   dkp_prk = LabeledExtract(
+    //     zero(0),
+    //     concat(I2OSP(kem_id, 2), "dkp_prk"),
+    //     ikm
+    //   )
+    //   sk = LabeledExpand(dkp_prk, "sk", zero(0), Nsk)
+    //   return (sk, pk(sk))
     /// PRIVATE USE ONLY
     ///
     /// For a function you can actually use, see `kem::Kem::derive_keypair`.
     ///
-    /// Deterministically derives a keypair from the given input keying material. This keying
-    /// material SHOULD have as many bits of entropy as the bit length of a secret key, i.e., 256.
-    fn derive_keypair<Kdf: KdfTrait>(ikm: &[u8]) -> (PrivateKey, PublicKey) {
-        let desc = b"x25519";
-        let (_, hkdf_ctx) = labeled_extract::<Kdf>(&[], desc, ikm);
+    /// Deterministically derives a keypair from the given input keying material and KEM ID. This
+    /// keying material SHOULD have as many bits of entropy as the bit length of a secret key,
+    /// i.e., 256.
+    fn derive_keypair<Kdf: KdfTrait>(ikm: &[u8], kem_id: u16) -> (PrivateKey, PublicKey) {
+        // Write the label into a byte buffer and extract from the IKM
+        let (_, hkdf_ctx) = {
+            // The XX is a placeholder for the 16-bit label (which is the KEM ID)
+            let mut label_bytes = *b"XXdkp_prk";
+            BigEndian::write_u16(&mut label_bytes[..2], kem_id);
+            labeled_extract::<Kdf>(&[], &label_bytes, ikm)
+        };
         // The buffer we hold the candidate scalar bytes in. This is the size of a private key.
         let mut buf = [0u8; 32];
-        hkdf_ctx.expand(&[], &mut buf).unwrap();
+        hkdf_ctx.labeled_expand(b"sk", &[], &mut buf).unwrap();
 
         let sk = x25519_dalek::StaticSecret::from(buf);
         let pk = x25519_dalek::PublicKey::from(&sk);

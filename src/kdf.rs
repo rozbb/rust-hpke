@@ -1,4 +1,4 @@
-use crate::{prelude::*, util::static_zeros};
+use crate::{kem::Kem as KemTrait, prelude::*};
 
 use byteorder::{BigEndian, ByteOrder};
 use digest::{generic_array::GenericArray, BlockInput, Digest, FixedOutput, Reset, Update};
@@ -52,21 +52,32 @@ impl KdfTrait for HkdfSha512 {
 }
 
 // def ExtractAndExpand(dh, kemContext):
-//   prk = LabeledExtract(zero(Nh), "dh", dh)
-//   return LabeledExpand(prk, "prk", kemContext, Nzz)
+//   eae_prk = LabeledExtract(zero(0),
+//                            concat(I2OSP(kem_id, 2), "eae_prk"),
+//                            dh)
+//   return LabeledExpand(eae_prk,
+//                        concat(I2OSP(kem_id, 2), "zz"),
+//                        kemContext,
+//                        Nzz)
 /// Uses the given IKM to extract a secret, and then uses that secret, plus the given info string,
 /// to expand to the output buffer
-pub(crate) fn extract_and_expand<Kdf: KdfTrait>(
+pub(crate) fn extract_and_expand<Kem: KemTrait>(
     ikm: &[u8],
     info: &[u8],
     out: &mut [u8],
 ) -> Result<(), hkdf::InvalidLength> {
-    // The salt is a zero array of length Nh
-    let salt = static_zeros::<Kdf>();
+    // Construct the labels
+    let extract_label = {
+        // XX is a a placeholder for the 16-bit KEM ID
+        let mut buf = *b"XXeae_prk";
+        BigEndian::write_u16(&mut buf[..2], Kem::KEM_ID);
+        buf
+    };
+
     // Extract using given IKM
-    let (_, hkdf_ctx) = labeled_extract::<Kdf>(&salt, b"dh", ikm);
+    let (_, hkdf_ctx) = labeled_extract::<Kem::Kdf>(&[], &extract_label[..], ikm);
     // Expand using given info string
-    hkdf_ctx.labeled_expand(b"prk", info, out)
+    hkdf_ctx.labeled_expand(b"zz", info, out)
 }
 
 // def LabeledExtract(salt, label, IKM):
@@ -101,8 +112,7 @@ impl<D: Update + BlockInput + FixedOutput + Reset + Default + Clone> LabeledExpa
     for hkdf::Hkdf<D>
 {
     // def LabeledExpand(PRK, label, info, L):
-    //   labeledInfo = concat(encode_big_endian(L, 2),
-    //                         "RFCXXXX ", label, info)
+    //   labeledInfo = concat(I2OSP(L, 2), "RFCXXXX ", label, info)
     //   return Expand(PRK, labeledInfo, L)
     fn labeled_expand(
         &self,

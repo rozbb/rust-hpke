@@ -97,11 +97,8 @@ where
     //
     // Instead of `secret` we derive an HKDF context which we run .expand() on to derive the
     // key-nonce pair.
-    let (extracted_psk, _) = labeled_extract::<Kdf>(
-        static_zeros::<Kdf>(),
-        b"psk_hash",
-        mode.get_psk_bytes::<Kdf>(),
-    );
+    let (extracted_psk, _) =
+        labeled_extract::<Kdf>(static_zeros::<Kdf>(), b"psk_hash", mode.get_psk_bytes());
     let (_, secret_ctx) = labeled_extract::<Kdf>(&extracted_psk, b"secret", &shared_secret);
 
     // Empty fixed-size buffers
@@ -122,7 +119,7 @@ where
         .labeled_expand(b"exp", &sched_context, exporter_secret.as_mut_slice())
         .expect("exporter secret len is way too big");
 
-    AeadCtx::new(key, nonce, exporter_secret)
+    AeadCtx::new(&key, nonce, exporter_secret)
 }
 
 // From draft02 §6.5:

@@ -34,7 +34,10 @@ pub trait KeyExchange {
 
     fn kex(sk: &Self::PrivateKey, pk: &Self::PublicKey) -> Result<Self::KexResult, HpkeError>;
 
-    fn derive_keypair<Kdf: KdfTrait>(ikm: &[u8]) -> (Self::PrivateKey, Self::PublicKey);
+    fn derive_keypair<Kdf: KdfTrait>(
+        ikm: &[u8],
+        context: u16,
+    ) -> (Self::PrivateKey, Self::PublicKey);
 
     /// Generates a random keypair using the given RNG
     fn gen_keypair<R: CryptoRng + RngCore>(csprng: &mut R) -> (Self::PrivateKey, Self::PublicKey) {
@@ -44,7 +47,7 @@ pub trait KeyExchange {
         // Fill it with randomness
         csprng.fill_bytes(&mut ikm);
         // Run derive_keypair. We use SHA-512 to satisfy any security level
-        Self::derive_keypair::<HkdfSha512>(&ikm)
+        Self::derive_keypair::<HkdfSha512>(&ikm, 0)
     }
 }
 

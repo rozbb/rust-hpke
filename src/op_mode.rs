@@ -1,4 +1,4 @@
-use crate::{kdf::Kdf as KdfTrait, kex::KeyExchange, util::static_zeros};
+use crate::kex::KeyExchange;
 
 /// Contains preshared key bytes and an identifier
 #[derive(Clone, Copy)]
@@ -62,12 +62,12 @@ impl<'a, Kex: KeyExchange> OpModeS<'a, Kex> {
 }
 
 /// Represents the convenience methods necessary for getting default values out of the operation
-/// mode. These are defined in draft02 §6.1.
+/// mode
 pub(crate) trait OpMode<Kex: KeyExchange> {
     /// Gets the mode ID (hardcoded based on variant)
     fn mode_id(&self) -> u8;
-    /// If this is a PSK mode, returns the PSK. Otherwise returns zeros.
-    fn get_psk_bytes<Kdf: KdfTrait>(&self) -> &[u8];
+    /// If this is a PSK mode, returns the PSK. Otherwise returns the empty string.
+    fn get_psk_bytes(&self) -> &[u8];
     /// If this is a PSK mode, returns the PSK ID. Otherwise returns the empty string.
     fn get_psk_id(&self) -> &[u8];
 }
@@ -85,22 +85,22 @@ impl<'a, Kex: KeyExchange> OpMode<Kex> for OpModeR<'a, Kex> {
 
     // Returns the preshared key bytes if it's set in the mode, otherwise returns
     // [0u8; Kdf::HashImpl::OutputSize]
-    fn get_psk_bytes<Kdf: KdfTrait>(&self) -> &[u8] {
-        // draft02 §6.1: default_psk = zero(Nh)
+    fn get_psk_bytes(&self) -> &[u8] {
+        // default_psk = zero(0)
         match self {
             OpModeR::Psk(bundle) => &bundle.psk,
             OpModeR::AuthPsk(_, bundle) => &bundle.psk,
-            _ => static_zeros::<Kdf>(),
+            _ => &[],
         }
     }
 
     // Returns the preshared key ID if it's set in the mode, otherwise returns the emtpy string
     fn get_psk_id(&self) -> &[u8] {
-        // draft02 §6.1: default_pskID = zero(0)
+        // default_pskID = zero(0)
         match self {
             OpModeR::Psk(p) => &p.psk_id,
             OpModeR::AuthPsk(_, p) => &p.psk_id,
-            _ => b"",
+            _ => &[],
         }
     }
 }
@@ -120,22 +120,22 @@ impl<'a, Kex: KeyExchange> OpMode<Kex> for OpModeS<'a, Kex> {
 
     // Returns the preshared key bytes if it's set in the mode, otherwise returns
     // [0u8; Kdf::Hashfunction::OutputSize]
-    fn get_psk_bytes<Kdf: KdfTrait>(&self) -> &[u8] {
-        // draft02 §6.1: default_psk = zero(Nh)
+    fn get_psk_bytes(&self) -> &[u8] {
+        // default_psk = zero(0)
         match self {
             OpModeS::Psk(bundle) => &bundle.psk,
             OpModeS::AuthPsk(_, bundle) => &bundle.psk,
-            _ => static_zeros::<Kdf>(),
+            _ => &[],
         }
     }
 
     // Returns the preshared key ID if it's set in the mode, otherwise returns the emtpy string
     fn get_psk_id(&self) -> &[u8] {
-        // draft02 §6.1: default_pskID = zero(0)
+        // default_pskID = zero(0)
         match self {
             OpModeS::Psk(p) => &p.psk_id,
             OpModeS::AuthPsk(_, p) => &p.psk_id,
-            _ => b"",
+            _ => &[],
         }
     }
 }

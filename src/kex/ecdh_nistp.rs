@@ -1,11 +1,10 @@
 use crate::{
-    kdf::{labeled_extract, Kdf as KdfTrait},
+    kdf::{labeled_extract, Kdf as KdfTrait, LabeledExpand},
     kex::{KeyExchange, Marshallable, Unmarshallable},
     HpkeError,
 };
 
-use core::convert::TryInto;
-
+use byteorder::{BigEndian, ByteOrder};
 use digest::generic_array::GenericArray;
 use p256::{
     arithmetic::{AffinePoint, ProjectivePoint, Scalar},
@@ -161,14 +160,19 @@ impl KeyExchange for DhP256 {
 
     // From the DeriveKeyPair section
     //   def DeriveKeyPair(ikm):
-    //     prk = LabeledExtract(zero(0), desc, ikm)
+    //     dkp_prk = LabeledExtract(
+    //       zero(0),
+    //       concat(I2OSP(kem_id, 2), "dkp_prk"),
+    //       ikm
+    //     )
     //     sk = 0
-    //     counter = 1
+    //     counter = 0
     //     while sk == 0 or sk >= order:
-    //       label = concat("candidate ", encode_big_endian(counter, 1))
-    //       bytes = Expand(prk, label, Nsk)
+    //       if counter > 255:
+    //         raise DeriveKeyPairError
+    //       bytes = LabeledExpand(dkp_prk, "candidate", I2OSP(counter, 1), Nsk)
     //       bytes[0] = bytes[0] & bitmask
-    //       sk = decode_big_endian(bytes)
+    //       sk = OS2IP(bytes)
     //       counter = counter + 1
     //     return (sk, pk(sk))
     //
@@ -176,27 +180,28 @@ impl KeyExchange for DhP256 {
     ///
     /// For a function you can actually use, see `kem::Kem::derive_keypair`.
     ///
-    /// Deterministically derives a keypair from the given input keying material. This keying
-    /// material SHOULD have as many bits of entropy as the bit length of a secret key, i.e., 256.
-    fn derive_keypair<Kdf: KdfTrait>(ikm: &[u8]) -> (PrivateKey, PublicKey) {
-        let desc = b"p-256";
-        let (_, hkdf_ctx) = labeled_extract::<Kdf>(&[], desc, ikm);
+    /// Deterministically derives a keypair from the given input keying material and KEM ID. This
+    /// keying material SHOULD have as many bits of entropy as the bit length of a secret key,
+    /// i.e., 256.
+    fn derive_keypair<Kdf: KdfTrait>(ikm: &[u8], kem_id: u16) -> (PrivateKey, PublicKey) {
+        // Write the label into a byte buffer and extract from the IKM
+        let (_, hkdf_ctx) = {
+            // The XX is a placeholder for the 16-bit label (which is the KEM ID)
+            let mut label_bytes = *b"XXdkp_prk";
+            BigEndian::write_u16(&mut label_bytes[..2], kem_id);
+            labeled_extract::<Kdf>(&[], &label_bytes, ikm)
+        };
 
-        // Iteration counter
-        let mut counter = 1usize;
-        // HKDF label. The X is replaced with the iteration number
-        let mut label = [0u8; 11];
-        label.copy_from_slice(b"candidate X");
         // The buffer we hold the candidate scalar bytes in. This is the size of a private key.
         let mut buf = [0u8; 32];
 
-        loop {
-            // Construct the HDKF label. The last character the counter as a byte.
-            // This unwrap() should never ever trigger. The likelihood that we get 255 bad samples in a
-            // row for p256 is 2^-8160.
-            label[label.len() - 1] = counter.try_into().unwrap();
-            // This unwrap is fine too. It only triggers if buf is way too big. It's only 32 bytes.
-            hkdf_ctx.expand(&label, &mut buf).unwrap();
+        // Try to generate a key 256 times. Practically, this will succeed and return early on the
+        // first iteration.
+        for counter in 0u8..=255 {
+            // This unwrap is fine. It only triggers if buf is way too big. It's only 32 bytes.
+            hkdf_ctx
+                .labeled_expand(b"candidate", &[counter], &mut buf)
+                .unwrap();
 
             // Try to convert to a scalar
             let sk = Scalar::from_bytes(buf);
@@ -206,12 +211,12 @@ impl KeyExchange for DhP256 {
                 let sk = PrivateKey(sk.unwrap());
                 let pk = Self::sk_to_pk(&sk);
                 return (sk, pk);
-            } else {
-                // The conversion failed. Increment the counter and try again. It is really
-                // unlikely (2^-32) that the inside of this loop ever runs more than once.
-                counter += 1;
             }
         }
+
+        // The code should never ever get here. The likelihood that we get 256 bad samples
+        // in a row for p256 is 2^-8192.
+        panic!("DeriveKeyPair failed all attempts");
     }
 }
 

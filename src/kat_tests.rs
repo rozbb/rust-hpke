@@ -51,31 +51,23 @@ struct MainTestVector {
     info: Vec<u8>,
 
     // Private keys
-    #[serde(rename = "skRm", deserialize_with = "bytes_from_hex")]
-    sk_recip: Vec<u8>,
-    #[serde(default, rename = "skSm", deserialize_with = "bytes_from_hex_opt")]
-    sk_sender: Option<Vec<u8>>,
-    #[serde(rename = "skEm", deserialize_with = "bytes_from_hex")]
-    sk_eph: Vec<u8>,
+    #[serde(rename = "seedR", deserialize_with = "bytes_from_hex")]
+    ikm_recip: Vec<u8>,
+    #[serde(default, rename = "seedS", deserialize_with = "bytes_from_hex_opt")]
+    ikm_sender: Option<Vec<u8>>,
+    #[serde(rename = "seedE", deserialize_with = "bytes_from_hex")]
+    ikm_eph: Vec<u8>,
     #[serde(default, deserialize_with = "bytes_from_hex_opt")]
     psk: Option<Vec<u8>>,
     #[serde(default, rename = "pskID", deserialize_with = "bytes_from_hex_opt")]
     psk_id: Option<Vec<u8>>,
-
-    // Public Keys
-    #[serde(rename = "pkRm", deserialize_with = "bytes_from_hex")]
-    pk_recip: Vec<u8>,
-    #[serde(default, rename = "pkSm", deserialize_with = "bytes_from_hex_opt")]
-    pk_sender: Option<Vec<u8>>,
-    #[serde(rename = "pkEm", deserialize_with = "bytes_from_hex")]
-    pk_eph: Vec<u8>,
 
     // Key schedule inputs and computations
     #[serde(rename = "enc", deserialize_with = "bytes_from_hex")]
     encapped_key: Vec<u8>,
     #[serde(rename = "zz", deserialize_with = "bytes_from_hex")]
     shared_secret: Vec<u8>,
-    #[serde(rename = "key_schedule_context", deserialize_with = "bytes_from_hex")]
+    #[serde(rename = "keyScheduleContext", deserialize_with = "bytes_from_hex")]
     _hpke_context: Vec<u8>,
     #[serde(rename = "secret", deserialize_with = "bytes_from_hex")]
     _key_schedule_secret: Vec<u8>,
@@ -112,35 +104,15 @@ struct ExporterTestVector {
     export_val: Vec<u8>,
 }
 
-/// Returns a KEX keypair given the secret bytes and pubkey bytes, and ensures that the pubkey does
-/// indeed correspond to that secret key
-fn get_and_assert_keypair<Kex: KeyExchange>(
-    sk_bytes: &[u8],
-    pk_bytes: &[u8],
-) -> (Kex::PrivateKey, Kex::PublicKey) {
-    // Unmarshall the secret key
-    let sk = <Kex as KeyExchange>::PrivateKey::unmarshal(sk_bytes).unwrap();
-    // Unmarshall the pubkey
-    let pk = <Kex as KeyExchange>::PublicKey::unmarshal(pk_bytes).unwrap();
-
-    // Make sure the derived pubkey matches the given pubkey
-    assert_eq!(pk.marshal(), Kex::sk_to_pk(&sk).marshal());
-
-    (sk, pk)
-}
-
 /// Constructs an `OpModeR` from the given components. The variant constructed is determined solely
 /// by `mode_id`. This will panic if there is insufficient data to construct the variants specified
 /// by `mode_id`.
 fn make_op_mode_r<'a, Kex: KeyExchange>(
     mode_id: u8,
-    pk_sender_bytes: Option<Vec<u8>>,
+    pk: Option<Kex::PublicKey>,
     psk: Option<&'a [u8]>,
     psk_id: Option<&'a [u8]>,
 ) -> OpModeR<'a, Kex> {
-    // Unmarshal the optional pubkey
-    let pk =
-        pk_sender_bytes.map(|bytes| <Kex as KeyExchange>::PublicKey::unmarshal(&bytes).unwrap());
     // Unmarshal the optinoal bundle
     let bundle = psk.map(|bytes| PskBundle {
         psk: bytes,
@@ -160,31 +132,16 @@ fn make_op_mode_r<'a, Kex: KeyExchange>(
 // This does all the legwork
 fn test_case<A: Aead, Kdf: KdfTrait, Kem: KemTrait>(tv: MainTestVector) {
     // First, unmarshall all the relevant keys so we can reconstruct the encapped key
-    let (sk_recip, pk_recip) = get_and_assert_keypair::<Kem::Kex>(&tv.sk_recip, &tv.pk_recip);
-    let (sk_eph, _) = get_and_assert_keypair::<Kem::Kex>(&tv.sk_eph, &tv.pk_eph);
+    let (sk_recip, pk_recip) = Kem::derive_keypair(&tv.ikm_recip);
+    let (sk_eph, _) = Kem::derive_keypair(&tv.ikm_eph);
 
-    let sk_sender = tv
-        .sk_sender
-        .map(|bytes| <Kem::Kex as KeyExchange>::PrivateKey::unmarshal(&bytes).unwrap());
-    let pk_sender = tv
-        .pk_sender
-        .clone()
-        .map(|bytes| <Kem::Kex as KeyExchange>::PublicKey::unmarshal(&bytes).unwrap());
-    // If sk_sender is Some, then so is pk_sender
-    let sender_keypair = sk_sender.map(|sk| (sk, pk_sender.unwrap()));
+    let sender_keypair = tv.ikm_sender.map(|ikm| Kem::derive_keypair(&ikm));
 
     // Now derive the encapped key with the deterministic encap function, using all the inputs
     // above
     let (zz, encapped_key) =
         encap_with_eph::<Kem>(&pk_recip, sender_keypair.as_ref(), sk_eph.clone())
             .expect("encap failed");
-
-    // Assert that the derived shared secret key is identical to the one provided
-    assert_eq!(
-        zz.as_slice(),
-        tv.shared_secret.as_slice(),
-        "zz doesn't match"
-    );
 
     // Assert that the derived encapped key is identical to the one provided
     assert_eq!(
@@ -193,10 +150,17 @@ fn test_case<A: Aead, Kdf: KdfTrait, Kem: KemTrait>(tv: MainTestVector) {
         "encapped keys don't match"
     );
 
+    // Assert that the derived shared secret key is identical to the one provided
+    assert_eq!(
+        zz.as_slice(),
+        tv.shared_secret.as_slice(),
+        "zz doesn't match"
+    );
+
     // We're going to test the encryption contexts. First, construct the appropriate OpMode.
     let mode = make_op_mode_r(
         tv.mode,
-        tv.pk_sender,
+        sender_keypair.map(|(_, pk)| pk),
         tv.psk.as_ref().map(Vec::as_slice),
         tv.psk_id.as_ref().map(Vec::as_slice),
     );
@@ -297,7 +261,7 @@ macro_rules! dispatch_testcase {
 
 #[test]
 fn kat_test() {
-    let file = File::open("test-vectors-f0be13a.json").unwrap();
+    let file = File::open("test-vectors-prerelease.json").unwrap();
     let tvs: Vec<MainTestVector> = serde_json::from_reader(file).unwrap();
 
     for tv in tvs.into_iter() {

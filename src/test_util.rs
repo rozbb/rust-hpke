@@ -38,8 +38,8 @@ pub(crate) fn gen_ctx_simple_pair<A: Aead, Kdf: KdfTrait>() -> (AeadCtxS<A, Kdf>
         buf
     };
 
-    let ctx1 = AeadCtx::new(key.clone(), nonce.clone(), exporter_secret.clone());
-    let ctx2 = AeadCtx::new(key.clone(), nonce.clone(), exporter_secret.clone());
+    let ctx1 = AeadCtx::new(&key, nonce.clone(), exporter_secret.clone());
+    let ctx2 = AeadCtx::new(&key, nonce.clone(), exporter_secret.clone());
 
     (ctx1.into(), ctx2.into())
 }
