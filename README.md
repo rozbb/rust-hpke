@@ -64,6 +64,7 @@ What's next
 
 * Add support for more KEMs
 * Remove allocation once and for all
+* Benchmarks
 
 License
 -------
