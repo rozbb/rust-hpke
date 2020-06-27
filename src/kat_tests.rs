@@ -1,7 +1,7 @@
 use crate::{
     aead::{Aead, AeadTag, AesGcm128, AesGcm256, ChaCha20Poly1305},
     kdf::{HkdfSha256, HkdfSha384, HkdfSha512, Kdf as KdfTrait},
-    kem::{encap_with_eph, DhP256HkdfSha256, Kem as KemTrait, X25519HkdfSha256},
+    kem::{encap_with_eph, DhP256HkdfSha256, EncappedKey, Kem as KemTrait, X25519HkdfSha256},
     kex::{KeyExchange, Marshallable, Unmarshallable},
     op_mode::{OpModeR, PskBundle},
     prelude::*,
@@ -14,6 +14,13 @@ use std::fs::File;
 use hex;
 use serde::{de::Error as SError, Deserialize, Deserializer};
 use serde_json;
+
+/// Asserts that the given marshallable values are equal
+macro_rules! assert_marshallable_eq {
+    ($a:expr, $b:expr, $args:tt) => {
+        assert_eq!($a.marshal(), $b.marshal(), $args)
+    };
+}
 
 // Tells serde how to deserialize bytes from the hex representation
 fn bytes_from_hex<'de, D>(deserializer: D) -> Result<Vec<u8>, D::Error>
@@ -50,17 +57,35 @@ struct MainTestVector {
     #[serde(deserialize_with = "bytes_from_hex")]
     info: Vec<u8>,
 
-    // Private keys
+    // Keying material
     #[serde(rename = "seedR", deserialize_with = "bytes_from_hex")]
     ikm_recip: Vec<u8>,
     #[serde(default, rename = "seedS", deserialize_with = "bytes_from_hex_opt")]
     ikm_sender: Option<Vec<u8>>,
     #[serde(rename = "seedE", deserialize_with = "bytes_from_hex")]
     ikm_eph: Vec<u8>,
+
+    // Private keys
+    #[serde(rename = "skRm", deserialize_with = "bytes_from_hex")]
+    sk_recip: Vec<u8>,
+    #[serde(default, rename = "skSm", deserialize_with = "bytes_from_hex_opt")]
+    sk_sender: Option<Vec<u8>>,
+    #[serde(rename = "skEm", deserialize_with = "bytes_from_hex")]
+    sk_eph: Vec<u8>,
+
+    // Preshared Key Bundle
     #[serde(default, deserialize_with = "bytes_from_hex_opt")]
     psk: Option<Vec<u8>>,
     #[serde(default, rename = "pskID", deserialize_with = "bytes_from_hex_opt")]
     psk_id: Option<Vec<u8>>,
+
+    // Public Keys
+    #[serde(rename = "pkRm", deserialize_with = "bytes_from_hex")]
+    pk_recip: Vec<u8>,
+    #[serde(default, rename = "pkSm", deserialize_with = "bytes_from_hex_opt")]
+    pk_sender: Option<Vec<u8>>,
+    #[serde(rename = "pkEm", deserialize_with = "bytes_from_hex")]
+    pk_eph: Vec<u8>,
 
     // Key schedule inputs and computations
     #[serde(rename = "enc", deserialize_with = "bytes_from_hex")]
@@ -104,6 +129,23 @@ struct ExporterTestVector {
     export_val: Vec<u8>,
 }
 
+/// Returns a KEX keypair given the secret bytes and pubkey bytes, and ensures that the pubkey does
+/// indeed correspond to that secret key
+fn get_and_validate_keypair<Kex: KeyExchange>(
+    sk_bytes: &[u8],
+    pk_bytes: &[u8],
+) -> (Kex::PrivateKey, Kex::PublicKey) {
+    // Unmarshall the secret key
+    let sk = <Kex as KeyExchange>::PrivateKey::unmarshal(sk_bytes).unwrap();
+    // Unmarshall the pubkey
+    let pk = <Kex as KeyExchange>::PublicKey::unmarshal(pk_bytes).unwrap();
+
+    // Make sure the derived pubkey matches the given pubkey
+    assert_marshallable_eq!(pk, Kex::sk_to_pk(&sk), "derived pubkey doesn't match given");
+
+    (sk, pk)
+}
+
 /// Constructs an `OpModeR` from the given components. The variant constructed is determined solely
 /// by `mode_id`. This will panic if there is insufficient data to construct the variants specified
 /// by `mode_id`.
@@ -132,10 +174,34 @@ fn make_op_mode_r<'a, Kex: KeyExchange>(
 // This does all the legwork
 fn test_case<A: Aead, Kdf: KdfTrait, Kem: KemTrait>(tv: MainTestVector) {
     // First, unmarshall all the relevant keys so we can reconstruct the encapped key
-    let (sk_recip, pk_recip) = Kem::derive_keypair(&tv.ikm_recip);
-    let (sk_eph, _) = Kem::derive_keypair(&tv.ikm_eph);
+    let recip_keypair = get_and_validate_keypair::<Kem::Kex>(&tv.sk_recip, &tv.pk_recip);
+    let eph_keypair = get_and_validate_keypair::<Kem::Kex>(&tv.sk_eph, &tv.pk_eph);
+    let sender_keypair = {
+        let pk_sender = &tv.pk_sender.as_ref();
+        tv.sk_sender
+            .as_ref()
+            .map(|sk| get_and_validate_keypair::<Kem::Kex>(sk, pk_sender.unwrap()))
+    };
 
-    let sender_keypair = tv.ikm_sender.map(|ikm| Kem::derive_keypair(&ikm));
+    // Make sure the keys match what we would've gotten had we used DeriveKeyPair
+    {
+        let derived_kp = Kem::derive_keypair(&tv.ikm_recip);
+        assert_marshallable_eq!(recip_keypair.0, derived_kp.0, "sk recip doesn't match");
+        assert_marshallable_eq!(recip_keypair.1, derived_kp.1, "pk recip doesn't match");
+    }
+    {
+        let derived_kp = Kem::derive_keypair(&tv.ikm_eph);
+        assert_marshallable_eq!(eph_keypair.0, derived_kp.0, "sk eph doesn't match");
+        assert_marshallable_eq!(eph_keypair.1, derived_kp.1, "pk eph doesn't match");
+    }
+    if let Some(sks) = sender_keypair.as_ref() {
+        let derived_kp = Kem::derive_keypair(&tv.ikm_sender.unwrap());
+        assert_marshallable_eq!(sks.0, derived_kp.0, "sk sender doesn't match");
+        assert_marshallable_eq!(sks.1, derived_kp.1, "pk sender doesn't match");
+    }
+
+    let (sk_recip, pk_recip) = recip_keypair;
+    let (sk_eph, _) = eph_keypair;
 
     // Now derive the encapped key with the deterministic encap function, using all the inputs
     // above
@@ -143,19 +209,22 @@ fn test_case<A: Aead, Kdf: KdfTrait, Kem: KemTrait>(tv: MainTestVector) {
         encap_with_eph::<Kem>(&pk_recip, sender_keypair.as_ref(), sk_eph.clone())
             .expect("encap failed");
 
-    // Assert that the derived encapped key is identical to the one provided
-    assert_eq!(
-        encapped_key.marshal().as_slice(),
-        tv.encapped_key.as_slice(),
-        "encapped keys don't match"
-    );
-
     // Assert that the derived shared secret key is identical to the one provided
     assert_eq!(
         zz.as_slice(),
         tv.shared_secret.as_slice(),
         "zz doesn't match"
     );
+
+    // Assert that the derived encapped key is identical to the one provided
+    {
+        let provided_encapped_key = EncappedKey::<Kem::Kex>::unmarshal(&tv.encapped_key).unwrap();
+        assert_marshallable_eq!(
+            encapped_key,
+            provided_encapped_key,
+            "encapped keys don't match"
+        );
+    }
 
     // We're going to test the encryption contexts. First, construct the appropriate OpMode.
     let mode = make_op_mode_r(
