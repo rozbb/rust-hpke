@@ -196,7 +196,7 @@ where
 mod test {
     use super::{setup_receiver, setup_sender};
     use crate::test_util::{aead_ctx_eq, gen_rand_buf, new_op_mode_pair, OpModeKind};
-    use crate::{aead::ChaCha20Poly1305, kdf::HkdfSha256, kem::Kem as KemTrait, kex::KeyExchange};
+    use crate::{aead::ChaCha20Poly1305, kdf::HkdfSha256, kem::Kem as KemTrait};
 
     use rand::{rngs::StdRng, SeedableRng};
 
@@ -216,7 +216,7 @@ mod test {
                 let info = b"why would you think in a million years that that would actually work";
 
                 // Generate the receiver's long-term keypair
-                let (sk_recip, pk_recip) = <Kex as KeyExchange>::gen_keypair(&mut csprng);
+                let (sk_recip, pk_recip) = Kem::gen_keypair(&mut csprng);
 
                 // Try a full setup for all the op modes
                 for op_mode_kind in &[
@@ -286,7 +286,7 @@ mod test {
                 let info = b"why would you think in a million years that that would actually work";
 
                 // Generate the receiver's long-term keypair
-                let (sk_recip, pk_recip) = <Kex as KeyExchange>::gen_keypair(&mut csprng);
+                let (sk_recip, pk_recip) = Kem::gen_keypair(&mut csprng);
 
                 // Generate a mutually agreeing op mode pair
                 let (psk, psk_id) = (gen_rand_buf(), gen_rand_buf());
@@ -312,7 +312,7 @@ mod test {
 
                 // Now make a receiver with the wrong secret key and ensure it doesn't match the
                 // sender
-                let (bad_sk, _) = <Kex as KeyExchange>::gen_keypair(&mut csprng);
+                let (bad_sk, _) = Kem::gen_keypair(&mut csprng);
                 let mut aead_ctx2 =
                     setup_receiver::<_, _, Kem>(&receiver_mode, &bad_sk, &encapped_key, &info[..])
                         .unwrap();

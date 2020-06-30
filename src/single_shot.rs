@@ -85,9 +85,8 @@ mod test {
         aead::ChaCha20Poly1305,
         kdf::HkdfSha256,
         kem::Kem as KemTrait,
-        kex::KeyExchange,
         op_mode::{OpModeR, OpModeS, PskBundle},
-        test_util::gen_rand_buf,
+        test_util::{gen_rand_buf, kex_gen_keypair},
     };
 
     use rand::{rngs::StdRng, SeedableRng};
@@ -118,8 +117,8 @@ mod test {
                 };
 
                 // Generate the sender's and receiver's long-term keypairs
-                let (sk_sender_id, pk_sender_id) = Kex::gen_keypair(&mut csprng);
-                let (sk_recip, pk_recip) = Kex::gen_keypair(&mut csprng);
+                let (sk_sender_id, pk_sender_id) = kex_gen_keypair::<Kex, _>(&mut csprng);
+                let (sk_recip, pk_recip) = kex_gen_keypair::<Kex, _>(&mut csprng);
 
                 // Construct the sender's encryption context, and get an encapped key
                 let sender_mode = OpModeS::<Kex>::AuthPsk(

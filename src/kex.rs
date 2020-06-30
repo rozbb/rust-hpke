@@ -1,10 +1,6 @@
-use crate::{
-    kdf::{HkdfSha512, Kdf as KdfTrait},
-    HpkeError,
-};
+use crate::{kdf::Kdf as KdfTrait, HpkeError};
 
 use digest::generic_array::{typenum::marker_traits::Unsigned, ArrayLength, GenericArray};
-use rand::{CryptoRng, RngCore};
 
 /// Implemented by types that have a fixed-length byte representation
 pub trait Marshallable {
@@ -28,27 +24,21 @@ pub trait Unmarshallable: Marshallable + Sized {
 pub trait KeyExchange {
     type PublicKey: Clone + Marshallable + Unmarshallable;
     type PrivateKey: Clone + Marshallable + Unmarshallable;
+
+    #[doc(hidden)]
     type KexResult: Marshallable;
 
+    #[doc(hidden)]
     fn sk_to_pk(sk: &Self::PrivateKey) -> Self::PublicKey;
 
+    #[doc(hidden)]
     fn kex(sk: &Self::PrivateKey, pk: &Self::PublicKey) -> Result<Self::KexResult, HpkeError>;
 
+    #[doc(hidden)]
     fn derive_keypair<Kdf: KdfTrait>(
         ikm: &[u8],
         context: u16,
     ) -> (Self::PrivateKey, Self::PublicKey);
-
-    /// Generates a random keypair using the given RNG
-    fn gen_keypair<R: CryptoRng + RngCore>(csprng: &mut R) -> (Self::PrivateKey, Self::PublicKey) {
-        // Make some keying material that's the size of a private key
-        let mut ikm: GenericArray<u8, <Self::PrivateKey as Marshallable>::OutputSize> =
-            GenericArray::default();
-        // Fill it with randomness
-        csprng.fill_bytes(&mut ikm);
-        // Run derive_keypair. We use SHA-512 to satisfy any security level
-        Self::derive_keypair::<HkdfSha512>(&ikm, 0)
-    }
 }
 
 #[cfg(feature = "p256")]

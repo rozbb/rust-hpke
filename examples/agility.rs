@@ -16,7 +16,7 @@ use hpke::{
     aead::{Aead, AeadCtxR, AeadCtxS, AeadTag, AesGcm128, AesGcm256, ChaCha20Poly1305},
     kdf::{HkdfSha256, HkdfSha384, HkdfSha512, Kdf as KdfTrait},
     kem::{DhP256HkdfSha256, Kem as KemTrait, X25519HkdfSha256},
-    kex::{DhP256, KeyExchange, Marshallable, Unmarshallable, X25519},
+    kex::{KeyExchange, Marshallable, Unmarshallable},
     op_mode::PskBundle,
     setup_receiver, setup_sender, EncappedKey, HpkeError, OpModeR, OpModeS,
 };
@@ -310,12 +310,12 @@ impl AgileKeypair {
 
 // The leg work of agile_gen_keypair
 macro_rules! do_gen_keypair {
-    ($kex_ty:ty, $kex_alg:ident, $csprng:ident) => {{
-        type Kex = $kex_ty;
+    ($kem_ty:ty, $kex_alg:ident, $csprng:ident) => {{
+        type Kem = $kem_ty;
         let kex_alg = $kex_alg;
         let csprng = $csprng;
 
-        let (sk, pk) = Kex::gen_keypair(csprng);
+        let (sk, pk) = Kem::gen_keypair(csprng);
         let sk = AgilePrivateKey {
             kex_alg: kex_alg,
             privkey_bytes: sk.marshal().to_vec(),
@@ -329,10 +329,11 @@ macro_rules! do_gen_keypair {
     }};
 }
 
-fn agile_gen_keypair<R: CryptoRng + RngCore>(kex_alg: KexAlg, csprng: &mut R) -> AgileKeypair {
-    match kex_alg {
-        KexAlg::X25519 => do_gen_keypair!(X25519, kex_alg, csprng),
-        KexAlg::DhP256 => do_gen_keypair!(DhP256, kex_alg, csprng),
+fn agile_gen_keypair<R: CryptoRng + RngCore>(kem_alg: KemAlg, csprng: &mut R) -> AgileKeypair {
+    let kex_alg = kem_alg.kex_alg();
+    match kem_alg {
+        KemAlg::X25519HkdfSha256 => do_gen_keypair!(X25519HkdfSha256, kex_alg, csprng),
+        KemAlg::DhP256HkdfSha256 => do_gen_keypair!(DhP256HkdfSha256, kex_alg, csprng),
         _ => unimplemented!(),
     }
 }
@@ -720,7 +721,7 @@ fn main() {
                 let kex_alg = kem_alg.kex_alg();
 
                 // Make a random sender keypair and PSK bundle
-                let sender_keypair = agile_gen_keypair(kex_alg, &mut csprng);
+                let sender_keypair = agile_gen_keypair(kem_alg, &mut csprng);
                 let mut psk_bytes = vec![0u8; kdf_alg.get_digest_len()];
                 let psk_id = b"preshared key attempt #5, take 2. action";
                 let psk_bundle = {
@@ -746,7 +747,7 @@ fn main() {
                 };
 
                 // Set up the sender's encryption context
-                let recip_keypair = agile_gen_keypair(kex_alg, &mut csprng);
+                let recip_keypair = agile_gen_keypair(kem_alg, &mut csprng);
                 let (encapped_key, mut aead_ctx1) = agile_setup_sender(
                     aead_alg,
                     kdf_alg,

@@ -28,6 +28,24 @@ pub trait Kem {
     ) {
         Self::Kex::derive_keypair::<Self::Kdf>(ikm, Self::KEM_ID)
     }
+
+    /// Generates a random keypair using the given RNG
+    fn gen_keypair<R: CryptoRng + RngCore>(
+        csprng: &mut R,
+    ) -> (
+        <Self::Kex as KeyExchange>::PrivateKey,
+        <Self::Kex as KeyExchange>::PublicKey,
+    ) {
+        // Make some keying material that's the size of a private key
+        let mut ikm: GenericArray<
+            u8,
+            <<Self::Kex as KeyExchange>::PrivateKey as Marshallable>::OutputSize,
+        > = GenericArray::default();
+        // Fill it with randomness
+        csprng.fill_bytes(&mut ikm);
+        // Run derive_keypair using the KEM's KDF
+        Self::derive_keypair(&ikm)
+    }
 }
 
 // Kem is also used as a type parameter everywhere. To avoid confusion, alias it
@@ -193,7 +211,7 @@ where
     R: CryptoRng + RngCore,
 {
     // Generate a new ephemeral keypair
-    let (sk_eph, _) = Kem::Kex::gen_keypair(csprng);
+    let (sk_eph, _) = Kem::gen_keypair(csprng);
     // Now pass to encap_with_eph
     encap_with_eph::<Kem>(pk_recip, sender_id_keypair, sk_eph)
 }
@@ -275,7 +293,7 @@ pub(crate) fn decap<Kem: KemTrait>(
 #[cfg(test)]
 mod tests {
     use super::{decap, encap, EncappedKey, Marshallable, Unmarshallable};
-    use crate::{kem::Kem as KemTrait, kex::KeyExchange};
+    use crate::kem::Kem as KemTrait;
 
     use rand::{rngs::StdRng, SeedableRng};
 
@@ -287,7 +305,7 @@ mod tests {
                 type Kem = $kem_ty;
 
                 let mut csprng = StdRng::from_entropy();
-                let (sk_recip, pk_recip) = <Kem as KemTrait>::Kex::gen_keypair(&mut csprng);
+                let (sk_recip, pk_recip) = Kem::gen_keypair(&mut csprng);
 
                 // Encapsulate a random shared secret
                 let (auth_shared_secret, encapped_key) =
@@ -305,7 +323,7 @@ mod tests {
                 //
 
                 // Make a sender identity keypair
-                let (sk_sender_id, pk_sender_id) = <Kem as KemTrait>::Kex::gen_keypair(&mut csprng);
+                let (sk_sender_id, pk_sender_id) = Kem::gen_keypair(&mut csprng);
 
                 // Encapsulate a random shared secret
                 let (auth_shared_secret, encapped_key) = encap::<Kem, _>(
@@ -340,7 +358,7 @@ mod tests {
                 // Encapsulate a random shared secret
                 let encapped_key = {
                     let mut csprng = StdRng::from_entropy();
-                    let (_, pk_recip) = <Kem as KemTrait>::Kex::gen_keypair(&mut csprng);
+                    let (_, pk_recip) = Kem::gen_keypair(&mut csprng);
                     encap::<Kem, _>(&pk_recip, None, &mut csprng).unwrap().1
                 };
                 // Marshal it

@@ -37,7 +37,7 @@ fn server_init() -> (
     <Kex as KeyExchange>::PublicKey,
 ) {
     let mut csprng = StdRng::from_entropy();
-    Kex::gen_keypair(&mut csprng)
+    Kem::gen_keypair(&mut csprng)
 }
 
 // Given a message and associated data, returns an encapsulated key, ciphertext, and tag. The

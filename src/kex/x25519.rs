@@ -82,17 +82,22 @@ impl Marshallable for KexResult {
 pub struct X25519 {}
 
 impl KeyExchange for X25519 {
+    #[doc(hidden)]
     type PublicKey = PublicKey;
+    #[doc(hidden)]
     type PrivateKey = PrivateKey;
+    #[doc(hidden)]
     type KexResult = KexResult;
 
     /// Converts an X25519 private key to a public key
+    #[doc(hidden)]
     fn sk_to_pk(sk: &PrivateKey) -> PublicKey {
         PublicKey(x25519_dalek::PublicKey::from(&sk.0))
     }
 
     /// Does the DH operation. Returns `HpkeError::InvalidKeyExchange` if and only if the DH
     /// result was all zeros. This is required by the HPKE spec.
+    #[doc(hidden)]
     fn kex(sk: &PrivateKey, pk: &PublicKey) -> Result<KexResult, HpkeError> {
         let res = sk.0.diffie_hellman(&pk.0);
         // "Senders and recipients MUST check whether the shared secret is the all-zero value
@@ -112,13 +117,10 @@ impl KeyExchange for X25519 {
     //   )
     //   sk = LabeledExpand(dkp_prk, "sk", zero(0), Nsk)
     //   return (sk, pk(sk))
-    /// PRIVATE USE ONLY
-    ///
-    /// For a function you can actually use, see `kem::Kem::derive_keypair`.
-    ///
     /// Deterministically derives a keypair from the given input keying material and KEM ID. This
     /// keying material SHOULD have as many bits of entropy as the bit length of a secret key,
     /// i.e., 256.
+    #[doc(hidden)]
     fn derive_keypair<Kdf: KdfTrait>(ikm: &[u8], kem_id: u16) -> (PrivateKey, PublicKey) {
         // Write the label into a byte buffer and extract from the IKM
         let (_, hkdf_ctx) = {
@@ -140,9 +142,12 @@ impl KeyExchange for X25519 {
 
 #[cfg(test)]
 mod tests {
-    use crate::kex::{
-        x25519::{PrivateKey, PublicKey, X25519},
-        KeyExchange, Marshallable, Unmarshallable,
+    use crate::{
+        kex::{
+            x25519::{PrivateKey, PublicKey, X25519},
+            KeyExchange, Marshallable, Unmarshallable,
+        },
+        test_util::kex_gen_keypair,
     };
     use rand::{rngs::StdRng, RngCore, SeedableRng};
 
@@ -191,7 +196,7 @@ mod tests {
         let mut csprng = StdRng::from_entropy();
 
         // Make a random keypair and marshal it
-        let (sk, pk) = Kex::gen_keypair(&mut csprng);
+        let (sk, pk) = kex_gen_keypair::<Kex, _>(&mut csprng);
         let (sk_bytes, pk_bytes) = (sk.marshal(), pk.marshal());
 
         // Now unmarshal those bytes
