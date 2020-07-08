@@ -1,4 +1,4 @@
-use crate::{kdf::Kdf as KdfTrait, HpkeError};
+use crate::{kdf::Kdf as KdfTrait, util::KemSuiteId, HpkeError};
 
 use digest::generic_array::{typenum::marker_traits::Unsigned, ArrayLength, GenericArray};
 
@@ -36,8 +36,8 @@ pub trait KeyExchange {
 
     #[doc(hidden)]
     fn derive_keypair<Kdf: KdfTrait>(
+        suite_id: &KemSuiteId,
         ikm: &[u8],
-        context: u16,
     ) -> (Self::PrivateKey, Self::PublicKey);
 }
 

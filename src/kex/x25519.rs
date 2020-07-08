@@ -1,10 +1,10 @@
 use crate::{
     kdf::{labeled_extract, Kdf as KdfTrait, LabeledExpand},
     kex::{KeyExchange, Marshallable, Unmarshallable},
+    util::KemSuiteId,
     HpkeError,
 };
 
-use byteorder::{BigEndian, ByteOrder};
 use digest::generic_array::{typenum, GenericArray};
 use subtle::ConstantTimeEq;
 
@@ -110,28 +110,21 @@ impl KeyExchange for X25519 {
     }
 
     // def DeriveKeyPair(ikm):
-    //   dkp_prk = LabeledExtract(
-    //     zero(0),
-    //     concat(I2OSP(kem_id, 2), "dkp_prk"),
-    //     ikm
-    //   )
+    //   dkp_prk = LabeledExtract(zero(0), "dkp_prk", ikm)
     //   sk = LabeledExpand(dkp_prk, "sk", zero(0), Nsk)
     //   return (sk, pk(sk))
-    /// Deterministically derives a keypair from the given input keying material and KEM ID. This
-    /// keying material SHOULD have as many bits of entropy as the bit length of a secret key,
-    /// i.e., 256.
+    /// Deterministically derives a keypair from the given input keying material and ciphersuite
+    /// ID. The keying material SHOULD have as many bits of entropy as the bit length of a secret
+    /// key, i.e., 256.
     #[doc(hidden)]
-    fn derive_keypair<Kdf: KdfTrait>(ikm: &[u8], kem_id: u16) -> (PrivateKey, PublicKey) {
+    fn derive_keypair<Kdf: KdfTrait>(suite_id: &KemSuiteId, ikm: &[u8]) -> (PrivateKey, PublicKey) {
         // Write the label into a byte buffer and extract from the IKM
-        let (_, hkdf_ctx) = {
-            // The XX is a placeholder for the 16-bit label (which is the KEM ID)
-            let mut label_bytes = *b"XXdkp_prk";
-            BigEndian::write_u16(&mut label_bytes[..2], kem_id);
-            labeled_extract::<Kdf>(&[], &label_bytes, ikm)
-        };
+        let (_, hkdf_ctx) = labeled_extract::<Kdf>(&[], suite_id, b"dkp_prk", ikm);
         // The buffer we hold the candidate scalar bytes in. This is the size of a private key.
         let mut buf = [0u8; 32];
-        hkdf_ctx.labeled_expand(b"sk", &[], &mut buf).unwrap();
+        hkdf_ctx
+            .labeled_expand(suite_id, b"sk", &[], &mut buf)
+            .unwrap();
 
         let sk = x25519_dalek::StaticSecret::from(buf);
         let pk = x25519_dalek::PublicKey::from(&sk);

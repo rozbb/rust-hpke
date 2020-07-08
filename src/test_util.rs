@@ -1,6 +1,7 @@
 use crate::{
     aead::{Aead, AeadCtx, AeadCtxR, AeadCtxS, AeadKey, AeadNonce},
     kdf::Kdf as KdfTrait,
+    kem::Kem as KemTrait,
     kex::{KeyExchange, Marshallable},
     op_mode::{OpModeR, OpModeS, PskBundle},
     setup::ExporterSecret,
@@ -26,12 +27,16 @@ pub(crate) fn kex_gen_keypair<Kex: KeyExchange, R: CryptoRng + RngCore>(
         GenericArray::default();
     // Fill it with randomness
     csprng.fill_bytes(&mut ikm);
-    // Run derive_keypair. We use SHA-512 to satisfy any security level. The 0 KEM ID is reserved.
-    Kex::derive_keypair::<crate::kdf::HkdfSha512>(&ikm, 0)
+    // Run derive_keypair with a nonsense ciphersuite. We use SHA-512 to satisfy any security level
+    Kex::derive_keypair::<crate::kdf::HkdfSha512>(b"31337", &ikm)
 }
 
 /// Creates a pair of `AeadCtx`s without doing a key exchange
-pub(crate) fn gen_ctx_simple_pair<A: Aead, Kdf: KdfTrait>() -> (AeadCtxS<A, Kdf>, AeadCtxR<A, Kdf>)
+pub(crate) fn gen_ctx_simple_pair<A, Kdf, Kem>() -> (AeadCtxS<A, Kdf, Kem>, AeadCtxR<A, Kdf, Kem>)
+where
+    A: Aead,
+    Kdf: KdfTrait,
+    Kem: KemTrait,
 {
     let mut csprng = StdRng::from_entropy();
 
@@ -102,9 +107,9 @@ pub(crate) fn new_op_mode_pair<'a, Kex: KeyExchange, Kdf: KdfTrait>(
 
 /// Evaluates the equivalence of two encryption contexts by doing some encryption-decryption
 /// round trips. Returns `true` iff the contexts are equal after 1000 iterations
-pub(crate) fn aead_ctx_eq<A: Aead, K: KdfTrait>(
-    sender: &mut AeadCtxS<A, K>,
-    receiver: &mut AeadCtxR<A, K>,
+pub(crate) fn aead_ctx_eq<A: Aead, Kdf: KdfTrait, Kem: KemTrait>(
+    sender: &mut AeadCtxS<A, Kdf, Kem>,
+    receiver: &mut AeadCtxR<A, Kdf, Kem>,
 ) -> bool {
     let mut csprng = StdRng::from_entropy();
 

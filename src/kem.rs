@@ -1,13 +1,15 @@
 use crate::{
     kdf::{extract_and_expand, Kdf as KdfTrait},
     kex::{KeyExchange, Marshallable, Unmarshallable},
+    util::kem_suite_id,
     HpkeError,
 };
+
 use digest::{generic_array::GenericArray, FixedOutput};
 use rand::{CryptoRng, RngCore};
 
 /// Defines a combination of key exchange mechanism and a KDF, which together form a KEM
-pub trait Kem {
+pub trait Kem: Sized {
     type Kex: KeyExchange;
     type Kdf: KdfTrait;
 
@@ -26,7 +28,8 @@ pub trait Kem {
         <Self::Kex as KeyExchange>::PrivateKey,
         <Self::Kex as KeyExchange>::PublicKey,
     ) {
-        Self::Kex::derive_keypair::<Self::Kdf>(ikm, Self::KEM_ID)
+        let suite_id = kem_suite_id::<Self>();
+        Self::Kex::derive_keypair::<Self::Kdf>(&suite_id, ikm)
     }
 
     /// Generates a random keypair using the given RNG
@@ -111,7 +114,7 @@ pub(crate) type SharedSecret<Kem> =
     GenericArray<u8, <<<Kem as KemTrait>::Kdf as KdfTrait>::HashImpl as FixedOutput>::OutputSize>;
 
 // def Encap(pkR):
-//   skE, pkE = DeriveKeyPair(random(Nsk))
+//   skE, pkE = GenerateKeyPair()
 //   dh = DH(skE, pkR)
 //   enc = Serialize(pkE)
 //
@@ -122,7 +125,7 @@ pub(crate) type SharedSecret<Kem> =
 //   return zz, enc
 //
 // def AuthEncap(pkR, skS):
-//   skE, pkE = DeriveKeyPair(random(Nsk))
+//   skE, pkE = GenerateKeyPair()
 //   dh = concat(DH(skE, pkR), DH(skS, pkR))
 //   enc = Serialize(pkE)
 //
@@ -132,7 +135,7 @@ pub(crate) type SharedSecret<Kem> =
 //
 //   zz = ExtractAndExpand(dh, kemContext)
 //   return zz, enc
-/// Derives a shared secret that the owner of the reciepint's pubkey can use to derive the same
+/// Derives a shared secret that the owner of the recipient's pubkey can use to derive the same
 /// shared secret. If `sk_sender_id` is given, the sender's identity will be tied to the shared
 /// secret.
 ///
@@ -145,6 +148,9 @@ pub(crate) fn encap_with_eph<Kem: KemTrait>(
     sender_id_keypair: Option<&(KemPrivkey<Kem>, KemPubkey<Kem>)>,
     sk_eph: KemPrivkey<Kem>,
 ) -> Result<(SharedSecret<Kem>, EncappedKey<Kem::Kex>), HpkeError> {
+    // Put together the binding context used for all KDF operations
+    let suite_id = kem_suite_id::<Kem>();
+
     // Compute the shared secret from the ephemeral inputs
     let kex_res_eph = Kem::Kex::kex(&sk_eph, pk_recip)?;
 
@@ -174,7 +180,7 @@ pub(crate) fn encap_with_eph<Kem: KemTrait>(
         // HKDF-Expand call only errors if the output values are 255x the digest size of the hash
         // function. Since these values are fixed at compile time, we don't worry about it.
         let mut buf = <SharedSecret<Kem> as Default>::default();
-        extract_and_expand::<Kem>(&concatted_secrets, &kem_context, &mut buf)
+        extract_and_expand::<Kem>(&concatted_secrets, &suite_id, &kem_context, &mut buf)
             .expect("shared secret is way too big");
         buf
     } else {
@@ -184,7 +190,7 @@ pub(crate) fn encap_with_eph<Kem: KemTrait>(
         // digest size of the hash function. Since these values are fixed at compile time, we don't
         // worry about it.
         let mut buf = <SharedSecret<Kem> as Default>::default();
-        extract_and_expand::<Kem>(&kex_res_eph.marshal(), &kem_context, &mut buf)
+        extract_and_expand::<Kem>(&kex_res_eph.marshal(), &suite_id, &kem_context, &mut buf)
             .expect("shared secret is way too big");
         buf
     };
@@ -248,6 +254,9 @@ pub(crate) fn decap<Kem: KemTrait>(
     pk_sender_id: Option<&KemPubkey<Kem>>,
     encapped_key: &EncappedKey<Kem::Kex>,
 ) -> Result<SharedSecret<Kem>, HpkeError> {
+    // Put together the binding context used for all KDF operations
+    let suite_id = kem_suite_id::<Kem>();
+
     // Compute the shared secret from the ephemeral inputs
     let kex_res_eph = Kem::Kex::kex(&sk_recip, &encapped_key.0)?;
 
@@ -274,8 +283,13 @@ pub(crate) fn decap<Kem: KemTrait>(
         // HKDF-Expand call only errors if the output values are 255x the digest size of the hash
         // function. Since these values are fixed at compile time, we don't worry about it.
         let mut shared_secret = <SharedSecret<Kem> as Default>::default();
-        extract_and_expand::<Kem>(&concatted_secrets, &kem_context, &mut shared_secret)
-            .expect("shared secret is way too big");
+        extract_and_expand::<Kem>(
+            &concatted_secrets,
+            &suite_id,
+            &kem_context,
+            &mut shared_secret,
+        )
+        .expect("shared secret is way too big");
         Ok(shared_secret)
     } else {
         let kem_context = [encapped_key.marshal(), pk_recip.marshal()].concat();
@@ -284,8 +298,13 @@ pub(crate) fn decap<Kem: KemTrait>(
         // digest size of the hash function. Since these values are fixed at compile time, we don't
         // worry about it.
         let mut shared_secret = <SharedSecret<Kem> as Default>::default();
-        extract_and_expand::<Kem>(&kex_res_eph.marshal(), &kem_context, &mut shared_secret)
-            .expect("shared secret is way too big");
+        extract_and_expand::<Kem>(
+            &kex_res_eph.marshal(),
+            &suite_id,
+            &kem_context,
+            &mut shared_secret,
+        )
+        .expect("shared secret is way too big");
         Ok(shared_secret)
     }
 }

@@ -122,7 +122,7 @@ struct EncryptionTestVector {
 #[derive(Clone, Deserialize, Debug)]
 struct ExporterTestVector {
     #[serde(rename = "exportContext", deserialize_with = "bytes_from_hex")]
-    info: Vec<u8>,
+    export_ctx: Vec<u8>,
     #[serde(rename = "exportLength")]
     export_len: usize,
     #[serde(rename = "exportValue", deserialize_with = "bytes_from_hex")]
@@ -275,7 +275,9 @@ fn test_case<A: Aead, Kdf: KdfTrait, Kem: KemTrait>(tv: MainTestVector) {
     // Now check that AeadCtx::export returns the expected values
     for export in tv.exports {
         let mut exported_val = vec![0u8; export.export_len];
-        aead_ctx.export(&export.info, &mut exported_val).unwrap();
+        aead_ctx
+            .export(&export.export_ctx, &mut exported_val)
+            .unwrap();
         assert_eq!(exported_val, export.export_val, "export values don't match");
     }
 }

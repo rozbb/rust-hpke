@@ -60,40 +60,31 @@ impl KdfTrait for HkdfSha512 {
 }
 
 // def ExtractAndExpand(dh, kemContext):
-//   eae_prk = LabeledExtract(zero(0),
-//                            concat(I2OSP(kem_id, 2), "eae_prk"),
-//                            dh)
-//   return LabeledExpand(eae_prk,
-//                        concat(I2OSP(kem_id, 2), "zz"),
-//                        kemContext,
-//                        Nzz)
-/// Uses the given IKM to extract a secret, and then uses that secret, plus the given info string,
-/// to expand to the output buffer
+//   eae_prk = LabeledExtract(zero(0), "eae_prk", dh)
+//   zz = LabeledExpand(eae_prk, "zz", kemContext, Nzz)
+//   return zz
+/// Uses the given IKM to extract a secret, and then uses that secret, plus the given suite ID and
+/// info string, to expand to the output buffer
 pub(crate) fn extract_and_expand<Kem: KemTrait>(
     ikm: &[u8],
+    suite_id: &[u8],
     info: &[u8],
     out: &mut [u8],
 ) -> Result<(), hkdf::InvalidLength> {
     // Construct the labels
-    let extract_label = {
-        // XX is a a placeholder for the 16-bit KEM ID
-        let mut buf = *b"XXeae_prk";
-        BigEndian::write_u16(&mut buf[..2], Kem::KEM_ID);
-        buf
-    };
-
     // Extract using given IKM
-    let (_, hkdf_ctx) = labeled_extract::<Kem::Kdf>(&[], &extract_label[..], ikm);
+    let (_, hkdf_ctx) = labeled_extract::<Kem::Kdf>(&[], suite_id, b"eae_prk", ikm);
     // Expand using given info string
-    hkdf_ctx.labeled_expand(b"zz", info, out)
+    hkdf_ctx.labeled_expand(suite_id, b"zz", info, out)
 }
 
 // def LabeledExtract(salt, label, IKM):
-//   labeledIKM = concat("RFCXXXX ", label, IKM)
+//   labeledIKM = concat("RFCXXXX ", suite_id, label, IKM)
 //   return Extract(salt, labeledIKM)
-/// Returns the HKDF context derived from `(salt=salt, ikm= "RFCXXXX"||label||ikm)`
+/// Returns the HKDF context derived from `(salt=salt, ikm= "RFCXXXX "||suite_id||label||ikm)`
 pub(crate) fn labeled_extract<Kdf: KdfTrait>(
     salt: &[u8],
+    suite_id: &[u8],
     label: &[u8],
     ikm: &[u8],
 ) -> (
@@ -101,7 +92,7 @@ pub(crate) fn labeled_extract<Kdf: KdfTrait>(
     hkdf::Hkdf<Kdf::HashImpl>,
 ) {
     // Concat the inputs to create a new IKM
-    let labeled_ikm: Vec<u8> = [RFC_STR, label, ikm].concat();
+    let labeled_ikm: Vec<u8> = [RFC_STR, suite_id, label, ikm].concat();
     // Extract and the HKDF context
     hkdf::Hkdf::<Kdf::HashImpl>::extract(Some(&salt), &labeled_ikm)
 }
@@ -110,6 +101,7 @@ pub(crate) fn labeled_extract<Kdf: KdfTrait>(
 pub(crate) trait LabeledExpand {
     fn labeled_expand(
         &self,
+        suite_id: &[u8],
         label: &[u8],
         info: &[u8],
         out: &mut [u8],
@@ -120,10 +112,11 @@ impl<D: Update + BlockInput + FixedOutput + Reset + Default + Clone> LabeledExpa
     for hkdf::Hkdf<D>
 {
     // def LabeledExpand(PRK, label, info, L):
-    //   labeledInfo = concat(I2OSP(L, 2), "RFCXXXX ", label, info)
+    //   labeledInfo = concat(I2OSP(L, 2), "RFCXXXX ", suite_id, label, info)
     //   return Expand(PRK, labeledInfo, L)
     fn labeled_expand(
         &self,
+        suite_id: &[u8],
         label: &[u8],
         info: &[u8],
         out: &mut [u8],
@@ -135,7 +128,7 @@ impl<D: Update + BlockInput + FixedOutput + Reset + Default + Clone> LabeledExpa
         let mut len_buf = [0u8; 2];
         BigEndian::write_u16(&mut len_buf, out.len() as u16);
 
-        let labeled_info: Vec<u8> = [&len_buf, RFC_STR, label, info].concat();
+        let labeled_info: Vec<u8> = [&len_buf, RFC_STR, suite_id, label, info].concat();
         self.expand(&labeled_info, out)
     }
 }

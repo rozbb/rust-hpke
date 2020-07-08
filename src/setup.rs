@@ -4,28 +4,12 @@ use crate::{
     kem::{self, EncappedKey, Kem as KemTrait, SharedSecret},
     kex::KeyExchange,
     op_mode::{OpMode, OpModeR, OpModeS},
-    util::static_zeros,
+    util::full_suite_id,
     HpkeError,
 };
 
-use byteorder::{BigEndian, ByteOrder};
 use digest::{generic_array::GenericArray, Digest};
 use rand::{CryptoRng, RngCore};
-
-/* struct {
-        // Mode and algorithms
-        uint8 mode;
-        uint16 kem_id;
-        uint16 kdf_id;
-        uint16 aead_id;
-
-        // Cryptographic hash of application-supplied pskID
-        opaque pskID_hash[Nh];
-
-        // Cryptographic hash of application-supplied info
-        opaque info_hash[Nh];
-    } HPKEContext;
-*/
 
 /// Secret generated in `derive_enc_ctx` and stored in `AeadCtx`
 pub(crate) type ExporterSecret<K> =
@@ -37,7 +21,7 @@ fn derive_enc_ctx<A, Kdf, Kem, O>(
     mode: &O,
     shared_secret: SharedSecret<Kem>,
     info: &[u8],
-) -> AeadCtx<A, Kdf>
+) -> AeadCtx<A, Kdf, Kem>
 where
     A: Aead,
     Kdf: KdfTrait,
@@ -51,34 +35,29 @@ where
         &mut buf[to_write.len()..]
     }
 
-    // In KeySchedule(),
-    //     ciphersuite = concat(encode_big_endian(kem_id, 2),
-    //                          encode_big_endian(kdf_id, 2),
-    //                          encode_big_endian(aead_id, 2))
-    //     pskID_hash = LabeledExtract(zero(Nh), "pskID", pskID)
-    //     info_hash = LabeledExtract(zero(Nh), "info_hash", info)
-    //     schedule_context = concat(ciphersuite, mode, pskID_hash, info_hash)
+    // Put together the binding context used for all KDF operations
+    let suite_id = full_suite_id::<A, Kdf, Kem>();
 
-    // Pick a buffer to hold 3 u16s, a u8, and 2 digests, as described above
-    let mut buf = [0u8; 3 * 2 + 1 + 2 * 512];
+    // In KeySchedule(),
+    //     pskID_hash = LabeledExtract(zero(0), "pskID", pskID)
+    //     info_hash = LabeledExtract(zero(0), "info_hash", info)
+    //     key_schedule_context = concat(mode, pskID_hash, info_hash)
+
+    // Pick a buffer to hold a u8 and 2 digests, as described above
+    let mut buf = [0u8; 1 + 2 * 512];
     let buf_len = buf.len();
 
     let sched_context: &[u8] = {
-        // Write the ciphersuite identifiers to the buffer. Forgive the explicit indexing.
-        BigEndian::write_u16(&mut buf[..2], Kem::KEM_ID);
-        BigEndian::write_u16(&mut buf[2..4], Kdf::KDF_ID);
-        BigEndian::write_u16(&mut buf[4..6], A::AEAD_ID);
-
         //  Define a cursor with which to write to the above buffer
-        let mut cursor = &mut buf[6..];
+        let mut cursor = &mut buf[..];
 
         // Use the helper function to write the mode identifier (1 byte, so endianness doesn't
         // matter)
         cursor = write_to_buf(cursor, &[mode.mode_id()]);
 
-        let zeros = static_zeros::<Kdf>();
-        let (psk_id_hash, _) = labeled_extract::<Kdf>(zeros, b"pskID_hash", mode.get_psk_id());
-        let (info_hash, _) = labeled_extract::<Kdf>(zeros, b"info_hash", info);
+        let (psk_id_hash, _) =
+            labeled_extract::<Kdf>(&[], &suite_id, b"pskID_hash", mode.get_psk_id());
+        let (info_hash, _) = labeled_extract::<Kdf>(&[], &suite_id, b"info_hash", info);
 
         cursor = write_to_buf(cursor, psk_id_hash.as_slice());
         cursor = write_to_buf(cursor, info_hash.as_slice());
@@ -88,18 +67,17 @@ where
     };
 
     // In KeySchedule(),
-    //   extracted_psk = LabeledExtract(zero(Nh), "psk", psk)
-    //   secret = LabeledExtract(extracted_psk, "zz", zz)
-    //   key = LabeledExpand(secret, "key", context, Nk)
-    //   nonce = LabeledExpand(secret, "nonce", context, Nn)
-    //   exporter_secret = LabeledExpand(secret, "exp", context, Nh)
-    //   return Context(key, nonce, exporter_secret)
-    //
+    //   psk_hash = LabeledExtract(zero(0), "psk_hash", psk)
+    //   secret = LabeledExtract(psk_hash, "secret", zz)
+    //   key = LabeledExpand(secret, "key", key_schedule_context, Nk)
+    //   nonce = LabeledExpand(secret, "nonce", key_schedule_context, Nn)
+    //   exporter_secret = LabeledExpand(secret, "exp", key_schedule_context, Nh)
+    let (extracted_psk, _) =
+        labeled_extract::<Kdf>(&[], &suite_id, b"psk_hash", mode.get_psk_bytes());
     // Instead of `secret` we derive an HKDF context which we run .expand() on to derive the
     // key-nonce pair.
-    let (extracted_psk, _) =
-        labeled_extract::<Kdf>(static_zeros::<Kdf>(), b"psk_hash", mode.get_psk_bytes());
-    let (_, secret_ctx) = labeled_extract::<Kdf>(&extracted_psk, b"secret", &shared_secret);
+    let (_, secret_ctx) =
+        labeled_extract::<Kdf>(&extracted_psk, &suite_id, b"secret", &shared_secret);
 
     // Empty fixed-size buffers
     let mut key = crate::aead::AeadKey::<A>::default();
@@ -110,13 +88,18 @@ where
     // digest size of the hash function. Since these values are fixed at compile time, we don't
     // worry about it.
     secret_ctx
-        .labeled_expand(b"key", &sched_context, key.as_mut_slice())
+        .labeled_expand(&suite_id, b"key", &sched_context, key.as_mut_slice())
         .expect("aead key len is way too big");
     secret_ctx
-        .labeled_expand(b"nonce", &sched_context, nonce.as_mut_slice())
+        .labeled_expand(&suite_id, b"nonce", &sched_context, nonce.as_mut_slice())
         .expect("nonce len is way too big");
     secret_ctx
-        .labeled_expand(b"exp", &sched_context, exporter_secret.as_mut_slice())
+        .labeled_expand(
+            &suite_id,
+            b"exp",
+            &sched_context,
+            exporter_secret.as_mut_slice(),
+        )
         .expect("exporter secret len is way too big");
 
     AeadCtx::new(&key, nonce, exporter_secret)
@@ -141,7 +124,7 @@ pub fn setup_sender<A, Kdf, Kem, R>(
     pk_recip: &<Kem::Kex as KeyExchange>::PublicKey,
     info: &[u8],
     csprng: &mut R,
-) -> Result<(EncappedKey<Kem::Kex>, AeadCtxS<A, Kdf>), HpkeError>
+) -> Result<(EncappedKey<Kem::Kex>, AeadCtxS<A, Kdf, Kem>), HpkeError>
 where
     A: Aead,
     Kdf: KdfTrait,
@@ -176,7 +159,7 @@ pub fn setup_receiver<A, Kdf, Kem>(
     sk_recip: &<Kem::Kex as KeyExchange>::PrivateKey,
     encapped_key: &EncappedKey<Kem::Kex>,
     info: &[u8],
-) -> Result<AeadCtxR<A, Kdf>, HpkeError>
+) -> Result<AeadCtxR<A, Kdf, Kem>, HpkeError>
 where
     A: Aead,
     Kdf: KdfTrait,
@@ -240,7 +223,7 @@ mod test {
                     .unwrap();
 
                     // Use the encapped key to derive the reciever's encryption context
-                    let mut aead_ctx2 = setup_receiver::<A, _, Kem>(
+                    let mut aead_ctx2 = setup_receiver::<A, Kdf, Kem>(
                         &receiver_mode,
                         &sk_recip,
                         &encapped_key,

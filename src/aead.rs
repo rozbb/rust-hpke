@@ -1,11 +1,13 @@
 use crate::{
-    kdf::{Kdf, LabeledExpand},
+    kdf::{Kdf as KdfTrait, LabeledExpand},
+    kem::Kem as KemTrait,
     kex::{Marshallable, Unmarshallable},
     setup::ExporterSecret,
+    util::{full_suite_id, FullSuiteId},
     HpkeError,
 };
 
-use core::u8;
+use core::{marker::PhantomData, u8};
 
 use aead::{AeadInPlace as BaseAead, NewAead as BaseNewAead};
 use digest::generic_array::GenericArray;
@@ -139,7 +141,7 @@ impl<A: Aead> Unmarshallable for AeadTag<A> {
 }
 
 /// The HPKE encryption context. This is what you use to `seal` plaintexts and `open` ciphertexts.
-pub(crate) struct AeadCtx<A: Aead, K: Kdf> {
+pub(crate) struct AeadCtx<A: Aead, Kdf: KdfTrait, Kem: KemTrait> {
     /// Records whether the nonce sequence counter has overflowed
     overflowed: bool,
     /// The underlying AEAD instance. This also does decryption.
@@ -147,78 +149,87 @@ pub(crate) struct AeadCtx<A: Aead, K: Kdf> {
     /// The base nonce which we XOR with sequence numbers
     nonce: AeadNonce<A>,
     /// The exporter secret, used in the `export()` method
-    exporter_secret: ExporterSecret<K>,
+    exporter_secret: ExporterSecret<Kdf>,
     /// The running sequence number
     seq: Seq<A>,
+    /// This binds the `AeadCtx` to the KEM that made it. Used to generate `suite_id`.
+    src_kem: PhantomData<Kem>,
+    /// The full ID of the ciphersuite that created this `AeadCtx`. Used for context binding.
+    suite_id: FullSuiteId,
 }
 
 // Necessary for test_setup_soundness
 #[cfg(test)]
-impl<A: Aead, K: Kdf> Clone for AeadCtx<A, K> {
-    fn clone(&self) -> AeadCtx<A, K> {
+impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> Clone for AeadCtx<A, Kdf, Kem> {
+    fn clone(&self) -> AeadCtx<A, Kdf, Kem> {
         AeadCtx {
             overflowed: self.overflowed,
             encryptor: self.encryptor.clone(),
             nonce: self.nonce.clone(),
             exporter_secret: self.exporter_secret.clone(),
             seq: self.seq.clone(),
+            src_kem: PhantomData,
+            suite_id: self.suite_id.clone(),
         }
     }
 }
 
-impl<A: Aead, K: Kdf> AeadCtx<A, K> {
+impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AeadCtx<A, Kdf, Kem> {
     /// Makes an AeadCtx from a raw key and nonce
     pub(crate) fn new(
         key: &AeadKey<A>,
         nonce: AeadNonce<A>,
-        exporter_secret: ExporterSecret<K>,
-    ) -> AeadCtx<A, K> {
+        exporter_secret: ExporterSecret<Kdf>,
+    ) -> AeadCtx<A, Kdf, Kem> {
+        let suite_id = full_suite_id::<A, Kdf, Kem>();
         AeadCtx {
             overflowed: false,
             encryptor: <A::AeadImpl as aead::NewAead>::new(key),
             nonce,
             exporter_secret,
             seq: <Seq<A> as Default>::default(),
+            src_kem: PhantomData,
+            suite_id,
         }
     }
 
     // def Context.Export(exporter_context, L):
-    //     return Expand(self.exporter_secret, exporter_context, L)
+    //   return LabeledExpand(self.exporter_secret, "sec", exporter_context, L)
     /// Fills a given buffer with secret bytes derived from this encryption context. This value
     /// does not depend on sequence number, so it is constant for the lifetime of this context.
-    pub fn export(&self, info: &[u8], out_buf: &mut [u8]) -> Result<(), HpkeError> {
+    pub fn export(&self, exporter_ctx: &[u8], out_buf: &mut [u8]) -> Result<(), HpkeError> {
         // Use our exporter secret as the PRK for an HKDF-Expand op. The only time this fails is
         // when the length of the PRK is not the the underlying hash function's digest size. But
         // that's guaranteed by the type system, so we can unwrap().
-        let hkdf_ctx = Hkdf::<K::HashImpl>::from_prk(self.exporter_secret.as_slice()).unwrap();
+        let hkdf_ctx = Hkdf::<Kdf::HashImpl>::from_prk(self.exporter_secret.as_slice()).unwrap();
 
         // This call either succeeds or returns hkdf::InvalidLength (iff the buffer length is more
         // than 255x the digest size of the underlying hash function)
         hkdf_ctx
-            .labeled_expand(b"sec", info, out_buf)
+            .labeled_expand(&self.suite_id, b"sec", exporter_ctx, out_buf)
             .map_err(|_| HpkeError::InvalidKdfLength)
     }
 }
 
 /// The HPKE receiver's context. This is what you use to `open` ciphertexts.
-pub struct AeadCtxR<A: Aead, K: Kdf>(AeadCtx<A, K>);
+pub struct AeadCtxR<A: Aead, Kdf: KdfTrait, Kem: KemTrait>(AeadCtx<A, Kdf, Kem>);
 
 // AeadCtx -> AeadCtxR via wrapping
-impl<A: Aead, K: Kdf> From<AeadCtx<A, K>> for AeadCtxR<A, K> {
-    fn from(ctx: AeadCtx<A, K>) -> AeadCtxR<A, K> {
+impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> From<AeadCtx<A, Kdf, Kem>> for AeadCtxR<A, Kdf, Kem> {
+    fn from(ctx: AeadCtx<A, Kdf, Kem>) -> AeadCtxR<A, Kdf, Kem> {
         AeadCtxR(ctx)
     }
 }
 
 // Necessary for test_setup_soundness
 #[cfg(test)]
-impl<A: Aead, K: Kdf> Clone for AeadCtxR<A, K> {
-    fn clone(&self) -> AeadCtxR<A, K> {
+impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> Clone for AeadCtxR<A, Kdf, Kem> {
+    fn clone(&self) -> AeadCtxR<A, Kdf, Kem> {
         self.0.clone().into()
     }
 }
 
-impl<A: Aead, K: Kdf> AeadCtxR<A, K> {
+impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AeadCtxR<A, Kdf, Kem> {
     // def Context.Open(aad, ct):
     //   pt = Open(self.key, self.Nonce(self.seq), aad, ct)
     //   if pt == OpenError:
@@ -281,24 +292,24 @@ impl<A: Aead, K: Kdf> AeadCtxR<A, K> {
 }
 
 /// The HPKE senders's context. This is what you use to `seal` plaintexts.
-pub struct AeadCtxS<A: Aead, K: Kdf>(AeadCtx<A, K>);
+pub struct AeadCtxS<A: Aead, Kdf: KdfTrait, Kem: KemTrait>(AeadCtx<A, Kdf, Kem>);
 
 // AeadCtx -> AeadCtxS via wrapping
-impl<A: Aead, K: Kdf> From<AeadCtx<A, K>> for AeadCtxS<A, K> {
-    fn from(ctx: AeadCtx<A, K>) -> AeadCtxS<A, K> {
+impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> From<AeadCtx<A, Kdf, Kem>> for AeadCtxS<A, Kdf, Kem> {
+    fn from(ctx: AeadCtx<A, Kdf, Kem>) -> AeadCtxS<A, Kdf, Kem> {
         AeadCtxS(ctx)
     }
 }
 
 // Necessary for test_setup_soundness
 #[cfg(test)]
-impl<A: Aead, K: Kdf> Clone for AeadCtxS<A, K> {
-    fn clone(&self) -> AeadCtxS<A, K> {
+impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> Clone for AeadCtxS<A, Kdf, Kem> {
+    fn clone(&self) -> AeadCtxS<A, Kdf, Kem> {
         self.0.clone().into()
     }
 }
 
-impl<A: Aead, K: Kdf> AeadCtxS<A, K> {
+impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AeadCtxS<A, Kdf, Kem> {
     // def Context.Seal(aad, pt):
     //   ct = Seal(self.key, self.Nonce(self.seq), aad, pt)
     //   self.IncrementSeq()
@@ -356,7 +367,10 @@ impl<A: Aead, K: Kdf> AeadCtxS<A, K> {
 #[cfg(test)]
 mod test {
     use super::{AeadTag, AesGcm128, AesGcm256, ChaCha20Poly1305, Seq};
-    use crate::{kdf::HkdfSha256, kex::Unmarshallable, test_util::gen_ctx_simple_pair, HpkeError};
+    use crate::{
+        kdf::HkdfSha256, kem::X25519HkdfSha256, kex::Unmarshallable,
+        test_util::gen_ctx_simple_pair, HpkeError,
+    };
 
     use core::u8;
 
@@ -365,7 +379,8 @@ mod test {
     #[test]
     fn test_export_idempotence() {
         // Set up a context. Logic is algorithm-independent, so we don't care about the types here
-        let (mut sender_ctx, _) = gen_ctx_simple_pair::<ChaCha20Poly1305, HkdfSha256>();
+        let (mut sender_ctx, _) =
+            gen_ctx_simple_pair::<ChaCha20Poly1305, HkdfSha256, X25519HkdfSha256>();
 
         // Get an initial export secret
         let mut secret1 = [0u8; 16];
@@ -403,7 +418,7 @@ mod test {
         };
 
         let (mut sender_ctx, mut receiver_ctx) =
-            gen_ctx_simple_pair::<ChaCha20Poly1305, HkdfSha256>();
+            gen_ctx_simple_pair::<ChaCha20Poly1305, HkdfSha256, X25519HkdfSha256>();
         sender_ctx.0.seq = big_seq.clone();
         receiver_ctx.0.seq = big_seq.clone();
 
@@ -462,9 +477,10 @@ mod test {
             #[test]
             fn $test_name() {
                 type A = $aead_ty;
-                type K = HkdfSha256;
+                type Kdf = HkdfSha256;
+                type Kem = X25519HkdfSha256;
 
-                let (mut sender_ctx, mut receiver_ctx) = gen_ctx_simple_pair::<A, K>();
+                let (mut sender_ctx, mut receiver_ctx) = gen_ctx_simple_pair::<A, Kdf, Kem>();
 
                 let msg = b"Love it or leave it, you better gain way";
                 let aad = b"You better hit bull's eye, the kid don't play";

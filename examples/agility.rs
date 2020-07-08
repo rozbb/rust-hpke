@@ -57,13 +57,13 @@ impl From<HpkeError> for AgileHpkeError {
     }
 }
 
-impl<A: Aead, Kdf: KdfTrait> AgileAeadCtxS for AeadCtxS<A, Kdf> {
+impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AgileAeadCtxS for AeadCtxS<A, Kdf, Kem> {
     fn seal(&mut self, plaintext: &mut [u8], aad: &[u8]) -> Result<Vec<u8>, HpkeError> {
         self.seal(plaintext, aad).map(|tag| tag.marshal().to_vec())
     }
 }
 
-impl<A: Aead, Kdf: KdfTrait> AgileAeadCtxR for AeadCtxR<A, Kdf> {
+impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AgileAeadCtxR for AeadCtxR<A, Kdf, Kem> {
     fn open(
         &mut self,
         ciphertext: &mut [u8],
@@ -546,7 +546,7 @@ fn do_setup_sender<A, Kdf, Kem, R>(
 where
     A: 'static + Aead,
     Kdf: 'static + KdfTrait,
-    Kem: KemTrait,
+    Kem: 'static + KemTrait,
     R: CryptoRng + RngCore,
 {
     let kex_alg = mode.kex_alg;
@@ -630,7 +630,7 @@ fn do_setup_receiver<A, Kdf, Kem, Dummy>(
 where
     A: 'static + Aead,
     Kdf: 'static + KdfTrait,
-    Kem: KemTrait,
+    Kem: 'static + KemTrait,
 {
     let mode = mode.clone().try_lift::<Kem::Kex, Kdf>()?;
     let (sk_recip, _) = recip_keypair.try_lift::<Kem::Kex>()?;

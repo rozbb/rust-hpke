@@ -1,10 +1,10 @@
 use crate::{
     kdf::{labeled_extract, Kdf as KdfTrait, LabeledExpand},
     kex::{KeyExchange, Marshallable, Unmarshallable},
+    util::KemSuiteId,
     HpkeError,
 };
 
-use byteorder::{BigEndian, ByteOrder};
 use digest::generic_array::GenericArray;
 use p256::{
     arithmetic::{AffinePoint, ProjectivePoint, Scalar},
@@ -181,18 +181,13 @@ impl KeyExchange for DhP256 {
     //       counter = counter + 1
     //     return (sk, pk(sk))
     //
-    /// Deterministically derives a keypair from the given input keying material and KEM ID. This
-    /// keying material SHOULD have as many bits of entropy as the bit length of a secret key,
-    /// i.e., 256.
+    /// Deterministically derives a keypair from the given input keying material and ciphersuite
+    /// ID. The keying material SHOULD have as many bits of entropy as the bit length of a secret
+    /// key, i.e., 256.
     #[doc(hidden)]
-    fn derive_keypair<Kdf: KdfTrait>(ikm: &[u8], kem_id: u16) -> (PrivateKey, PublicKey) {
+    fn derive_keypair<Kdf: KdfTrait>(suite_id: &KemSuiteId, ikm: &[u8]) -> (PrivateKey, PublicKey) {
         // Write the label into a byte buffer and extract from the IKM
-        let (_, hkdf_ctx) = {
-            // The XX is a placeholder for the 16-bit label (which is the KEM ID)
-            let mut label_bytes = *b"XXdkp_prk";
-            BigEndian::write_u16(&mut label_bytes[..2], kem_id);
-            labeled_extract::<Kdf>(&[], &label_bytes, ikm)
-        };
+        let (_, hkdf_ctx) = labeled_extract::<Kdf>(&[], suite_id, b"dkp_prk", ikm);
 
         // The buffer we hold the candidate scalar bytes in. This is the size of a private key.
         let mut buf = [0u8; 32];
@@ -202,7 +197,7 @@ impl KeyExchange for DhP256 {
         for counter in 0u8..=255 {
             // This unwrap is fine. It only triggers if buf is way too big. It's only 32 bytes.
             hkdf_ctx
-                .labeled_expand(b"candidate", &[counter], &mut buf)
+                .labeled_expand(suite_id, b"candidate", &[counter], &mut buf)
                 .unwrap();
 
             // Try to convert to a scalar
