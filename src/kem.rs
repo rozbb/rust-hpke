@@ -311,8 +311,7 @@ pub(crate) fn decap<Kem: KemTrait>(
 
 #[cfg(test)]
 mod tests {
-    use super::{decap, encap, EncappedKey, Marshallable, Unmarshallable};
-    use crate::kem::Kem as KemTrait;
+    use crate::kem::{decap, encap, EncappedKey, Kem as KemTrait, Marshallable, Unmarshallable};
 
     use rand::{rngs::StdRng, SeedableRng};
 
@@ -362,11 +361,6 @@ mod tests {
         };
     }
 
-    #[cfg(feature = "x25519-dalek")]
-    test_encap_correctness!(test_encap_correctness_x25519, crate::kem::X25519HkdfSha256);
-    #[cfg(feature = "p256")]
-    test_encap_correctness!(test_encap_correctness_p256, crate::kem::DhP256HkdfSha256);
-
     /// Tests that an unmarshal-marshal round-trip on an encapped key ends up at the same value
     macro_rules! test_encapped_marshal {
         ($test_name:ident, $kem_ty:ty) => {
@@ -393,6 +387,11 @@ mod tests {
             }
         };
     }
+
+    #[cfg(feature = "x25519-dalek")]
+    test_encap_correctness!(test_encap_correctness_x25519, crate::kem::X25519HkdfSha256);
+    #[cfg(feature = "p256")]
+    test_encap_correctness!(test_encap_correctness_p256, crate::kem::DhP256HkdfSha256);
 
     #[cfg(feature = "x25519-dalek")]
     test_encapped_marshal!(test_encapped_marshal_x25519, crate::kem::X25519HkdfSha256);

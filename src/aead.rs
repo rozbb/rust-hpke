@@ -367,118 +367,134 @@ impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AeadCtxS<A, Kdf, Kem> {
 #[cfg(test)]
 mod test {
     use super::{AeadTag, AesGcm128, AesGcm256, ChaCha20Poly1305, Seq};
-    use crate::{
-        kdf::HkdfSha256, kem::X25519HkdfSha256, kex::Unmarshallable,
-        test_util::gen_ctx_simple_pair, HpkeError,
-    };
+    use crate::{kdf::HkdfSha256, kex::Unmarshallable, test_util::gen_ctx_simple_pair, HpkeError};
 
     use core::u8;
 
     /// Tests that encryption context secret export does not change behavior based on the
-    /// underlying sequence number
-    #[test]
-    fn test_export_idempotence() {
-        // Set up a context. Logic is algorithm-independent, so we don't care about the types here
-        let (mut sender_ctx, _) =
-            gen_ctx_simple_pair::<ChaCha20Poly1305, HkdfSha256, X25519HkdfSha256>();
+    /// underlying sequence number This logic is cipher-agnostic, so we don't make the test generic
+    /// over ciphers.
+    macro_rules! test_export_idempotence {
+        ($test_name:ident, $kem_ty:ty) => {
+            #[test]
+            fn $test_name() {
+                type Kem = $kem_ty;
+                type Kdf = HkdfSha256;
+                // Again, this test is cipher-agnostic
+                type A = ChaCha20Poly1305;
 
-        // Get an initial export secret
-        let mut secret1 = [0u8; 16];
-        sender_ctx
-            .export(b"test_export_idempotence", &mut secret1)
-            .unwrap();
+                // Set up a context. Logic is algorithm-independent, so we don't care about the
+                // types here
+                let (mut sender_ctx, _) = gen_ctx_simple_pair::<A, Kdf, Kem>();
 
-        // Modify the context by encrypting something
-        let mut plaintext = *b"back hand";
-        sender_ctx
-            .seal(&mut plaintext[..], b"")
-            .expect("seal() failed");
+                // Get an initial export secret
+                let mut secret1 = [0u8; 16];
+                sender_ctx
+                    .export(b"test_export_idempotence", &mut secret1)
+                    .unwrap();
 
-        // Get a second export secret
-        let mut secret2 = [0u8; 16];
-        sender_ctx
-            .export(b"test_export_idempotence", &mut secret2)
-            .unwrap();
+                // Modify the context by encrypting something
+                let mut plaintext = *b"back hand";
+                sender_ctx
+                    .seal(&mut plaintext[..], b"")
+                    .expect("seal() failed");
 
-        assert_eq!(secret1, secret2);
+                // Get a second export secret
+                let mut secret2 = [0u8; 16];
+                sender_ctx
+                    .export(b"test_export_idempotence", &mut secret2)
+                    .unwrap();
+
+                assert_eq!(secret1, secret2);
+            }
+        };
     }
 
     /// Tests that sequence overflowing causes an error. This logic is cipher-agnostic, so we don't
-    /// bother making this a macro
-    #[test]
-    fn test_overflow() {
-        // Make a sequence number that's at the max
-        let big_seq = {
-            let mut buf = <Seq<ChaCha20Poly1305> as Default>::default();
-            // Set all the values to the max
-            for byte in buf.0.iter_mut() {
-                *byte = u8::MAX;
+    /// make the test generic over ciphers.
+    macro_rules! test_overflow {
+        ($test_name:ident, $kem_ty:ty) => {
+            #[test]
+            fn $test_name() {
+                type Kem = $kem_ty;
+                type Kdf = HkdfSha256;
+                // Again, this test is cipher-agnostic
+                type A = ChaCha20Poly1305;
+
+                // Make a sequence number that's at the max
+                let big_seq = {
+                    let mut buf = <Seq<A> as Default>::default();
+                    // Set all the values to the max
+                    for byte in buf.0.iter_mut() {
+                        *byte = u8::MAX;
+                    }
+                    buf
+                };
+
+                let (mut sender_ctx, mut receiver_ctx) = gen_ctx_simple_pair::<A, Kdf, Kem>();
+                sender_ctx.0.seq = big_seq.clone();
+                receiver_ctx.0.seq = big_seq.clone();
+
+                // These should support precisely one more encryption before it registers an
+                // overflow
+
+                let msg = b"draxx them sklounst";
+                let aad = b"with my prayers";
+
+                // Do one round trip and ensure it works
+                {
+                    let mut plaintext = *msg;
+                    // Encrypt the plaintext
+                    let tag = sender_ctx
+                        .seal(&mut plaintext[..], aad)
+                        .expect("seal() failed");
+                    // Rename for clarity
+                    let mut ciphertext = plaintext;
+
+                    // Now to decrypt on the other side
+                    receiver_ctx
+                        .open(&mut ciphertext[..], aad, &tag)
+                        .expect("open() failed");
+                    // Rename for clarity
+                    let roundtrip_plaintext = ciphertext;
+
+                    // Make sure the output message was the same as the input message
+                    assert_eq!(msg, &roundtrip_plaintext);
+                }
+
+                // Try another round trip and ensure that we've overflowed
+                {
+                    let mut plaintext = *msg;
+                    // Try to encrypt the plaintext
+                    match sender_ctx.seal(&mut plaintext[..], aad) {
+                        Err(HpkeError::SeqOverflow) => {} // Good, this should have overflowed
+                        Err(e) => panic!("seal() should have overflowed. Instead got {}", e),
+                        _ => panic!("seal() should have overflowed. Instead it succeeded"),
+                    }
+
+                    // Now try to decrypt something. This isn't a valid ciphertext or tag, but the
+                    // overflow should fail before the tag check fails.
+                    let mut dummy_ciphertext = [0u8; 32];
+                    let dummy_tag = AeadTag::unmarshal(&[0; 16]).unwrap();
+
+                    match receiver_ctx.open(&mut dummy_ciphertext[..], aad, &dummy_tag) {
+                        Err(HpkeError::SeqOverflow) => {} // Good, this should have overflowed
+                        Err(e) => panic!("open() should have overflowed. Instead got {}", e),
+                        _ => panic!("open() should have overflowed. Instead it succeeded"),
+                    }
+                }
             }
-            buf
         };
-
-        let (mut sender_ctx, mut receiver_ctx) =
-            gen_ctx_simple_pair::<ChaCha20Poly1305, HkdfSha256, X25519HkdfSha256>();
-        sender_ctx.0.seq = big_seq.clone();
-        receiver_ctx.0.seq = big_seq.clone();
-
-        // These should support precisely one more encryption before it registers an overflow
-
-        let msg = b"draxx them sklounst";
-        let aad = b"with my prayers";
-
-        // Do one round trip and ensure it works
-        {
-            let mut plaintext = *msg;
-            // Encrypt the plaintext
-            let tag = sender_ctx
-                .seal(&mut plaintext[..], aad)
-                .expect("seal() failed");
-            // Rename for clarity
-            let mut ciphertext = plaintext;
-
-            // Now to decrypt on the other side
-            receiver_ctx
-                .open(&mut ciphertext[..], aad, &tag)
-                .expect("open() failed");
-            // Rename for clarity
-            let roundtrip_plaintext = ciphertext;
-
-            // Make sure the output message was the same as the input message
-            assert_eq!(msg, &roundtrip_plaintext);
-        }
-
-        // Try another round trip and ensure that we've overflowed
-        {
-            let mut plaintext = *msg;
-            // Try to encrypt the plaintext
-            match sender_ctx.seal(&mut plaintext[..], aad) {
-                Err(HpkeError::SeqOverflow) => {} // Good, this should have overflowed
-                Err(e) => panic!("seal() should have overflowed. Instead got {}", e),
-                _ => panic!("seal() should have overflowed. Instead it succeeded"),
-            }
-
-            // Now try to decrypt something. This isn't a valid ciphertext or tag, but the overflow
-            // should fail before the tag check fails.
-            let mut dummy_ciphertext = [0u8; 32];
-            let dummy_tag = AeadTag::unmarshal(&[0; 16]).unwrap();
-
-            match receiver_ctx.open(&mut dummy_ciphertext[..], aad, &dummy_tag) {
-                Err(HpkeError::SeqOverflow) => {} // Good, this should have overflowed
-                Err(e) => panic!("open() should have overflowed. Instead got {}", e),
-                _ => panic!("open() should have overflowed. Instead it succeeded"),
-            }
-        }
     }
 
     /// Tests that `open()` can decrypt things properly encrypted with `seal()`
     macro_rules! test_ctx_correctness {
-        ($test_name:ident, $aead_ty:ty) => {
+        ($test_name:ident, $aead_ty:ty, $kem_ty:ty) => {
             #[test]
             fn $test_name() {
                 type A = $aead_ty;
                 type Kdf = HkdfSha256;
-                type Kem = X25519HkdfSha256;
+                type Kem = $kem_ty;
 
                 let (mut sender_ctx, mut receiver_ctx) = gen_ctx_simple_pair::<A, Kdf, Kem>();
 
@@ -505,8 +521,50 @@ mod test {
         };
     }
 
-    // The hash function and DH impl shouldn't really matter
-    test_ctx_correctness!(test_ctx_correctness_aes128, AesGcm128);
-    test_ctx_correctness!(test_ctx_correctness_aes256, AesGcm256);
-    test_ctx_correctness!(test_ctx_correctness_chacha, ChaCha20Poly1305);
+    #[cfg(feature = "x25519-dalek")]
+    test_export_idempotence!(test_export_idempotence_x25519, crate::kem::X25519HkdfSha256);
+    #[cfg(feature = "p256")]
+    test_export_idempotence!(test_export_idempotence_p256, crate::kem::DhP256HkdfSha256);
+
+    #[cfg(feature = "x25519-dalek")]
+    test_overflow!(test_overflow_x25519, crate::kem::X25519HkdfSha256);
+    #[cfg(feature = "p256")]
+    test_overflow!(test_overflow_p256, crate::kem::DhP256HkdfSha256);
+
+    #[cfg(feature = "x25519-dalek")]
+    test_ctx_correctness!(
+        test_ctx_correctness_aes128_x25519,
+        AesGcm128,
+        crate::kem::X25519HkdfSha256
+    );
+    #[cfg(feature = "p256")]
+    test_ctx_correctness!(
+        test_ctx_correctness_aes128_p256,
+        AesGcm128,
+        crate::kem::DhP256HkdfSha256
+    );
+    #[cfg(feature = "x25519-dalek")]
+    test_ctx_correctness!(
+        test_ctx_correctness_aes256_x25519,
+        AesGcm256,
+        crate::kem::X25519HkdfSha256
+    );
+    #[cfg(feature = "p256")]
+    test_ctx_correctness!(
+        test_ctx_correctness_aes256_p256,
+        AesGcm256,
+        crate::kem::DhP256HkdfSha256
+    );
+    #[cfg(feature = "x25519-dalek")]
+    test_ctx_correctness!(
+        test_ctx_correctness_chacha_x25519,
+        ChaCha20Poly1305,
+        crate::kem::X25519HkdfSha256
+    );
+    #[cfg(feature = "p256")]
+    test_ctx_correctness!(
+        test_ctx_correctness_chacha_p256,
+        ChaCha20Poly1305,
+        crate::kem::DhP256HkdfSha256
+    );
 }

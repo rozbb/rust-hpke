@@ -169,7 +169,6 @@ mod test {
         HkdfSha256,
         crate::kem::X25519HkdfSha256
     );
-
     #[cfg(feature = "p256")]
     test_single_shot_correctness!(
         test_single_shot_correctness_p256,

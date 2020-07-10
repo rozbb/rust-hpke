@@ -238,22 +238,6 @@ mod test {
         };
     }
 
-    #[cfg(feature = "x25519-dalek")]
-    test_setup_correctness!(
-        test_setup_correctness_x25519,
-        ChaCha20Poly1305,
-        HkdfSha256,
-        crate::kem::X25519HkdfSha256
-    );
-
-    #[cfg(feature = "p256")]
-    test_setup_correctness!(
-        test_setup_correctness_p256,
-        ChaCha20Poly1305,
-        HkdfSha256,
-        crate::kem::DhP256HkdfSha256
-    );
-
     /// Tests that using different input data gives you different encryption contexts
     macro_rules! test_setup_soundness {
         ($test_name:ident, $aead:ty, $kdf:ty, $kem:ty) => {
@@ -331,13 +315,27 @@ mod test {
     }
 
     #[cfg(feature = "x25519-dalek")]
+    test_setup_correctness!(
+        test_setup_correctness_x25519,
+        ChaCha20Poly1305,
+        HkdfSha256,
+        crate::kem::X25519HkdfSha256
+    );
+    #[cfg(feature = "p256")]
+    test_setup_correctness!(
+        test_setup_correctness_p256,
+        ChaCha20Poly1305,
+        HkdfSha256,
+        crate::kem::DhP256HkdfSha256
+    );
+
+    #[cfg(feature = "x25519-dalek")]
     test_setup_soundness!(
         test_setup_soundness_x25519,
         ChaCha20Poly1305,
         HkdfSha256,
         crate::kem::X25519HkdfSha256
     );
-
     #[cfg(feature = "p256")]
     test_setup_soundness!(
         test_setup_soundness_p256,
