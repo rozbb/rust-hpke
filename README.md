@@ -32,9 +32,9 @@ Here are all the primitives listed in the spec. The primitives with checked boxe
 Crate Features
 --------------
 
-Default flags: `x25519`, `p256`.
+Default features flags: `x25519`, `p256`.
 
-Flag list:
+Feature flag list:
 
 * `x25519` - Enables X25519-based KEMs
 * `p256` - Enables NIST P-256-based KEMs
@@ -63,8 +63,8 @@ What's next
 -----------
 
 * Add support for more KEMs
-* Remove allocation once and for all
 * Benchmarks
+* More examples
 
 License
 -------

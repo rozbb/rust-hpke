@@ -13,8 +13,8 @@ categories = ["cryptography", "no-std"]
 
 [features]
 # "p256" enables the use of ECDH-NIST-P256 as a KEM
-# "x25519-dalek" enables the use of the X25519 as a KEM
-default = ["p256", "x25519-dalek"]
+# "x25519" enables the use of the X25519 as a KEM
+default = ["p256", "x25519"]
 # The std feature has no function outside of doing KAT tests. There is no need to use this in
 # production.
 std = []
@@ -46,8 +46,8 @@ rand = { version = "0.7", default-features = false, features = ["getrandom"] }
 
 [[example]]
 name = "client_server"
-required-features = ["x25519-dalek"]
+required-features = ["x25519"]
 
 [[example]]
 name = "agility"
-required-features = ["p256", "x25519-dalek"]
+required-features = ["p256", "x25519"]

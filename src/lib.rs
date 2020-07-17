@@ -31,15 +31,16 @@ mod test_util;
 
 //-------- Modules and exports--------//
 
+#[macro_use]
+mod util;
+
 pub mod aead;
 pub mod kdf;
 pub mod kem;
 pub mod kex;
 pub mod op_mode;
-mod prelude;
 pub mod setup;
 pub mod single_shot;
-mod util;
 
 #[doc(inline)]
 pub use crate::aead::{AeadCtxR, AeadCtxS};

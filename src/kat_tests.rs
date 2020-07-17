@@ -4,12 +4,11 @@ use crate::{
     kem::{encap_with_eph, DhP256HkdfSha256, EncappedKey, Kem as KemTrait, X25519HkdfSha256},
     kex::{KeyExchange, Marshallable, Unmarshallable},
     op_mode::{OpModeR, PskBundle},
-    prelude::*,
     setup::setup_receiver,
 };
 
 extern crate std;
-use std::fs::File;
+use std::{fs::File, string::String, vec::Vec};
 
 use hex;
 use serde::{de::Error as SError, Deserialize, Deserializer};

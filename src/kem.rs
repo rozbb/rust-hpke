@@ -1,6 +1,6 @@
 use crate::{
     kdf::{extract_and_expand, Kdf as KdfTrait},
-    kex::{KeyExchange, Marshallable, Unmarshallable},
+    kex::{KeyExchange, Marshallable, Unmarshallable, MAX_PUBKEY_SIZE},
     util::kem_suite_id,
     HpkeError,
 };
@@ -163,17 +163,29 @@ pub(crate) fn encap_with_eph<Kem: KemTrait>(
     // The shared secret is either gonna be kex_res_eph, or that along with another shared secret
     // that's tied to the sender's identity.
     let shared_secret = if let Some((sk_sender_id, pk_sender_id)) = sender_id_keypair {
-        let kem_context = [
-            encapped_key.marshal(),
-            pk_recip.marshal(),
-            pk_sender_id.marshal(),
-        ]
-        .concat();
+        // kem_context = encapped_key || pk_recip || pk_sender_id
+        // We concat without allocation by making a buffer of the maximum possible size, then
+        // taking the appropriately sized slice.
+        let (kem_context_buf, kem_context_size) = concat_with_known_maxlen!(
+            MAX_PUBKEY_SIZE,
+            &encapped_key.marshal(),
+            &pk_recip.marshal(),
+            &pk_sender_id.marshal()
+        );
+        let kem_context = &kem_context_buf[..kem_context_size];
+
         // We want to do an authed encap. Do KEX between the sender identity secret key and the
         // recipient's pubkey
         let kex_res_identity = Kem::Kex::kex(sk_sender_id, pk_recip)?;
-        // kex_res_eph || kex_res_identity
-        let concatted_secrets = [kex_res_eph.marshal(), kex_res_identity.marshal()].concat();
+
+        // concatted_secrets = kex_res_eph || kex_res_identity
+        // Same no-alloc concat trick as above
+        let (concatted_secrets_buf, concatted_secret_size) = concat_with_known_maxlen!(
+            MAX_PUBKEY_SIZE,
+            &kex_res_eph.marshal(),
+            &kex_res_identity.marshal()
+        );
+        let concatted_secrets = &concatted_secrets_buf[..concatted_secret_size];
 
         // The "authed shared secret" is derived from the KEX of the ephemeral input with the
         // recipient pubkey, and the KEX of the identity input with the recipient pubkey. The
@@ -184,7 +196,16 @@ pub(crate) fn encap_with_eph<Kem: KemTrait>(
             .expect("shared secret is way too big");
         buf
     } else {
-        let kem_context = [encapped_key.marshal(), pk_recip.marshal()].concat();
+        // kem_context = encapped_key || pk_recip
+        // We concat without allocation by making a buffer of the maximum possible size, then
+        // taking the appropriately sized slice.
+        let (kem_context_buf, kem_context_size) = concat_with_known_maxlen!(
+            MAX_PUBKEY_SIZE,
+            &encapped_key.marshal(),
+            &pk_recip.marshal()
+        );
+        let kem_context = &kem_context_buf[..kem_context_size];
+
         // The "unauthed shared secret" is derived from just the KEX of the ephemeral input with
         // the recipient pubkey. The HKDF-Expand call only errors if the output values are 255x the
         // digest size of the hash function. Since these values are fixed at compile time, we don't
@@ -266,17 +287,29 @@ pub(crate) fn decap<Kem: KemTrait>(
     // The shared secret is either gonna be kex_res_eph, or that along with another shared secret
     // that's tied to the sender's identity.
     if let Some(pk_sender_id) = pk_sender_id {
-        let kem_context = [
-            encapped_key.marshal(),
-            pk_recip.marshal(),
-            pk_sender_id.marshal(),
-        ]
-        .concat();
+        // kem_context = encapped_key || pk_recip || pk_sender_id
+        // We concat without allocation by making a buffer of the maximum possible size, then
+        // taking the appropriately sized slice.
+        let (kem_context_buf, kem_context_size) = concat_with_known_maxlen!(
+            MAX_PUBKEY_SIZE,
+            &encapped_key.marshal(),
+            &pk_recip.marshal(),
+            &pk_sender_id.marshal()
+        );
+        let kem_context = &kem_context_buf[..kem_context_size];
+
         // We want to do an authed encap. Do KEX between the sender identity secret key and the
         // recipient's pubkey
         let kex_res_identity = Kem::Kex::kex(sk_recip, pk_sender_id)?;
-        // kex_res_eph || kex_res_identity
-        let concatted_secrets = [kex_res_eph.marshal(), kex_res_identity.marshal()].concat();
+
+        // concatted_secrets = kex_res_eph || kex_res_identity
+        // Same no-alloc concat trick as above
+        let (concatted_secrets_buf, concatted_secret_size) = concat_with_known_maxlen!(
+            MAX_PUBKEY_SIZE,
+            &kex_res_eph.marshal(),
+            &kex_res_identity.marshal()
+        );
+        let concatted_secrets = &concatted_secrets_buf[..concatted_secret_size];
 
         // The "authed shared secret" is derived from the KEX of the ephemeral input with the
         // recipient pubkey, and the kex of the identity input with the recipient pubkey. The
@@ -292,7 +325,16 @@ pub(crate) fn decap<Kem: KemTrait>(
         .expect("shared secret is way too big");
         Ok(shared_secret)
     } else {
-        let kem_context = [encapped_key.marshal(), pk_recip.marshal()].concat();
+        // kem_context = encapped_key || pk_recip || pk_sender_id
+        // We concat without allocation by making a buffer of the maximum possible size, then
+        // taking the appropriately sized slice.
+        let (kem_context_buf, kem_context_size) = concat_with_known_maxlen!(
+            MAX_PUBKEY_SIZE,
+            &encapped_key.marshal(),
+            &pk_recip.marshal()
+        );
+        let kem_context = &kem_context_buf[..kem_context_size];
+
         // The "unauthed shared secret" is derived from just the KEX of the ephemeral input with the
         // recipient pubkey. The HKDF-Expand call only errors if the output values are 255x the
         // digest size of the hash function. Since these values are fixed at compile time, we don't

@@ -2,6 +2,9 @@ use crate::{kdf::Kdf as KdfTrait, util::KemSuiteId, HpkeError};
 
 use digest::generic_array::{typenum::marker_traits::Unsigned, ArrayLength, GenericArray};
 
+// This is currently the maximum value of all of Npk, Ndh, and Nenc. It's achieved by P-521
+pub(crate) const MAX_PUBKEY_SIZE: usize = 133;
+
 /// Implemented by types that have a fixed-length byte representation
 pub trait Marshallable {
     type OutputSize: ArrayLength<u8>;

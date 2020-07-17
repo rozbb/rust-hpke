@@ -1,3 +1,4 @@
+use crate::kdf::MAX_DIGEST_SIZE;
 use crate::{
     aead::{Aead, AeadCtx, AeadCtxR, AeadCtxS},
     kdf::{labeled_extract, Kdf as KdfTrait, LabeledExpand},
@@ -28,43 +29,31 @@ where
     Kem: KemTrait,
     O: OpMode<Kem::Kex>,
 {
-    // A helper function that writes to a buffer and returns a slice containing the unwritten
-    // portion. If this crate were allowed to use std, we'd just use std::io::Write instead.
-    fn write_to_buf<'a>(buf: &'a mut [u8], to_write: &[u8]) -> &'a mut [u8] {
-        buf[..to_write.len()].copy_from_slice(to_write);
-        &mut buf[to_write.len()..]
-    }
-
     // Put together the binding context used for all KDF operations
     let suite_id = full_suite_id::<A, Kdf, Kem>();
 
     // In KeySchedule(),
-    //     pskID_hash = LabeledExtract(zero(0), "pskID", pskID)
+    //     psk_id_hash = LabeledExtract(zero(0), "pskID", psk_id)
     //     info_hash = LabeledExtract(zero(0), "info_hash", info)
-    //     key_schedule_context = concat(mode, pskID_hash, info_hash)
+    //     key_schedule_context = concat(mode, psk_id_hash, info_hash)
 
-    // Pick a buffer to hold a u8 and 2 digests, as described above
-    let mut buf = [0u8; 1 + 2 * 512];
-    let buf_len = buf.len();
-
-    let sched_context: &[u8] = {
-        //  Define a cursor with which to write to the above buffer
-        let mut cursor = &mut buf[..];
-
-        // Use the helper function to write the mode identifier (1 byte, so endianness doesn't
-        // matter)
-        cursor = write_to_buf(cursor, &[mode.mode_id()]);
-
+    // We concat without allocation by making a buffer of the maximum possible size, then
+    // taking the appropriately sized slice.
+    let (sched_context_buf, sched_context_size) = {
         let (psk_id_hash, _) =
             labeled_extract::<Kdf>(&[], &suite_id, b"pskID_hash", mode.get_psk_id());
         let (info_hash, _) = labeled_extract::<Kdf>(&[], &suite_id, b"info_hash", info);
 
-        cursor = write_to_buf(cursor, psk_id_hash.as_slice());
-        cursor = write_to_buf(cursor, info_hash.as_slice());
-
-        let bytes_written = buf_len - cursor.len();
-        &buf[..bytes_written]
+        // Yes it's overkill to bound the first input by MAX_DIGEST_SIZE, since it's only 1 byte.
+        // But whatever, this is pretty clean.
+        concat_with_known_maxlen!(
+            MAX_DIGEST_SIZE,
+            &[mode.mode_id()],
+            &psk_id_hash.as_slice(),
+            &info_hash.as_slice()
+        )
     };
+    let sched_context = &sched_context_buf[..sched_context_size];
 
     // In KeySchedule(),
     //   psk_hash = LabeledExtract(zero(0), "psk_hash", psk)

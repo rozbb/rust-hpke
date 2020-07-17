@@ -39,3 +39,39 @@ pub(crate) fn kem_suite_id<Kem: KemTrait>() -> KemSuiteId {
 
     suite_id
 }
+
+/// Returns a const expression that evaluates to the number of arguments it received
+macro_rules! count {
+    () => (0usize);
+    ( $x:tt $($xs:tt)* ) => (1usize + count!($($xs)*));
+}
+
+/// Given a length L and a sequence of n bytestrings with length at most L, this does a
+/// non-allocating concatentation of the bytestrings. It constructs a big buffer of n*L many bytes
+/// writes everything into there, and keeps track of how many bytes it wrote. The macro returns
+/// `(buf, num_bytes_written)`.
+macro_rules! concat_with_known_maxlen {
+    ( $maxlen:expr, $( $slice:expr ),* ) => {{
+        // The length of the big buffer is the number of items we're concatting times the max
+        // length of the items. count! tells us how many items we're concatting.
+        const BUFLEN: usize = count!($($slice)*) * $maxlen;
+
+        // Make the big buffer and iteratively write each slice to the remaining unused space.
+        // This panics if if we ever run out of space.
+        let mut buf = [0u8; BUFLEN];
+        let mut unused_space = &mut buf[..];
+        $(
+            unused_space = crate::util::write_to_buf(unused_space, $slice);
+        )*
+
+        let num_bytes_written = BUFLEN - unused_space.len();
+        (buf, num_bytes_written)
+    }};
+}
+
+/// A helper function that writes to a buffer and returns a slice containing the unwritten portion.
+/// If this crate were allowed to use std, we'd just use std::io::Write instead.
+pub(crate) fn write_to_buf<'a>(buf: &'a mut [u8], to_write: &[u8]) -> &'a mut [u8] {
+    buf[..to_write.len()].copy_from_slice(to_write);
+    &mut buf[to_write.len()..]
+}
