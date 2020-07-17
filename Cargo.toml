@@ -15,6 +15,7 @@ categories = ["cryptography", "no-std"]
 # "p256" enables the use of ECDH-NIST-P256 as a KEM
 # "x25519" enables the use of the X25519 as a KEM
 default = ["p256", "x25519"]
+x25519 = ["x25519-dalek"]
 # The std feature has no function outside of doing KAT tests. There is no need to use this in
 # production.
 std = []

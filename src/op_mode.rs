@@ -1,6 +1,7 @@
 use crate::kex::KeyExchange;
 
-/// Contains preshared key bytes and an identifier
+/// Contains preshared key bytes and an identifier. This is intended to go inside an `OpMode`
+/// struct.
 #[derive(Clone, Copy)]
 pub struct PskBundle<'a> {
     /// The preshared key
@@ -9,9 +10,10 @@ pub struct PskBundle<'a> {
     pub psk_id: &'a [u8],
 }
 
-/// The operation mode of the receiver's side of HPKE. This determines what information is folded
-/// into the encryption context derived in the `setup_receiver` functions. You can include a
-/// preshared key, the identity key of the sender, both, or neither.
+/// The operation mode of the HPKE session (receiver's view). This is how the sender authenticates
+/// their identity to the receiver. This authentication information can include a preshared key,
+/// the identity key of the sender, both, or neither. `Base` is the only mode that does not provide
+/// any kind of sender identity authentication.
 pub enum OpModeR<'a, Kex: KeyExchange> {
     /// No extra information included
     Base,
@@ -35,9 +37,10 @@ impl<'a, Kex: KeyExchange> OpModeR<'a, Kex> {
     }
 }
 
-/// The operation mode of the sender's side of HPKE. This determines what information is folded
-/// into the encryption context derived in the `setup_sender` functions. You can include a
-/// preshared key, the identity key of the sender, both, or neither.
+/// The operation mode of the HPKE session (sender's view). This is how the sender authenticates
+/// their identity to the receiver. This authentication information can include a preshared key,
+/// the identity key of the sender, both, or neither. `Base` is the only mode that does not provide
+/// any kind of sender identity authentication.
 pub enum OpModeS<'a, Kex: KeyExchange> {
     /// No extra information included
     Base,

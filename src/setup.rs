@@ -100,8 +100,7 @@ where
 //       pkIm = Marshal(pk(skI))
 //       return enc, KeySchedule(mode_psk_auth, pkR, zz, enc, info,
 //                               psk, pskID, pkIm)
-/// Initiates an encryption context to the given recipient. Does an "authenticated" encapsulation
-/// if `sk_sender_id` is set. This ties the sender identity to the shared secret.
+/// Initiates an encryption context to the given recipient public key
 ///
 /// Return Value
 /// ============

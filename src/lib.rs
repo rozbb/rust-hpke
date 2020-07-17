@@ -60,11 +60,11 @@ pub use single_shot::{single_shot_open, single_shot_seal};
 /// Describes things that can go wrong when trying to seal or open a ciphertext
 #[derive(Clone, Copy, Debug)]
 pub enum HpkeError {
-    /// The nonce sequence counter has already overflowed
+    /// The nonce sequence counter has overflowed
     SeqOverflow,
     /// The authentication tag was invalid when opening
     InvalidTag,
-    /// An error occured during encryption
+    /// An unspecified error occured during encryption
     Encryption,
     /// A key exchange input or output was invalid
     InvalidKeyExchange,

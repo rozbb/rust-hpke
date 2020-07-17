@@ -25,7 +25,11 @@ pub trait Unmarshallable: Marshallable + Sized {
 /// This trait captures the requirements of a key exchange mechanism. It must have a way to
 /// generate keypairs, perform the KEX computation, and marshal/umarshal KEX pubkeys
 pub trait KeyExchange {
+    /// The key exchange's public key type. If you want to generate a keypair, see
+    /// `Kem::gen_keypair` or `Kem::derive_keypair`
     type PublicKey: Clone + Marshallable + Unmarshallable;
+    /// The key exchange's private key type. If you want to generate a keypair, see
+    /// `Kem::gen_keypair` or `Kem::derive_keypair`
     type PrivateKey: Clone + Marshallable + Unmarshallable;
 
     #[doc(hidden)]

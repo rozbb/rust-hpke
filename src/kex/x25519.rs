@@ -78,7 +78,7 @@ impl Marshallable for KexResult {
     }
 }
 
-/// Dummy type which implements the `KeyExchange` trait
+/// Represents ECDH functionality over the X25519 group
 pub struct X25519 {}
 
 impl KeyExchange for X25519 {

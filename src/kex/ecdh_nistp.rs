@@ -128,7 +128,7 @@ impl Marshallable for KexResult {
     }
 }
 
-/// Dummy type which implements the `KeyExchange` trait
+/// Represents ECDH functionality over NIST curve P-256
 pub struct DhP256 {}
 
 impl KeyExchange for DhP256 {

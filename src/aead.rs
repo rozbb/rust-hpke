@@ -283,8 +283,10 @@ impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AeadCtxR<A, Kdf, Kem> {
     ///
     /// Return Value
     /// ============
-    /// Returns `Ok(())` on success. If the buffer length is more than 255x the digest size of the
-    /// underlying hash function, returns an `Err(HpkeError::InvalidKdfLength)`.
+    /// Returns `Ok(())` on success. If the buffer length is more than about 255x the digest size
+    /// of the underlying hash function, returns an `Err(HpkeError::InvalidKdfLength)`. The exact
+    /// number is given in the "Input Length Restrictions" section of the spec. Just don't use to
+    /// fill massive buffers and you'll be fine.
     pub fn export(&self, info: &[u8], out_buf: &mut [u8]) -> Result<(), HpkeError> {
         // Pass to AeadCtx
         self.0.export(info, out_buf)
