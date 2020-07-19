@@ -119,9 +119,9 @@ pub(crate) type SharedSecret<Kem> =
 //   enc = Serialize(pkE)
 //
 //   pkRm = Serialize(pkR)
-//   kemContext = concat(enc, pkRm)
+//   kem_context = concat(enc, pkRm)
 //
-//   zz = ExtractAndExpand(dh, kemContext)
+//   zz = ExtractAndExpand(dh, kem_context)
 //   return zz, enc
 //
 // def AuthEncap(pkR, skS):
@@ -131,9 +131,9 @@ pub(crate) type SharedSecret<Kem> =
 //
 //   pkRm = Serialize(pkR)
 //   pkSm = Serialize(pk(skS))
-//   kemContext = concat(enc, pkRm, pkSm)
+//   kem_context = concat(enc, pkRm, pkSm)
 //
-//   zz = ExtractAndExpand(dh, kemContext)
+//   zz = ExtractAndExpand(dh, kem_context)
 //   return zz, enc
 /// Derives a shared secret that the owner of the recipient's pubkey can use to derive the same
 /// shared secret. If `sk_sender_id` is given, the sender's identity will be tied to the shared

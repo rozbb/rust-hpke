@@ -1,7 +1,6 @@
-use crate::kdf::MAX_DIGEST_SIZE;
 use crate::{
     aead::{Aead, AeadCtx, AeadCtxR, AeadCtxS},
-    kdf::{labeled_extract, Kdf as KdfTrait, LabeledExpand},
+    kdf::{labeled_extract, Kdf as KdfTrait, LabeledExpand, MAX_DIGEST_SIZE},
     kem::{self, EncappedKey, Kem as KemTrait, SharedSecret},
     kex::KeyExchange,
     op_mode::{OpMode, OpModeR, OpModeS},
