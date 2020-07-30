@@ -32,15 +32,15 @@ where
     let suite_id = full_suite_id::<A, Kdf, Kem>();
 
     // In KeySchedule(),
-    //     psk_id_hash = LabeledExtract(zero(0), "pskID", psk_id)
-    //     info_hash = LabeledExtract(zero(0), "info_hash", info)
-    //     key_schedule_context = concat(mode, psk_id_hash, info_hash)
+    //   psk_id_hash = LabeledExtract("", "psk_id_hash", psk_id)
+    //   info_hash = LabeledExtract("", "info_hash", info)
+    //   key_schedule_context = concat(mode, psk_id_hash, info_hash)
 
     // We concat without allocation by making a buffer of the maximum possible size, then
     // taking the appropriately sized slice.
     let (sched_context_buf, sched_context_size) = {
         let (psk_id_hash, _) =
-            labeled_extract::<Kdf>(&[], &suite_id, b"pskID_hash", mode.get_psk_id());
+            labeled_extract::<Kdf>(&[], &suite_id, b"psk_id_hash", mode.get_psk_id());
         let (info_hash, _) = labeled_extract::<Kdf>(&[], &suite_id, b"info_hash", info);
 
         // Yes it's overkill to bound the first input by MAX_DIGEST_SIZE, since it's only 1 byte.
@@ -55,8 +55,8 @@ where
     let sched_context = &sched_context_buf[..sched_context_size];
 
     // In KeySchedule(),
-    //   psk_hash = LabeledExtract(zero(0), "psk_hash", psk)
-    //   secret = LabeledExtract(psk_hash, "secret", zz)
+    //   psk_hash = LabeledExtract("", "psk_hash", psk)
+    //   secret = LabeledExtract(psk_hash, "secret", shared_secret)
     //   key = LabeledExpand(secret, "key", key_schedule_context, Nk)
     //   nonce = LabeledExpand(secret, "nonce", key_schedule_context, Nn)
     //   exporter_secret = LabeledExpand(secret, "exp", key_schedule_context, Nh)
@@ -93,12 +93,9 @@ where
     AeadCtx::new(&key, nonce, exporter_secret)
 }
 
-// From draft02 §6.5:
-//     def SetupAuthPSKI(pkR, info, psk, pskID, skI):
-//       zz, enc = AuthEncap(pkR, skI)
-//       pkIm = Marshal(pk(skI))
-//       return enc, KeySchedule(mode_psk_auth, pkR, zz, enc, info,
-//                               psk, pskID, pkIm)
+// def SetupAuthPSKI(pkR, info, psk, psk_id, skI):
+//   shared_secret, enc = AuthEncap(pkR, skI)
+//   return enc, KeySchedule(mode_auth_psk, shared_secret, info, psk, psk_id)
 /// Initiates an encryption context to the given recipient public key
 ///
 /// Return Value
@@ -128,12 +125,9 @@ where
     Ok((encapped_key, enc_ctx.into()))
 }
 
-//  From draft02 §6.5:
-//     def SetupAuthPSKR(enc, skR, info, psk, pskID, pkI):
-//       zz = AuthDecap(enc, skR, pkI)
-//       pkIm = Marshal(pkI)
-//       return KeySchedule(mode_psk_auth, pk(skR), zz, enc, info,
-//                          psk, pskID, pkIm)
+// def SetupAuthPSKR(enc, skR, info, psk, pskID, pkI):
+//   shared_secret = AuthDecap(enc, skR, pkI)
+//   return KeySchedule(mode_auth_psk, shared_secret, info, psk, psk_id)
 /// Initiates an encryption context given a private key `sk` and an encapsulated key which was
 /// encapsulated to `sk`'s corresponding public key
 ///

@@ -63,7 +63,7 @@ impl Kem for X25519HkdfSha256 {
     type Kex = crate::kex::X25519;
     type Kdf = crate::kdf::HkdfSha256;
 
-    // Section 7.1: DHKEM(Curve25519, HKDF-SHA256)
+    // §7.1: DHKEM(X25519, HKDF-SHA256)
     const KEM_ID: u16 = 0x0020;
 }
 
@@ -76,7 +76,7 @@ impl Kem for DhP256HkdfSha256 {
     type Kex = crate::kex::DhP256;
     type Kdf = crate::kdf::HkdfSha256;
 
-    // Section 7.1: DHKEM(P256, HKDF-SHA256)
+    // §7.1: DHKEM(P-256, HKDF-SHA256)
     const KEM_ID: u16 = 0x0010;
 }
 
@@ -121,9 +121,6 @@ pub(crate) type SharedSecret<Kem> =
 //   pkRm = Serialize(pkR)
 //   kem_context = concat(enc, pkRm)
 //
-//   zz = ExtractAndExpand(dh, kem_context)
-//   return zz, enc
-//
 // def AuthEncap(pkR, skS):
 //   skE, pkE = GenerateKeyPair()
 //   dh = concat(DH(skE, pkR), DH(skS, pkR))
@@ -133,8 +130,8 @@ pub(crate) type SharedSecret<Kem> =
 //   pkSm = Serialize(pk(skS))
 //   kem_context = concat(enc, pkRm, pkSm)
 //
-//   zz = ExtractAndExpand(dh, kem_context)
-//   return zz, enc
+//   shared_secret = ExtractAndExpand(dh, kem_context)
+//   return shared_secret, enc
 /// Derives a shared secret that the owner of the recipient's pubkey can use to derive the same
 /// shared secret. If `sk_sender_id` is given, the sender's identity will be tied to the shared
 /// secret.
@@ -244,25 +241,25 @@ where
 }
 
 // def Decap(enc, skR):
-//   pkE = Unmarshal(enc)
+//   pkE = Deserialize(enc)
 //   dh = DH(skR, pkE)
 //
-//   pkRm = Marshal(pk(skR))
-//   kemContext = concat(enc, pkRm)
+//   pkRm = Serialize(pk(skR))
+//   kem_context = concat(enc, pkRm)
 //
-//   zz = ExtractAndExpand(dh, kemContext)
-//   return zz
+//   shared_secret = ExtractAndExpand(dh, kem_context)
+//   return shared_secret
 //
 // def AuthDecap(enc, skR, pkS):
-//   pkE = Unmarshal(enc)
+//   pkE = Deserialize(enc)
 //   dh = concat(DH(skR, pkE), DH(skR, pkS))
 //
-//   pkRm = Marshal(pk(skR))
-//   pkSm = Marshal(pkS)
-//   kemContext = concat(enc, pkRm, pkSm)
+//   pkRm = Serialize(pk(skR))
+//   pkSm = Serialize(pkS)
+//   kem_context = concat(enc, pkRm, pkSm)
 //
-//   zz = ExtractAndExpand(dh, kemContext)
-//   return zz
+//   shared_secret = ExtractAndExpand(dh, kem_context)
+//   return shared_secret
 /// Derives a shared secret given the encapsulated key and the recipients secret key. If
 /// `pk_sender_id` is given, the sender's identity will be tied to the shared secret.
 ///

@@ -5,7 +5,7 @@ use digest::{generic_array::GenericArray, BlockInput, Digest, FixedOutput, Reset
 use sha2::{Sha256, Sha384, Sha512};
 
 // This has a space because LabeledExtract calls for a space between the RFC string and the label
-const RFC_STR: &[u8] = b"RFCXXXX ";
+const RFC_STR: &[u8] = b"HPKE-05 ";
 
 // This is currently the maximum value of Nh. It is achieved by HKDF-SHA512.
 pub(crate) const MAX_DIGEST_SIZE: usize = 512;
@@ -29,11 +29,12 @@ use Kdf as KdfTrait;
 /// The implementation of HKDF-SHA256
 pub struct HkdfSha256 {}
 
+// The KDF_ID constant below come from §7.2
+
 impl KdfTrait for HkdfSha256 {
     #[doc(hidden)]
     type HashImpl = Sha256;
 
-    // draft02 §8.2: HKDF-SHA256
     #[doc(hidden)]
     const KDF_ID: u16 = 0x0001;
 }
@@ -45,7 +46,6 @@ impl KdfTrait for HkdfSha384 {
     #[doc(hidden)]
     type HashImpl = Sha384;
 
-    // draft02 §8.2: HKDF-SHA384
     #[doc(hidden)]
     const KDF_ID: u16 = 0x0002;
 }
@@ -57,15 +57,14 @@ impl KdfTrait for HkdfSha512 {
     #[doc(hidden)]
     type HashImpl = Sha512;
 
-    // draft02 §8.2: HKDF-SHA512
     #[doc(hidden)]
     const KDF_ID: u16 = 0x0003;
 }
 
 // def ExtractAndExpand(dh, kemContext):
 //   eae_prk = LabeledExtract(zero(0), "eae_prk", dh)
-//   zz = LabeledExpand(eae_prk, "zz", kemContext, Nzz)
-//   return zz
+//   shared_secret = LabeledExpand(eae_prk, "shared_secret", kemContext, Nsecret)
+//   return shared_secret
 /// Uses the given IKM to extract a secret, and then uses that secret, plus the given suite ID and
 /// info string, to expand to the output buffer
 pub(crate) fn extract_and_expand<Kem: KemTrait>(
@@ -78,13 +77,13 @@ pub(crate) fn extract_and_expand<Kem: KemTrait>(
     // Extract using given IKM
     let (_, hkdf_ctx) = labeled_extract::<Kem::Kdf>(&[], suite_id, b"eae_prk", ikm);
     // Expand using given info string
-    hkdf_ctx.labeled_expand(suite_id, b"zz", info, out)
+    hkdf_ctx.labeled_expand(suite_id, b"shared_secret", info, out)
 }
 
 // def LabeledExtract(salt, label, ikm):
-//   labeled_ikm = concat("RFCXXXX ", suite_id, label, ikm)
+//   labeled_ikm = concat("HPKE-05 ", suite_id, label, ikm)
 //   return Extract(salt, labeled_ikm)
-/// Returns the HKDF context derived from `(salt=salt, ikm="RFCXXXX "||suite_id||label||ikm)`
+/// Returns the HKDF context derived from `(salt=salt, ikm="HPKE-05 "||suite_id||label||ikm)`
 pub(crate) fn labeled_extract<Kdf: KdfTrait>(
     salt: &[u8],
     suite_id: &[u8],
@@ -117,9 +116,9 @@ pub(crate) trait LabeledExpand {
 impl<D: Update + BlockInput + FixedOutput + Reset + Default + Clone> LabeledExpand
     for hkdf::Hkdf<D>
 {
-    // def LabeledExpand(PRK, label, info, L):
-    //   labeled_info = concat(I2OSP(L, 2), "RFCXXXX ", suite_id, label, info)
-    //   return Expand(PRK, labeled_info, L)
+    // def LabeledExpand(prk, label, info, L):
+    //   labeled_info = concat(I2OSP(L, 2), "HPKE-05 ", suite_id, label, info)
+    //   return Expand(prk, labeled_info, L)
     fn labeled_expand(
         &self,
         suite_id: &[u8],

@@ -10,8 +10,8 @@ use crate::{
 
 use rand::{CryptoRng, RngCore};
 
-// def SealAuthPSK(pkR, info, aad, pt, psk, pskID, skS):
-//   enc, ctx = SetupAuthPSKS(pkR, info, psk, pskID, skS)
+// def SealAuthPSK(pkR, info, aad, pt, psk, psk_id, skS):
+//   enc, ctx = SetupAuthPSKS(pkR, info, psk, psk_id, skS)
 //   ct = ctx.Seal(aad, pt)
 //   return enc, ct
 /// Does a `setup_sender` and `AeadCtx::seal` in one shot. That is, it does a key encapsulation to
@@ -46,8 +46,8 @@ where
     Ok((encapped_key, tag))
 }
 
-// def OpenAuthPSK(enc, skR, info, aad, ct, psk, pskID, pkS):
-//   ctx = SetupAuthPSKR(enc, skR, info, psk, pskID, pkS)
+// def OpenAuthPSK(enc, skR, info, aad, ct, psk, psk_id, pkS):
+//   ctx = SetupAuthPSKR(enc, skR, info, psk, psk_id, pkS)
 //   return ctx.Open(aad, ct)
 /// Does a `setup_receiver` and `AeadCtx::open` in one shot. That is, it does a key decapsulation
 /// for the specified recipient and decrypts the provided plaintext in place. See

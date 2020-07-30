@@ -51,7 +51,10 @@ impl Aead for ChaCha20Poly1305 {
     // draft02 §8.3: ChaCha20Poly1305
     const AEAD_ID: u16 = 0x0003;
 }
-
+// def Context.IncrementSeq():
+//   if self.seq >= (1 << (8*Nn)) - 1:
+//     raise NonceOverflowError
+//   self.seq += 1
 /// Treats the given seq (which is a bytestring) as a big-endian integer, and increments it
 ///
 /// Return Value
@@ -75,10 +78,9 @@ fn increment_seq<A: Aead>(arr: &mut Seq<A>) -> Result<(), ()> {
     Err(())
 }
 
-// From draft02 §6.6
-//     def Context.Nonce(seq):
-//       encSeq = encode_big_endian(seq, len(self.nonce))
-//       return xor(self.nonce, encSeq)
+// def Context.ComputeNonce(seq):
+//   seq_bytes = I2OSP(seq, Nn)
+//   return xor(self.nonce, seq_bytes)
 /// Derives a nonce from the given nonce and a "sequence number". The sequence number is treated as
 /// a big-endian integer with length equal to the nonce length.
 fn mix_nonce<A: Aead>(base_nonce: &AeadNonce<A>, seq: &Seq<A>) -> AeadNonce<A> {
@@ -231,9 +233,9 @@ impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> Clone for AeadCtxR<A, Kdf, Kem> {
 
 impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AeadCtxR<A, Kdf, Kem> {
     // def Context.Open(aad, ct):
-    //   pt = Open(self.key, self.Nonce(self.seq), aad, ct)
+    //   pt = Open(self.key, self.ComputeNonce(self.seq), aad, ct)
     //   if pt == OpenError:
-    //     return OpenError
+    //     raise OpenError
     //   self.IncrementSeq()
     //   return pt
     /// Does a "detached open in place", meaning it overwrites `ciphertext` with the resulting
@@ -313,7 +315,7 @@ impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> Clone for AeadCtxS<A, Kdf, Kem> {
 
 impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AeadCtxS<A, Kdf, Kem> {
     // def Context.Seal(aad, pt):
-    //   ct = Seal(self.key, self.Nonce(self.seq), aad, pt)
+    //   ct = Seal(self.key, self.ComputeNonce(self.seq), aad, pt)
     //   self.IncrementSeq()
     //   return ct
     /// Does a "detached seal in place", meaning it overwrites `plaintext` with the resulting
@@ -353,6 +355,8 @@ impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AeadCtxS<A, Kdf, Kem> {
         }
     }
 
+    // def Context.Export(exporter_context, L):
+    //   return LabeledExpand(self.exporter_secret, "sec", exporter_context, L)
     /// Fills a given buffer with secret bytes derived from this encryption context. This value
     /// does not depend on sequence number, so it is constant for the lifetime of this context.
     ///

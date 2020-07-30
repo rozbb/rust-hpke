@@ -1,21 +1,24 @@
-//! This file describes a simple interaction between a client and a server. Here's the flow:
-//!  1. The server initializes itself with a new public-private keypair.
-//!  2. The client encapsulates a symmetric key, and then uses it to encrypt a message. It then
-//!     sends the server the encapsulated key and the authenticated ciphertext.
-//!  3. The server derives the encryption context from the encapsulated key and uses it to decrypt
-//!     the ciphertext.
-//!
-//! Concepts not covered in this example:
-//!  * Different operation modes (Auth, Psk, AuthPsk). See the docs on `OpModeR` and `OpModeS`
-//!    types for more info
-//!  * The single-shot API. See the methods exposed in the `single_shot` module for more info. The
-//!    single-shot methods are basically just `setup` followed by `seal/open`.
-//!  * Proper error handling. Everything here just panics when an error is encountered. It is up to
-//!    the user of this library to do the appropriate thing when a function returns an error.
+// This file describes a simple interaction between a client and a server. Here's the flow:
+//  1. The server initializes itself with a new public-private keypair.
+//  2. The client generates and encapsulates a symmetric key, and uses that key to derive an
+//     encryption context. With the encryption context, it encrypts ("seals") a message and gets an
+//     authenticated ciphertext. It then sends the server the encapsulated key and the
+//     authenticated ciphertext.
+//  3. The server uses the received encapsulated key to derive the decryption context, and decrypts
+//     the ciphertext.
+//
+// Concepts not covered in this example:
+//  * Different operation modes (Auth, Psk, AuthPsk). See the docs on `OpModeR` and `OpModeS`
+//    types for more info
+//  * The single-shot API. See the methods exposed in the `single_shot` module for more info. The
+//    single-shot methods are basically just `setup` followed by `seal/open`.
+//  * Proper error handling. Everything here just panics when an error is encountered. It is up to
+//    the user of this library to do the appropriate thing when a function returns an error.
 
 use hpke::{
     aead::{AeadTag, ChaCha20Poly1305},
     kdf::HkdfSha384,
+    kem::X25519HkdfSha256,
     EncappedKey, Kem as KemTrait, KeyExchange, Marshallable, OpModeR, OpModeS, Unmarshallable,
 };
 
@@ -24,14 +27,14 @@ use rand::{rngs::StdRng, SeedableRng};
 const INFO_STR: &'static [u8] = b"example session";
 
 // These are the only algorithms we're gonna use for this example
-type Kem = hpke::kem::X25519HkdfSha256;
+type Kem = X25519HkdfSha256;
 type Aead = ChaCha20Poly1305;
 type Kdf = HkdfSha384;
 
 // The KEX is dependent on the choice of KEM
 type Kex = <Kem as KemTrait>::Kex;
 
-// Initialize the server with a fresh keypair
+// Initializes the server with a fresh keypair
 fn server_init() -> (
     <Kex as KeyExchange>::PrivateKey,
     <Kex as KeyExchange>::PublicKey,

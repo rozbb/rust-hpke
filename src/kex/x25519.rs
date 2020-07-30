@@ -22,6 +22,7 @@ pub struct KexResult(x25519_dalek::SharedSecret);
 
 // Oh I love me an excuse to break out type-level integers
 impl Marshallable for PublicKey {
+    // §7.1: Nsecret of DHKEM(X25519, HKDF-SHA256) is 32
     type OutputSize = typenum::U32;
 
     // Dalek lets us convert pubkeys to [u8; 32]
@@ -69,7 +70,7 @@ impl Unmarshallable for PrivateKey {
 }
 
 impl Marshallable for KexResult {
-    // §7.1: DHKEM(Curve25519) Nzz = 32
+    // §7.1: Nsecret of DHKEM(X25519, HKDF-SHA256) is 32
     type OutputSize = typenum::U32;
 
     // Dalek lets us convert shared secrets to to [u8; 32]

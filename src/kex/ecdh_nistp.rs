@@ -32,6 +32,7 @@ pub struct KexResult(AffinePoint);
 // Everything is marshalled and unmarshalled uncompressed
 impl Marshallable for PublicKey {
     // A fancy way of saying "65 bytes"
+    // §7.1: Npk of DHKEM(P-256, HKDF-SHA256) is 65
     type OutputSize = UncompressedPointSize<<NistP256 as Curve>::ScalarSize>;
 
     fn marshal(&self) -> GenericArray<u8, Self::OutputSize> {
@@ -81,6 +82,7 @@ impl Unmarshallable for PublicKey {
 
 impl Marshallable for PrivateKey {
     // A fancy way of saying "32 bytes"
+    // §7.1: Nsecret of DHKEM(P-256, HKDF-SHA256) is 32
     type OutputSize = <NistP256 as Curve>::ScalarSize;
 
     fn marshal(&self) -> GenericArray<u8, Self::OutputSize> {
@@ -180,7 +182,7 @@ impl KeyExchange for DhP256 {
     //       sk = OS2IP(bytes)
     //       counter = counter + 1
     //     return (sk, pk(sk))
-    //
+    //  where bitmask = 0xFF for P-256, i.e., the masking line is a no-op
     /// Deterministically derives a keypair from the given input keying material and ciphersuite
     /// ID. The keying material SHOULD have as many bits of entropy as the bit length of a secret
     /// key, i.e., 256.

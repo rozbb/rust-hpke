@@ -47,11 +47,8 @@ where
 struct MainTestVector {
     // Parameters
     mode: u8,
-    #[serde(rename = "kemID")]
     kem_id: u16,
-    #[serde(rename = "kdfID")]
     kdf_id: u16,
-    #[serde(rename = "aeadID")]
     aead_id: u16,
     #[serde(deserialize_with = "bytes_from_hex")]
     info: Vec<u8>,
@@ -75,7 +72,7 @@ struct MainTestVector {
     // Preshared Key Bundle
     #[serde(default, deserialize_with = "bytes_from_hex_opt")]
     psk: Option<Vec<u8>>,
-    #[serde(default, rename = "pskID", deserialize_with = "bytes_from_hex_opt")]
+    #[serde(default, rename = "psk_id", deserialize_with = "bytes_from_hex_opt")]
     psk_id: Option<Vec<u8>>,
 
     // Public Keys
@@ -89,9 +86,9 @@ struct MainTestVector {
     // Key schedule inputs and computations
     #[serde(rename = "enc", deserialize_with = "bytes_from_hex")]
     encapped_key: Vec<u8>,
-    #[serde(rename = "zz", deserialize_with = "bytes_from_hex")]
+    #[serde(deserialize_with = "bytes_from_hex")]
     shared_secret: Vec<u8>,
-    #[serde(rename = "keyScheduleContext", deserialize_with = "bytes_from_hex")]
+    #[serde(rename = "key_schedule_context", deserialize_with = "bytes_from_hex")]
     _hpke_context: Vec<u8>,
     #[serde(rename = "secret", deserialize_with = "bytes_from_hex")]
     _key_schedule_secret: Vec<u8>,
@@ -99,7 +96,7 @@ struct MainTestVector {
     _aead_key: Vec<u8>,
     #[serde(rename = "nonce", deserialize_with = "bytes_from_hex")]
     _aead_nonce: Vec<u8>,
-    #[serde(rename = "exporterSecret", deserialize_with = "bytes_from_hex")]
+    #[serde(rename = "exporter_secret", deserialize_with = "bytes_from_hex")]
     _exporter_secret: Vec<u8>,
 
     encryptions: Vec<EncryptionTestVector>,
@@ -204,15 +201,15 @@ fn test_case<A: Aead, Kdf: KdfTrait, Kem: KemTrait>(tv: MainTestVector) {
 
     // Now derive the encapped key with the deterministic encap function, using all the inputs
     // above
-    let (zz, encapped_key) =
+    let (shared_secret, encapped_key) =
         encap_with_eph::<Kem>(&pk_recip, sender_keypair.as_ref(), sk_eph.clone())
             .expect("encap failed");
 
     // Assert that the derived shared secret key is identical to the one provided
     assert_eq!(
-        zz.as_slice(),
+        shared_secret.as_slice(),
         tv.shared_secret.as_slice(),
-        "zz doesn't match"
+        "shared_secret doesn't match"
     );
 
     // Assert that the derived encapped key is identical to the one provided
@@ -331,7 +328,7 @@ macro_rules! dispatch_testcase {
 
 #[test]
 fn kat_test() {
-    let file = File::open("test-vectors-fef8e58.json").unwrap();
+    let file = File::open("test-vectors-580119b.json").unwrap();
     let tvs: Vec<MainTestVector> = serde_json::from_reader(file).unwrap();
 
     for tv in tvs.into_iter() {
