@@ -12,6 +12,7 @@ use core::{marker::PhantomData, u8};
 use aead::{AeadInPlace as BaseAead, NewAead as BaseNewAead};
 use digest::generic_array::GenericArray;
 use hkdf::Hkdf;
+use subtle::ConstantTimeEq;
 
 /// Represents authenticated encryption functionality
 pub trait Aead {
@@ -51,31 +52,43 @@ impl Aead for ChaCha20Poly1305 {
     // draft02 §8.3: ChaCha20Poly1305
     const AEAD_ID: u16 = 0x0003;
 }
+
 // def Context.IncrementSeq():
 //   if self.seq >= (1 << (8*Nn)) - 1:
 //     raise NonceOverflowError
 //   self.seq += 1
-/// Treats the given seq (which is a bytestring) as a big-endian integer, and increments it
+/// Treats the given seq (which is a bytestring) as a big-endian integer, and increments it. This
+/// function was adapted from libsodium's
+/// [`sodium_increment`](https://github.com/jedisct1/libsodium/blob/7e9095bcc5726bc71b155f0e219189c96c520729/src/libsodium/sodium/utils.c#L263)
+/// function
 ///
 /// Return Value
 /// ============
 /// Returns Ok(()) if successful. Returns Err(()) if an overflow occured.
-fn increment_seq<A: Aead>(arr: &mut Seq<A>) -> Result<(), ()> {
-    let arr = arr.0.as_mut_slice();
-    for byte in arr.iter_mut().rev() {
-        if *byte < u8::MAX {
-            // If the byte is below the max, increment it
-            *byte += 1;
-            return Ok(());
-        } else {
-            // Otherwise, it's at the max, and we'll have to increment a more significant byte. In
-            // that case, clear this byte.
-            *byte = 0;
-        }
+fn increment_seq<A: Aead>(seq: &mut Seq<A>) -> Result<(), ()> {
+    let mut carry = 1u16;
+
+    // Go through all the bytes (in increasing-significance order) and do addition & carry. This
+    // is hopefully constant time.
+    for limb in seq.0.as_mut_slice().iter_mut().rev() {
+        // This is either limb+1 or limb+0
+        let new_limb: u16 = (*limb as u16) + carry;
+        // If carry was 1 and limb+carry overflowed, the limb will now be 0
+        // If carry was 1 and limb+carry didn't overflow, the limb will be incremented
+        // If carry was 0, this is a no-op
+        *limb = new_limb as u8;
+        // Derive the new carry bit by clearing all the lower order bits
+        // If carry was 1 and limb+carry overflowed, then carry will be 1
+        // If limb+carry didn't overflow, then carry will be 0
+        carry = new_limb >> 8;
     }
 
-    // If we got to the end and never incremented a byte, this array was maxed out
-    Err(())
+    // If we get to the end and still have a carry bit, the sequence number was maxed out
+    if carry.ct_eq(&1).into() {
+        Err(())
+    } else {
+        Ok(())
+    }
 }
 
 // def Context.ComputeNonce(seq):
