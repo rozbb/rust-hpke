@@ -10,7 +10,7 @@ This is an **work-in-progress** implementation of the [HPKE](https://datatracker
 What it implements
 ------------------
 
-This implementation complies with the [HPKE draft](https://github.com/cfrg/draft-irtf-cfrg-hpke) up to commit [325c94f](https://github.com/cfrg/draft-irtf-cfrg-hpke/tree/325c94f111732d8fdab54caac26ceee364de8a69).
+This implementation complies with the [HPKE draft](https://github.com/cfrg/draft-irtf-cfrg-hpke) up to commit [47ab7da](https://github.com/cfrg/draft-irtf-cfrg-hpke/tree/47ab7da225f421bc32301f3eaa5ec842ab880047).
 
 Here are all the primitives listed in the spec. The primitives with checked boxes are the ones that are implemented.
 
