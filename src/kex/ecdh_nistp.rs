@@ -1,6 +1,6 @@
 use crate::{
     kdf::{labeled_extract, Kdf as KdfTrait, LabeledExpand},
-    kex::{KeyExchange, Marshallable, Unmarshallable},
+    kex::{Deserializable, KeyExchange, Serializable},
     util::KemSuiteId,
     HpkeError,
 };
@@ -29,21 +29,21 @@ pub struct PrivateKey(Scalar);
 // A bare DH computation result
 pub struct KexResult(AffinePoint);
 
-// Everything is marshalled and unmarshalled uncompressed
-impl Marshallable for PublicKey {
+// Everything is serialized and deserialized in uncompressed form
+impl Serializable for PublicKey {
     // A fancy way of saying "65 bytes"
     // §7.1: Npk of DHKEM(P-256, HKDF-SHA256) is 65
     type OutputSize = UncompressedPointSize<<NistP256 as Curve>::ScalarSize>;
 
-    fn marshal(&self) -> GenericArray<u8, Self::OutputSize> {
+    fn to_bytes(&self) -> GenericArray<u8, Self::OutputSize> {
         GenericArray::clone_from_slice(&self.0.to_uncompressed_pubkey().into_bytes())
     }
 }
 
-// A helper method for the unmarshall method. The real unmarshall method just runs this and
+// A helper method for the from_bytes() method. The real from_bytes() method just runs this and
 // interprets any `None` as an InvalidEncoding error.
 impl PublicKey {
-    fn unmarshal_helper(encoded: &[u8]) -> Option<PublicKey> {
+    fn from_bytes_helper(encoded: &[u8]) -> Option<PublicKey> {
         // In order to parse as an uncompressed curve point, we first make sure the input length is
         // correct
         if encoded.len() != Self::size() {
@@ -72,26 +72,26 @@ impl PublicKey {
     }
 }
 
-// Everything is marshalled and unmarshalled uncompressed
-impl Unmarshallable for PublicKey {
-    fn unmarshal(encoded: &[u8]) -> Result<Self, HpkeError> {
-        // Run the real unmarshal method and treat `None` as an encoding error
-        Self::unmarshal_helper(encoded).ok_or(HpkeError::InvalidEncoding)
+// Everything is serialized and deserialized in uncompressed form
+impl Deserializable for PublicKey {
+    fn from_bytes(encoded: &[u8]) -> Result<Self, HpkeError> {
+        // Run the from_bytes helper method and treat `None` as an encoding error
+        Self::from_bytes_helper(encoded).ok_or(HpkeError::InvalidEncoding)
     }
 }
 
-impl Marshallable for PrivateKey {
+impl Serializable for PrivateKey {
     // A fancy way of saying "32 bytes"
     // §7.1: Nsecret of DHKEM(P-256, HKDF-SHA256) is 32
     type OutputSize = <NistP256 as Curve>::ScalarSize;
 
-    fn marshal(&self) -> GenericArray<u8, Self::OutputSize> {
+    fn to_bytes(&self) -> GenericArray<u8, Self::OutputSize> {
         GenericArray::clone_from_slice(&self.0.to_bytes())
     }
 }
 
-impl Unmarshallable for PrivateKey {
-    fn unmarshal(encoded: &[u8]) -> Result<Self, HpkeError> {
+impl Deserializable for PrivateKey {
+    fn from_bytes(encoded: &[u8]) -> Result<Self, HpkeError> {
         // Check the length
         if encoded.len() != 32 {
             return Err(HpkeError::InvalidEncoding);
@@ -119,14 +119,14 @@ impl Unmarshallable for PrivateKey {
     }
 }
 
-// DH results are marshalled in the same way as public keys
-impl Marshallable for KexResult {
+// DH results are serialized in the same way as public keys
+impl Serializable for KexResult {
     // §4.1: Ndh equals Npk
-    type OutputSize = <PublicKey as Marshallable>::OutputSize;
+    type OutputSize = <PublicKey as Serializable>::OutputSize;
 
-    fn marshal(&self) -> GenericArray<u8, Self::OutputSize> {
-        // Rewrap and marshal
-        PublicKey(self.0).marshal()
+    fn to_bytes(&self) -> GenericArray<u8, Self::OutputSize> {
+        // Rewrap and serialize
+        PublicKey(self.0).to_bytes()
     }
 }
 
@@ -146,7 +146,7 @@ impl KeyExchange for DhP256 {
     fn sk_to_pk(sk: &PrivateKey) -> PublicKey {
         let pk = p256::arithmetic::ProjectivePoint::generator() * &sk.0;
         // It's safe to unwrap() here, because PrivateKeys are guaranteed to never be 0 (see the
-        // unmarshal() implementation for details)
+        // from_bytes() implementation for details)
         PublicKey(pk.to_affine().unwrap())
     }
 
@@ -224,21 +224,21 @@ mod tests {
     use crate::{
         kex::{
             ecdh_nistp::{DhP256, PrivateKey, PublicKey},
-            KeyExchange, Marshallable, Unmarshallable,
+            Deserializable, KeyExchange, Serializable,
         },
         test_util::kex_gen_keypair,
     };
 
     use rand::{rngs::StdRng, SeedableRng};
 
-    // We need this in our marshal-unmarshal tests
+    // We need this in our serialize-deserialize tests
     impl PartialEq for PrivateKey {
         fn eq(&self, other: &PrivateKey) -> bool {
             self.0.to_bytes() == other.0.to_bytes()
         }
     }
 
-    // We need this in our marshal-unmarshal tests
+    // We need this in our serialize-deserialize tests
     impl PartialEq for PublicKey {
         fn eq(&self, other: &PublicKey) -> bool {
             self.0 == other.0
@@ -274,13 +274,13 @@ mod tests {
         ))
         .unwrap();
 
-        // Unmarshal the pubkey and privkey and do a DH operation
-        let sk_recip = <Kex as KeyExchange>::PrivateKey::unmarshal(&sk_recip_bytes).unwrap();
-        let pk_sender = <Kex as KeyExchange>::PublicKey::unmarshal(&pk_sender_bytes).unwrap();
+        // Deserialize the pubkey and privkey and do a DH operation
+        let sk_recip = <Kex as KeyExchange>::PrivateKey::from_bytes(&sk_recip_bytes).unwrap();
+        let pk_sender = <Kex as KeyExchange>::PublicKey::from_bytes(&pk_sender_bytes).unwrap();
         let derived_dh = <Kex as KeyExchange>::kex(&sk_recip, &pk_sender).unwrap();
 
         // Assert that the derived DH result matches the test vector
-        assert_eq!(derived_dh.marshal().as_slice(), dh_res_bytes.as_slice());
+        assert_eq!(derived_dh.to_bytes().as_slice(), dh_res_bytes.as_slice());
     }
 
     // Test vector comes from §8.1 of RFC5903
@@ -308,11 +308,11 @@ mod tests {
         ];
 
         for (sk_hex, pk_hex) in sks.iter().zip(pks.iter()) {
-            // Unmarshal the hex values
-            let sk =
-                <Kex as KeyExchange>::PrivateKey::unmarshal(&hex::decode(sk_hex).unwrap()).unwrap();
+            // Deserialize the hex values
+            let sk = <Kex as KeyExchange>::PrivateKey::from_bytes(&hex::decode(sk_hex).unwrap())
+                .unwrap();
             let pk =
-                <Kex as KeyExchange>::PublicKey::unmarshal(&hex::decode(pk_hex).unwrap()).unwrap();
+                <Kex as KeyExchange>::PublicKey::from_bytes(&hex::decode(pk_hex).unwrap()).unwrap();
 
             // Derive the secret key's corresponding pubkey and check that it matches the given
             // pubkey
@@ -321,42 +321,42 @@ mod tests {
         }
     }
 
-    /// Tests that an unmarshal-marshal round-trip ends up at the same pubkey
+    /// Tests that an deserialize-serialize round-trip ends up at the same pubkey
     #[test]
-    fn test_pubkey_marshal_correctness() {
+    fn test_pubkey_serialize_correctness() {
         type Kex = DhP256;
 
         let mut csprng = StdRng::from_entropy();
 
         // We can't do the same thing as in the X25519 tests, since a completely random point is
-        // not likely to lie on the curve. Instead, we just generate a random point, marshal it,
-        // unmarshal it, and test whether it's the same using impl Eq for AffinePoint
+        // not likely to lie on the curve. Instead, we just generate a random point, serialize it,
+        // deserialize it, and test whether it's the same using impl Eq for AffinePoint
 
         let (_, pubkey) = kex_gen_keypair::<Kex, _>(&mut csprng);
-        let pubkey_bytes = pubkey.marshal();
-        let rederived_pubkey = <Kex as KeyExchange>::PublicKey::unmarshal(&pubkey_bytes).unwrap();
+        let pubkey_bytes = pubkey.to_bytes();
+        let rederived_pubkey = <Kex as KeyExchange>::PublicKey::from_bytes(&pubkey_bytes).unwrap();
 
-        // See if the re-marshalled bytes are the same as the input
+        // See if the re-serialized bytes are the same as the input
         assert_eq!(pubkey, rederived_pubkey);
     }
 
-    /// Tests that an unmarshal-marshal round-trip on a DH keypair ends up at the same values
+    /// Tests that an deserialize-serialize round-trip on a DH keypair ends up at the same values
     #[test]
-    fn test_dh_marshal_correctness() {
+    fn test_dh_serialize_correctness() {
         type Kex = DhP256;
 
         let mut csprng = StdRng::from_entropy();
 
-        // Make a random keypair and marshal it
+        // Make a random keypair and serialize it
         let (sk, pk) = kex_gen_keypair::<Kex, _>(&mut csprng);
-        let (sk_bytes, pk_bytes) = (sk.marshal(), pk.marshal());
+        let (sk_bytes, pk_bytes) = (sk.to_bytes(), pk.to_bytes());
 
-        // Now unmarshal those bytes
-        let new_sk = <Kex as KeyExchange>::PrivateKey::unmarshal(&sk_bytes).unwrap();
-        let new_pk = <Kex as KeyExchange>::PublicKey::unmarshal(&pk_bytes).unwrap();
+        // Now deserialize those bytes
+        let new_sk = <Kex as KeyExchange>::PrivateKey::from_bytes(&sk_bytes).unwrap();
+        let new_pk = <Kex as KeyExchange>::PublicKey::from_bytes(&pk_bytes).unwrap();
 
-        // See if the unmarshalled values are the same as the initial ones
-        assert!(new_sk == sk, "private key doesn't marshal correctly");
-        assert!(new_pk == pk, "public key doesn't marshal correctly");
+        // See if the deserialized values are the same as the initial ones
+        assert!(new_sk == sk, "private key doesn't serialize correctly");
+        assert!(new_pk == pk, "public key doesn't serialize correctly");
     }
 }

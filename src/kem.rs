@@ -1,6 +1,6 @@
 use crate::{
     kdf::{extract_and_expand, Kdf as KdfTrait},
-    kex::{KeyExchange, Marshallable, Unmarshallable, MAX_PUBKEY_SIZE},
+    kex::{Deserializable, KeyExchange, Serializable, MAX_PUBKEY_SIZE},
     util::kem_suite_id,
     HpkeError,
 };
@@ -42,7 +42,7 @@ pub trait Kem: Sized {
         // Make some keying material that's the size of a private key
         let mut ikm: GenericArray<
             u8,
-            <<Self::Kex as KeyExchange>::PrivateKey as Marshallable>::OutputSize,
+            <<Self::Kex as KeyExchange>::PrivateKey as Serializable>::OutputSize,
         > = GenericArray::default();
         // Fill it with randomness
         csprng.fill_bytes(&mut ikm);
@@ -91,19 +91,19 @@ pub struct EncappedKey<Kex: KeyExchange>(Kex::PublicKey);
 
 // EncappedKeys need to be serializable, since they're gonna be sent over the wire. Underlyingly,
 // they're just DH pubkeys, so we just serialize them the same way
-impl<Kex: KeyExchange> Marshallable for EncappedKey<Kex> {
-    type OutputSize = <Kex::PublicKey as Marshallable>::OutputSize;
+impl<Kex: KeyExchange> Serializable for EncappedKey<Kex> {
+    type OutputSize = <Kex::PublicKey as Serializable>::OutputSize;
 
-    // Pass to underlying marshal() impl
-    fn marshal(&self) -> GenericArray<u8, Self::OutputSize> {
-        self.0.marshal()
+    // Pass to underlying to_bytes() impl
+    fn to_bytes(&self) -> GenericArray<u8, Self::OutputSize> {
+        self.0.to_bytes()
     }
 }
 
-impl<Kex: KeyExchange> Unmarshallable for EncappedKey<Kex> {
-    // Pass to underlying unmarshal() impl
-    fn unmarshal(encoded: &[u8]) -> Result<Self, HpkeError> {
-        let pubkey = <Kex::PublicKey as Unmarshallable>::unmarshal(encoded)?;
+impl<Kex: KeyExchange> Deserializable for EncappedKey<Kex> {
+    // Pass to underlying from_bytes() impl
+    fn from_bytes(encoded: &[u8]) -> Result<Self, HpkeError> {
+        let pubkey = <Kex::PublicKey as Deserializable>::from_bytes(encoded)?;
         Ok(EncappedKey(pubkey))
     }
 }
@@ -165,9 +165,9 @@ pub(crate) fn encap_with_eph<Kem: KemTrait>(
         // taking the appropriately sized slice.
         let (kem_context_buf, kem_context_size) = concat_with_known_maxlen!(
             MAX_PUBKEY_SIZE,
-            &encapped_key.marshal(),
-            &pk_recip.marshal(),
-            &pk_sender_id.marshal()
+            &encapped_key.to_bytes(),
+            &pk_recip.to_bytes(),
+            &pk_sender_id.to_bytes()
         );
         let kem_context = &kem_context_buf[..kem_context_size];
 
@@ -179,8 +179,8 @@ pub(crate) fn encap_with_eph<Kem: KemTrait>(
         // Same no-alloc concat trick as above
         let (concatted_secrets_buf, concatted_secret_size) = concat_with_known_maxlen!(
             MAX_PUBKEY_SIZE,
-            &kex_res_eph.marshal(),
-            &kex_res_identity.marshal()
+            &kex_res_eph.to_bytes(),
+            &kex_res_identity.to_bytes()
         );
         let concatted_secrets = &concatted_secrets_buf[..concatted_secret_size];
 
@@ -198,8 +198,8 @@ pub(crate) fn encap_with_eph<Kem: KemTrait>(
         // taking the appropriately sized slice.
         let (kem_context_buf, kem_context_size) = concat_with_known_maxlen!(
             MAX_PUBKEY_SIZE,
-            &encapped_key.marshal(),
-            &pk_recip.marshal()
+            &encapped_key.to_bytes(),
+            &pk_recip.to_bytes()
         );
         let kem_context = &kem_context_buf[..kem_context_size];
 
@@ -208,7 +208,7 @@ pub(crate) fn encap_with_eph<Kem: KemTrait>(
         // digest size of the hash function. Since these values are fixed at compile time, we don't
         // worry about it.
         let mut buf = <SharedSecret<Kem> as Default>::default();
-        extract_and_expand::<Kem>(&kex_res_eph.marshal(), &suite_id, &kem_context, &mut buf)
+        extract_and_expand::<Kem>(&kex_res_eph.to_bytes(), &suite_id, &kem_context, &mut buf)
             .expect("shared secret is way too big");
         buf
     };
@@ -289,9 +289,9 @@ pub(crate) fn decap<Kem: KemTrait>(
         // taking the appropriately sized slice.
         let (kem_context_buf, kem_context_size) = concat_with_known_maxlen!(
             MAX_PUBKEY_SIZE,
-            &encapped_key.marshal(),
-            &pk_recip.marshal(),
-            &pk_sender_id.marshal()
+            &encapped_key.to_bytes(),
+            &pk_recip.to_bytes(),
+            &pk_sender_id.to_bytes()
         );
         let kem_context = &kem_context_buf[..kem_context_size];
 
@@ -303,8 +303,8 @@ pub(crate) fn decap<Kem: KemTrait>(
         // Same no-alloc concat trick as above
         let (concatted_secrets_buf, concatted_secret_size) = concat_with_known_maxlen!(
             MAX_PUBKEY_SIZE,
-            &kex_res_eph.marshal(),
-            &kex_res_identity.marshal()
+            &kex_res_eph.to_bytes(),
+            &kex_res_identity.to_bytes()
         );
         let concatted_secrets = &concatted_secrets_buf[..concatted_secret_size];
 
@@ -327,8 +327,8 @@ pub(crate) fn decap<Kem: KemTrait>(
         // taking the appropriately sized slice.
         let (kem_context_buf, kem_context_size) = concat_with_known_maxlen!(
             MAX_PUBKEY_SIZE,
-            &encapped_key.marshal(),
-            &pk_recip.marshal()
+            &encapped_key.to_bytes(),
+            &pk_recip.to_bytes()
         );
         let kem_context = &kem_context_buf[..kem_context_size];
 
@@ -338,7 +338,7 @@ pub(crate) fn decap<Kem: KemTrait>(
         // worry about it.
         let mut shared_secret = <SharedSecret<Kem> as Default>::default();
         extract_and_expand::<Kem>(
-            &kex_res_eph.marshal(),
+            &kex_res_eph.to_bytes(),
             &suite_id,
             &kem_context,
             &mut shared_secret,
@@ -350,7 +350,7 @@ pub(crate) fn decap<Kem: KemTrait>(
 
 #[cfg(test)]
 mod tests {
-    use crate::kem::{decap, encap, EncappedKey, Kem as KemTrait, Marshallable, Unmarshallable};
+    use crate::kem::{decap, encap, Deserializable, EncappedKey, Kem as KemTrait, Serializable};
 
     use rand::{rngs::StdRng, SeedableRng};
 
@@ -400,8 +400,8 @@ mod tests {
         };
     }
 
-    /// Tests that an unmarshal-marshal round-trip on an encapped key ends up at the same value
-    macro_rules! test_encapped_marshal {
+    /// Tests that an deserialize-serialize round trip on an encapped key ends up at the same value
+    macro_rules! test_encapped_serialize {
         ($test_name:ident, $kem_ty:ty) => {
             #[test]
             fn $test_name() {
@@ -413,15 +413,15 @@ mod tests {
                     let (_, pk_recip) = Kem::gen_keypair(&mut csprng);
                     encap::<Kem, _>(&pk_recip, None, &mut csprng).unwrap().1
                 };
-                // Marshal it
-                let encapped_key_bytes = encapped_key.marshal();
-                // Unmarshal it
+                // Serialize it
+                let encapped_key_bytes = encapped_key.to_bytes();
+                // Deserialize it
                 let new_encapped_key =
-                    EncappedKey::<<Kem as KemTrait>::Kex>::unmarshal(&encapped_key_bytes).unwrap();
+                    EncappedKey::<<Kem as KemTrait>::Kex>::from_bytes(&encapped_key_bytes).unwrap();
 
                 assert!(
                     new_encapped_key.0 == encapped_key.0,
-                    "encapped key doesn't marshal correctly"
+                    "encapped key doesn't serialize correctly"
                 );
             }
         };
@@ -433,7 +433,7 @@ mod tests {
     test_encap_correctness!(test_encap_correctness_p256, crate::kem::DhP256HkdfSha256);
 
     #[cfg(feature = "x25519-dalek")]
-    test_encapped_marshal!(test_encapped_marshal_x25519, crate::kem::X25519HkdfSha256);
+    test_encapped_serialize!(test_encapped_serialize_x25519, crate::kem::X25519HkdfSha256);
     #[cfg(feature = "p256")]
-    test_encapped_marshal!(test_encapped_marshal_p256, crate::kem::DhP256HkdfSha256);
+    test_encapped_serialize!(test_encapped_serialize_p256, crate::kem::DhP256HkdfSha256);
 }

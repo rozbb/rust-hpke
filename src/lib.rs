@@ -47,7 +47,7 @@ pub use crate::aead::{AeadCtxR, AeadCtxS};
 #[doc(inline)]
 pub use kem::{EncappedKey, Kem};
 #[doc(inline)]
-pub use kex::{KeyExchange, Marshallable, Unmarshallable};
+pub use kex::{Deserializable, KeyExchange, Serializable};
 #[doc(inline)]
 pub use op_mode::{OpModeR, OpModeS, PskBundle};
 #[doc(inline)]
@@ -70,7 +70,7 @@ pub enum HpkeError {
     InvalidKeyExchange,
     /// The KDF was asked to output too many bytes
     InvalidKdfLength,
-    /// The unmarshaller was given a bad encoding
+    /// The deserializer was given a bad encoding
     InvalidEncoding,
 }
 
@@ -82,7 +82,7 @@ impl core::fmt::Display for HpkeError {
             HpkeError::Encryption => "Encryption error",
             HpkeError::InvalidKeyExchange => "Key exchange validation error",
             HpkeError::InvalidKdfLength => "Too many bytes requested from KDF",
-            HpkeError::InvalidEncoding => "Cannot marshal byte sequence: invalid encoding",
+            HpkeError::InvalidEncoding => "Cannot deserialize byte sequence: invalid encoding",
         };
         f.write_str(kind)
     }

@@ -16,7 +16,7 @@ use hpke::{
     aead::{Aead, AeadCtxR, AeadCtxS, AeadTag, AesGcm128, AesGcm256, ChaCha20Poly1305},
     kdf::{HkdfSha256, HkdfSha384, HkdfSha512, Kdf as KdfTrait},
     kem::{DhP256HkdfSha256, Kem as KemTrait, X25519HkdfSha256},
-    kex::{KeyExchange, Marshallable, Unmarshallable},
+    kex::{Deserializable, KeyExchange, Serializable},
     op_mode::PskBundle,
     setup_receiver, setup_sender, EncappedKey, HpkeError, OpModeR, OpModeS,
 };
@@ -59,7 +59,7 @@ impl From<HpkeError> for AgileHpkeError {
 
 impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AgileAeadCtxS for AeadCtxS<A, Kdf, Kem> {
     fn seal(&mut self, plaintext: &mut [u8], aad: &[u8]) -> Result<Vec<u8>, HpkeError> {
-        self.seal(plaintext, aad).map(|tag| tag.marshal().to_vec())
+        self.seal(plaintext, aad).map(|tag| tag.to_bytes().to_vec())
     }
 }
 
@@ -70,7 +70,7 @@ impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AgileAeadCtxR for AeadCtxR<A, Kdf, K
         aad: &[u8],
         tag_bytes: &[u8],
     ) -> Result<(), AgileHpkeError> {
-        let tag = AeadTag::<A>::unmarshal(tag_bytes)?;
+        let tag = AeadTag::<A>::from_bytes(tag_bytes)?;
         self.open(ciphertext, aad, &tag).map_err(|e| e.into())
     }
 }
@@ -258,7 +258,7 @@ struct AgilePublicKey {
 
 impl AgilePublicKey {
     fn try_lift<Kex: KeyExchange>(&self) -> Result<Kex::PublicKey, AgileHpkeError> {
-        Kex::PublicKey::unmarshal(&self.pubkey_bytes).map_err(|e| e.into())
+        Kex::PublicKey::from_bytes(&self.pubkey_bytes).map_err(|e| e.into())
     }
 }
 
@@ -270,7 +270,7 @@ struct AgileEncappedKey {
 
 impl AgileEncappedKey {
     fn try_lift<Kex: KeyExchange>(&self) -> Result<EncappedKey<Kex>, AgileHpkeError> {
-        EncappedKey::<Kex>::unmarshal(&self.encapped_key_bytes).map_err(|e| e.into())
+        EncappedKey::<Kex>::from_bytes(&self.encapped_key_bytes).map_err(|e| e.into())
     }
 }
 
@@ -282,7 +282,7 @@ struct AgilePrivateKey {
 
 impl AgilePrivateKey {
     fn try_lift<Kex: KeyExchange>(&self) -> Result<Kex::PrivateKey, AgileHpkeError> {
-        Kex::PrivateKey::unmarshal(&self.privkey_bytes).map_err(|e| e.into())
+        Kex::PrivateKey::from_bytes(&self.privkey_bytes).map_err(|e| e.into())
     }
 }
 
@@ -318,11 +318,11 @@ macro_rules! do_gen_keypair {
         let (sk, pk) = Kem::gen_keypair(csprng);
         let sk = AgilePrivateKey {
             kex_alg: kex_alg,
-            privkey_bytes: sk.marshal().to_vec(),
+            privkey_bytes: sk.to_bytes().to_vec(),
         };
         let pk = AgilePublicKey {
             kex_alg: kex_alg,
-            pubkey_bytes: pk.marshal().to_vec(),
+            pubkey_bytes: pk.to_bytes().to_vec(),
         };
 
         AgileKeypair(sk, pk)
@@ -556,7 +556,7 @@ where
     let (encapped_key, aead_ctx) = setup_sender::<A, Kdf, Kem, _>(&mode, &pk_recip, info, csprng)?;
     let encapped_key = AgileEncappedKey {
         kex_alg,
-        encapped_key_bytes: encapped_key.marshal().to_vec(),
+        encapped_key_bytes: encapped_key.to_bytes().to_vec(),
     };
 
     Ok((encapped_key, Box::new(aead_ctx)))

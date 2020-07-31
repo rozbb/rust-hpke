@@ -1,6 +1,6 @@
 use crate::{
     kdf::{labeled_extract, Kdf as KdfTrait, LabeledExpand},
-    kex::{KeyExchange, Marshallable, Unmarshallable},
+    kex::{Deserializable, KeyExchange, Serializable},
     util::KemSuiteId,
     HpkeError,
 };
@@ -21,19 +21,19 @@ pub struct PrivateKey(x25519_dalek::StaticSecret);
 pub struct KexResult(x25519_dalek::SharedSecret);
 
 // Oh I love me an excuse to break out type-level integers
-impl Marshallable for PublicKey {
+impl Serializable for PublicKey {
     // §7.1: Nsecret of DHKEM(X25519, HKDF-SHA256) is 32
     type OutputSize = typenum::U32;
 
     // Dalek lets us convert pubkeys to [u8; 32]
-    fn marshal(&self) -> GenericArray<u8, typenum::U32> {
+    fn to_bytes(&self) -> GenericArray<u8, typenum::U32> {
         GenericArray::clone_from_slice(self.0.as_bytes())
     }
 }
 
-impl Unmarshallable for PublicKey {
+impl Deserializable for PublicKey {
     // Dalek also lets us convert [u8; 32] to pubkeys
-    fn unmarshal(encoded: &[u8]) -> Result<Self, HpkeError> {
+    fn from_bytes(encoded: &[u8]) -> Result<Self, HpkeError> {
         if encoded.len() != Self::size() {
             // Pubkeys must be 32 bytes
             Err(HpkeError::InvalidEncoding)
@@ -46,17 +46,17 @@ impl Unmarshallable for PublicKey {
     }
 }
 
-impl Marshallable for PrivateKey {
+impl Serializable for PrivateKey {
     type OutputSize = typenum::U32;
 
     // Dalek lets us convert scalars to [u8; 32]
-    fn marshal(&self) -> GenericArray<u8, typenum::U32> {
+    fn to_bytes(&self) -> GenericArray<u8, typenum::U32> {
         GenericArray::clone_from_slice(&self.0.to_bytes())
     }
 }
-impl Unmarshallable for PrivateKey {
+impl Deserializable for PrivateKey {
     // Dalek also lets us convert [u8; 32] to scalars
-    fn unmarshal(encoded: &[u8]) -> Result<Self, HpkeError> {
+    fn from_bytes(encoded: &[u8]) -> Result<Self, HpkeError> {
         if encoded.len() != 32 {
             // Privkeys must be 32 bytes
             Err(HpkeError::InvalidEncoding)
@@ -69,12 +69,12 @@ impl Unmarshallable for PrivateKey {
     }
 }
 
-impl Marshallable for KexResult {
+impl Serializable for KexResult {
     // §7.1: Nsecret of DHKEM(X25519, HKDF-SHA256) is 32
     type OutputSize = typenum::U32;
 
     // Dalek lets us convert shared secrets to to [u8; 32]
-    fn marshal(&self) -> GenericArray<u8, typenum::U32> {
+    fn to_bytes(&self) -> GenericArray<u8, typenum::U32> {
         GenericArray::clone_from_slice(self.0.as_bytes())
     }
 }
@@ -139,29 +139,29 @@ mod tests {
     use crate::{
         kex::{
             x25519::{PrivateKey, PublicKey, X25519},
-            KeyExchange, Marshallable, Unmarshallable,
+            Deserializable, KeyExchange, Serializable,
         },
         test_util::kex_gen_keypair,
     };
     use rand::{rngs::StdRng, RngCore, SeedableRng};
 
-    // We need this in our marshal-unmarshal tests
+    // We need this in our serialize-deserialize tests
     impl PartialEq for PrivateKey {
         fn eq(&self, other: &PrivateKey) -> bool {
             self.0.to_bytes() == other.0.to_bytes()
         }
     }
 
-    // We need this in our marshal-unmarshal tests
+    // We need this in our serialize-deserialize tests
     impl PartialEq for PublicKey {
         fn eq(&self, other: &PublicKey) -> bool {
             self.0.as_bytes() == other.0.as_bytes()
         }
     }
 
-    /// Tests that an unmarshal-marshal round-trip ends up at the same pubkey
+    /// Tests that an serialize-deserialize round-trip ends up at the same pubkey
     #[test]
-    fn test_pubkey_marshal_correctness() {
+    fn test_pubkey_serialize_correctness() {
         type Kex = X25519;
 
         let mut csprng = StdRng::from_entropy();
@@ -173,32 +173,32 @@ mod tests {
             buf
         };
 
-        // Make a pubkey with those random bytes. Note, that unmarshal does not clamp the input
+        // Make a pubkey with those random bytes. Note, that from_bytes() does not clamp the input
         // bytes. This is why this test passes.
-        let pk = <Kex as KeyExchange>::PublicKey::unmarshal(&orig_bytes).unwrap();
-        let pk_bytes = pk.marshal();
+        let pk = <Kex as KeyExchange>::PublicKey::from_bytes(&orig_bytes).unwrap();
+        let pk_bytes = pk.to_bytes();
 
-        // See if the re-marshalled bytes are the same as the input
+        // See if the re-serialized bytes are the same as the input
         assert_eq!(orig_bytes.as_slice(), pk_bytes.as_slice());
     }
 
-    /// Tests that an unmarshal-marshal round-trip on a DH keypair ends up at the same values
+    /// Tests that an deserialize-serialize round trip on a DH keypair ends up at the same values
     #[test]
-    fn test_dh_marshal_correctness() {
+    fn test_dh_serialize_correctness() {
         type Kex = X25519;
 
         let mut csprng = StdRng::from_entropy();
 
-        // Make a random keypair and marshal it
+        // Make a random keypair and serialize it
         let (sk, pk) = kex_gen_keypair::<Kex, _>(&mut csprng);
-        let (sk_bytes, pk_bytes) = (sk.marshal(), pk.marshal());
+        let (sk_bytes, pk_bytes) = (sk.to_bytes(), pk.to_bytes());
 
-        // Now unmarshal those bytes
-        let new_sk = <Kex as KeyExchange>::PrivateKey::unmarshal(&sk_bytes).unwrap();
-        let new_pk = <Kex as KeyExchange>::PublicKey::unmarshal(&pk_bytes).unwrap();
+        // Now deserialize those bytes
+        let new_sk = <Kex as KeyExchange>::PrivateKey::from_bytes(&sk_bytes).unwrap();
+        let new_pk = <Kex as KeyExchange>::PublicKey::from_bytes(&pk_bytes).unwrap();
 
-        // See if the unmarshalled values are the same as the initial ones
-        assert!(new_sk == sk, "private key doesn't marshal correctly");
-        assert!(new_pk == pk, "public key doesn't marshal correctly");
+        // See if the deserialized values are the same as the initial ones
+        assert!(new_sk == sk, "private key doesn't serialize correctly");
+        assert!(new_pk == pk, "public key doesn't serialize correctly");
     }
 }

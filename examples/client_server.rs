@@ -19,7 +19,7 @@ use hpke::{
     aead::{AeadTag, ChaCha20Poly1305},
     kdf::HkdfSha384,
     kem::X25519HkdfSha256,
-    EncappedKey, Kem as KemTrait, KeyExchange, Marshallable, OpModeR, OpModeS, Unmarshallable,
+    Deserializable, EncappedKey, Kem as KemTrait, KeyExchange, OpModeR, OpModeS, Serializable,
 };
 
 use rand::{rngs::StdRng, SeedableRng};
@@ -78,12 +78,12 @@ fn server_decrypt_msg(
     associated_data: &[u8],
     tag_bytes: &[u8],
 ) -> Vec<u8> {
-    // We have to unmarshal the secret key, AEAD tag, and encapsulated pubkey. These fail if the
+    // We have to derialize the secret key, AEAD tag, and encapsulated pubkey. These fail if the
     // bytestrings are the wrong length.
-    let server_sk = <Kex as KeyExchange>::PrivateKey::unmarshal(server_sk_bytes)
+    let server_sk = <Kex as KeyExchange>::PrivateKey::from_bytes(server_sk_bytes)
         .expect("could not deserialize server privkey!");
-    let tag = AeadTag::<Aead>::unmarshal(tag_bytes).expect("could not deserialize AEAD tag!");
-    let encapped_key = EncappedKey::<Kex>::unmarshal(encapped_key_bytes)
+    let tag = AeadTag::<Aead>::from_bytes(tag_bytes).expect("could not deserialize AEAD tag!");
+    let encapped_key = EncappedKey::<Kex>::from_bytes(encapped_key_bytes)
         .expect("could not deserialize the encapsulated pubkey!");
 
     // Decapsulate and derive the shared secret. This creates a shared AEAD context.
@@ -116,13 +116,13 @@ fn main() {
     let (encapped_key, ciphertext, tag) = client_encrypt_msg(msg, associated_data, &server_pubkey);
 
     // Now imagine we send everything over the wire, so we have to serialize it
-    let encapped_key_bytes = encapped_key.marshal();
-    let tag_bytes = tag.marshal();
+    let encapped_key_bytes = encapped_key.to_bytes();
+    let tag_bytes = tag.to_bytes();
 
     // Now imagine the server had to reboot so it saved its private key in byte format
-    let server_privkey_bytes = server_privkey.marshal();
+    let server_privkey_bytes = server_privkey.to_bytes();
 
-    // Now let the server decrypt the message. The marshal() calls returned a GenericArray, so we
+    // Now let the server decrypt the message. The to_bytes() calls returned a GenericArray, so we
     // have to convert them to slices before sending them
     let decrypted_msg = server_decrypt_msg(
         server_privkey_bytes.as_slice(),

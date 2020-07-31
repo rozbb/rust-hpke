@@ -1,7 +1,7 @@
 use crate::{
     kdf::{Kdf as KdfTrait, LabeledExpand},
     kem::Kem as KemTrait,
-    kex::{Marshallable, Unmarshallable},
+    kex::{Deserializable, Serializable},
     setup::ExporterSecret,
     util::{full_suite_id, FullSuiteId},
     HpkeError,
@@ -134,16 +134,16 @@ impl<A: Aead> Clone for Seq<A> {
 /// An authenticated encryption tag
 pub struct AeadTag<A: Aead>(GenericArray<u8, <A::AeadImpl as BaseAead>::TagSize>);
 
-impl<A: Aead> Marshallable for AeadTag<A> {
+impl<A: Aead> Serializable for AeadTag<A> {
     type OutputSize = <A::AeadImpl as BaseAead>::TagSize;
 
-    fn marshal(&self) -> GenericArray<u8, Self::OutputSize> {
+    fn to_bytes(&self) -> GenericArray<u8, Self::OutputSize> {
         self.0.clone()
     }
 }
 
-impl<A: Aead> Unmarshallable for AeadTag<A> {
-    fn unmarshal(encoded: &[u8]) -> Result<Self, HpkeError> {
+impl<A: Aead> Deserializable for AeadTag<A> {
+    fn from_bytes(encoded: &[u8]) -> Result<Self, HpkeError> {
         if encoded.len() != Self::size() {
             Err(HpkeError::InvalidEncoding)
         } else {
@@ -386,7 +386,7 @@ impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AeadCtxS<A, Kdf, Kem> {
 #[cfg(test)]
 mod test {
     use super::{AeadTag, AesGcm128, AesGcm256, ChaCha20Poly1305, Seq};
-    use crate::{kdf::HkdfSha256, kex::Unmarshallable, test_util::gen_ctx_simple_pair, HpkeError};
+    use crate::{kdf::HkdfSha256, kex::Deserializable, test_util::gen_ctx_simple_pair, HpkeError};
 
     use core::u8;
 
@@ -494,7 +494,7 @@ mod test {
                     // Now try to decrypt something. This isn't a valid ciphertext or tag, but the
                     // overflow should fail before the tag check fails.
                     let mut dummy_ciphertext = [0u8; 32];
-                    let dummy_tag = AeadTag::unmarshal(&[0; 16]).unwrap();
+                    let dummy_tag = AeadTag::from_bytes(&[0; 16]).unwrap();
 
                     match receiver_ctx.open(&mut dummy_ciphertext[..], aad, &dummy_tag) {
                         Err(HpkeError::SeqOverflow) => {} // Good, this should have overflowed

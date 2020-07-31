@@ -2,7 +2,7 @@ use crate::{
     aead::{Aead, AeadCtx, AeadCtxR, AeadCtxS, AeadKey, AeadNonce},
     kdf::Kdf as KdfTrait,
     kem::Kem as KemTrait,
-    kex::{KeyExchange, Marshallable},
+    kex::{KeyExchange, Serializable},
     op_mode::{OpModeR, OpModeS, PskBundle},
     setup::ExporterSecret,
 };
@@ -23,7 +23,7 @@ pub(crate) fn kex_gen_keypair<Kex: KeyExchange, R: CryptoRng + RngCore>(
     csprng: &mut R,
 ) -> (Kex::PrivateKey, Kex::PublicKey) {
     // Make some keying material that's the size of a private key
-    let mut ikm: GenericArray<u8, <Kex::PrivateKey as Marshallable>::OutputSize> =
+    let mut ikm: GenericArray<u8, <Kex::PrivateKey as Serializable>::OutputSize> =
         GenericArray::default();
     // Fill it with randomness
     csprng.fill_bytes(&mut ikm);

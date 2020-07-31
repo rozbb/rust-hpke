@@ -2,7 +2,7 @@ use crate::{
     aead::{Aead, AeadTag, AesGcm128, AesGcm256, ChaCha20Poly1305},
     kdf::{HkdfSha256, HkdfSha384, HkdfSha512, Kdf as KdfTrait},
     kem::{encap_with_eph, DhP256HkdfSha256, EncappedKey, Kem as KemTrait, X25519HkdfSha256},
-    kex::{KeyExchange, Marshallable, Unmarshallable},
+    kex::{Deserializable, KeyExchange, Serializable},
     op_mode::{OpModeR, PskBundle},
     setup::setup_receiver,
 };
@@ -14,10 +14,10 @@ use hex;
 use serde::{de::Error as SError, Deserialize, Deserializer};
 use serde_json;
 
-/// Asserts that the given marshallable values are equal
-macro_rules! assert_marshallable_eq {
+/// Asserts that the given serializable values are equal
+macro_rules! assert_serializable_eq {
     ($a:expr, $b:expr, $args:tt) => {
-        assert_eq!($a.marshal(), $b.marshal(), $args)
+        assert_eq!($a.to_bytes(), $b.to_bytes(), $args)
     };
 }
 
@@ -131,13 +131,13 @@ fn get_and_validate_keypair<Kex: KeyExchange>(
     sk_bytes: &[u8],
     pk_bytes: &[u8],
 ) -> (Kex::PrivateKey, Kex::PublicKey) {
-    // Unmarshall the secret key
-    let sk = <Kex as KeyExchange>::PrivateKey::unmarshal(sk_bytes).unwrap();
-    // Unmarshall the pubkey
-    let pk = <Kex as KeyExchange>::PublicKey::unmarshal(pk_bytes).unwrap();
+    // Deserialize the secret key
+    let sk = <Kex as KeyExchange>::PrivateKey::from_bytes(sk_bytes).unwrap();
+    // Deserialize the pubkey
+    let pk = <Kex as KeyExchange>::PublicKey::from_bytes(pk_bytes).unwrap();
 
     // Make sure the derived pubkey matches the given pubkey
-    assert_marshallable_eq!(pk, Kex::sk_to_pk(&sk), "derived pubkey doesn't match given");
+    assert_serializable_eq!(pk, Kex::sk_to_pk(&sk), "derived pubkey doesn't match given");
 
     (sk, pk)
 }
@@ -151,7 +151,7 @@ fn make_op_mode_r<'a, Kex: KeyExchange>(
     psk: Option<&'a [u8]>,
     psk_id: Option<&'a [u8]>,
 ) -> OpModeR<'a, Kex> {
-    // Unmarshal the optinoal bundle
+    // Deserialize the optional bundle
     let bundle = psk.map(|bytes| PskBundle {
         psk: bytes,
         psk_id: psk_id.unwrap(),
@@ -169,7 +169,7 @@ fn make_op_mode_r<'a, Kex: KeyExchange>(
 
 // This does all the legwork
 fn test_case<A: Aead, Kdf: KdfTrait, Kem: KemTrait>(tv: MainTestVector) {
-    // First, unmarshall all the relevant keys so we can reconstruct the encapped key
+    // First, deserialize all the relevant keys so we can reconstruct the encapped key
     let recip_keypair = get_and_validate_keypair::<Kem::Kex>(&tv.sk_recip, &tv.pk_recip);
     let eph_keypair = get_and_validate_keypair::<Kem::Kex>(&tv.sk_eph, &tv.pk_eph);
     let sender_keypair = {
@@ -182,18 +182,18 @@ fn test_case<A: Aead, Kdf: KdfTrait, Kem: KemTrait>(tv: MainTestVector) {
     // Make sure the keys match what we would've gotten had we used DeriveKeyPair
     {
         let derived_kp = Kem::derive_keypair(&tv.ikm_recip);
-        assert_marshallable_eq!(recip_keypair.0, derived_kp.0, "sk recip doesn't match");
-        assert_marshallable_eq!(recip_keypair.1, derived_kp.1, "pk recip doesn't match");
+        assert_serializable_eq!(recip_keypair.0, derived_kp.0, "sk recip doesn't match");
+        assert_serializable_eq!(recip_keypair.1, derived_kp.1, "pk recip doesn't match");
     }
     {
         let derived_kp = Kem::derive_keypair(&tv.ikm_eph);
-        assert_marshallable_eq!(eph_keypair.0, derived_kp.0, "sk eph doesn't match");
-        assert_marshallable_eq!(eph_keypair.1, derived_kp.1, "pk eph doesn't match");
+        assert_serializable_eq!(eph_keypair.0, derived_kp.0, "sk eph doesn't match");
+        assert_serializable_eq!(eph_keypair.1, derived_kp.1, "pk eph doesn't match");
     }
     if let Some(sks) = sender_keypair.as_ref() {
         let derived_kp = Kem::derive_keypair(&tv.ikm_sender.unwrap());
-        assert_marshallable_eq!(sks.0, derived_kp.0, "sk sender doesn't match");
-        assert_marshallable_eq!(sks.1, derived_kp.1, "pk sender doesn't match");
+        assert_serializable_eq!(sks.0, derived_kp.0, "sk sender doesn't match");
+        assert_serializable_eq!(sks.1, derived_kp.1, "pk sender doesn't match");
     }
 
     let (sk_recip, pk_recip) = recip_keypair;
@@ -214,8 +214,8 @@ fn test_case<A: Aead, Kdf: KdfTrait, Kem: KemTrait>(tv: MainTestVector) {
 
     // Assert that the derived encapped key is identical to the one provided
     {
-        let provided_encapped_key = EncappedKey::<Kem::Kex>::unmarshal(&tv.encapped_key).unwrap();
-        assert_marshallable_eq!(
+        let provided_encapped_key = EncappedKey::<Kem::Kex>::from_bytes(&tv.encapped_key).unwrap();
+        assert_serializable_eq!(
             encapped_key,
             provided_encapped_key,
             "encapped keys don't match"
@@ -249,7 +249,7 @@ fn test_case<A: Aead, Kdf: KdfTrait, Kem: KemTrait>(tv: MainTestVector) {
 
             (
                 ciphertext_bytes.to_vec(),
-                AeadTag::unmarshal(tag_bytes).unwrap(),
+                AeadTag::from_bytes(tag_bytes).unwrap(),
             )
         };
 
