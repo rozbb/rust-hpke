@@ -6,7 +6,7 @@
 //! purpose of hybrid encryption is to use allow someone to send secure messages to an entity whose
 //! public key they know. Here's an example of Alice and Bob, where Alice knows Bob's public key:
 //!
-//! ```rust
+//! ```ignore
 //! # use rand::{rngs::StdRng, SeedableRng};
 //! # use hpke::{
 //! #     aead::ChaCha20Poly1305,
