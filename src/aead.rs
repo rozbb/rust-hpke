@@ -76,7 +76,7 @@ struct Seq(u64);
 /// Increments the sequence counter. Returns None on overflow.
 fn increment_seq(seq: &Seq) -> Option<Seq> {
     // Try to add 1
-    seq.0.checked_add(1).map(|i| Seq(i))
+    seq.0.checked_add(1).map(Seq)
 }
 
 // def Context.ComputeNonce(seq):
