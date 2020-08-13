@@ -11,6 +11,7 @@ use rand::{CryptoRng, RngCore};
 /// Defines a combination of key exchange mechanism and a KDF, which together form a KEM
 pub trait Kem: Sized {
     type Kex: KeyExchange;
+    #[doc(hidden)]
     type Kdf: KdfTrait;
 
     const KEM_ID: u16;
