@@ -84,8 +84,8 @@ impl Kem for DhP256HkdfSha256 {
 type KemPubkey<Kem> = <<Kem as KemTrait>::Kex as KeyExchange>::PublicKey;
 type KemPrivkey<Kem> = <<Kem as KemTrait>::Kex as KeyExchange>::PrivateKey;
 
-/// This holds the content of an encapsulated secret. It is output by the `encap` and `encap_auth`
-/// functions.
+/// Holds the content of an encapsulated secret. This is what the receiver uses to derive the
+/// shared secret.
 // This just wraps a pubkey, because that's all an encapsulated key is in a DH-KEM
 pub struct EncappedKey<Kex: KeyExchange>(Kex::PublicKey);
 

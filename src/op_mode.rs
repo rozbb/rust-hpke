@@ -1,7 +1,7 @@
 use crate::kex::KeyExchange;
 
-/// Contains preshared key bytes and an identifier. This is intended to go inside an `OpMode`
-/// struct.
+/// Contains preshared key bytes and an identifier. This is intended to go inside an `OpModeR` or
+/// `OpModeS` struct.
 #[derive(Clone, Copy)]
 pub struct PskBundle<'a> {
     /// The preshared key

@@ -20,9 +20,10 @@ use rand::{CryptoRng, RngCore};
 ///
 /// Return Value
 /// ============
-/// Returns `Ok((encapped_key, tag))` on success. If an error happened during key exchange, returns
-/// `Err(HpkeError::InvalidKeyExchange)`. If an unspecified error happened during encryption,
-/// returns `Err(HpkeError::Encryption)`. In this case, the contents of `plaintext` is undefined.
+/// Returns `Ok((encapped_key, auth_tag))` on success. If an error happened during key exchange,
+/// returns `Err(HpkeError::InvalidKeyExchange)`. If an unspecified error happened during
+/// encryption, returns `Err(HpkeError::Encryption)`. In this case, the contents of `plaintext` is
+/// undefined.
 pub fn single_shot_seal<A, Kdf, Kem, R>(
     mode: &OpModeS<Kem::Kex>,
     pk_recip: &<Kem::Kex as KeyExchange>::PublicKey,
@@ -50,7 +51,7 @@ where
 //   ctx = SetupAuthPSKR(enc, skR, info, psk, psk_id, pkS)
 //   return ctx.Open(aad, ct)
 /// Does a `setup_receiver` and `AeadCtx::open` in one shot. That is, it does a key decapsulation
-/// for the specified recipient and decrypts the provided plaintext in place. See
+/// for the specified recipient and decrypts the provided ciphertext in-place. See
 /// `setup::setup_reciever` and `AeadCtx::open` for more detail.
 ///
 /// Return Value

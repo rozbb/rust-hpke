@@ -19,7 +19,8 @@ use hpke::{
     aead::{AeadTag, ChaCha20Poly1305},
     kdf::HkdfSha384,
     kem::X25519HkdfSha256,
-    Deserializable, EncappedKey, Kem as KemTrait, KeyExchange, OpModeR, OpModeS, Serializable,
+    kex::KeyExchange,
+    Deserializable, EncappedKey, Kem as KemTrait, OpModeR, OpModeS, Serializable,
 };
 
 use rand::{rngs::StdRng, SeedableRng};

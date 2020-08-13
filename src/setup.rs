@@ -128,12 +128,12 @@ where
 // def SetupAuthPSKR(enc, skR, info, psk, pskID, pkI):
 //   shared_secret = AuthDecap(enc, skR, pkI)
 //   return KeySchedule(mode_auth_psk, shared_secret, info, psk, psk_id)
-/// Initiates an encryption context given a private key `sk` and an encapsulated key which was
-/// encapsulated to `sk`'s corresponding public key
+/// Initiates a decryption context given a private key `sk_recip` and an encapsulated key which
+/// was encapsulated to `sk_recip`'s corresponding public key
 ///
 /// Return Value
 /// ============
-/// On success, returns an encryption context. If an error happened during key exchange, returns
+/// On success, returns a decryption context. If an error happened during key exchange, returns
 /// `Err(HpkeError::InvalidKeyExchange)`. This is the only possible error.
 pub fn setup_receiver<A, Kdf, Kem>(
     mode: &OpModeR<Kem::Kex>,

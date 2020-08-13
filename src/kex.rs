@@ -23,7 +23,9 @@ pub trait Deserializable: Serializable + Sized {
 }
 
 /// This trait captures the requirements of a key exchange mechanism. It must have a way to
-/// generate keypairs, perform the KEX computation, and serialize/deserialize KEX pubkeys
+/// generate keypairs, perform the KEX computation, and serialize/deserialize KEX pubkeys. Most of
+/// this functionality is hidden, though. Use `Kem::derive_keypair` or `Kem::gen_keypair` to make
+/// a keypair.
 pub trait KeyExchange {
     /// The key exchange's public key type. If you want to generate a keypair, see
     /// `Kem::gen_keypair` or `Kem::derive_keypair`

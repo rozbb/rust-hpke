@@ -1,3 +1,71 @@
+//! # hpke
+//! **WARNING:** This code has not been audited. Use at your own discretion.
+//!
+//! This is a pure Rust implementation of the
+//! [HPKE](https://datatracker.ietf.org/doc/draft-irtf-cfrg-hpke/) hybrid encryption scheme. The
+//! purpose of hybrid encryption is to use allow someone to send secure messages to an entity whose
+//! public key they know. Here's an example of Alice and Bob, where Alice knows Bob's public key:
+//!
+//! ```rust
+//! # use rand::{rngs::StdRng, SeedableRng};
+//! # use hpke::{
+//! #     aead::ChaCha20Poly1305,
+//! #     kdf::HkdfSha384,
+//! #     kem::X25519HkdfSha256,
+//! #     EncappedKey, Kem as KemTrait, OpModeR, OpModeS, setup_receiver, setup_sender,
+//! # };
+//! // These types define the ciphersuite Alice and Bob will be using
+//! type Kem = X25519HkdfSha256;
+//! type Aead = ChaCha20Poly1305;
+//! type Kdf = HkdfSha384;
+//!
+//! let mut csprng = StdRng::from_entropy();
+//! # let (bob_sk, bob_pk) = Kem::gen_keypair(&mut csprng);
+//!
+//! // This is a description string for the session. Both Alice and Bob need to know this value.
+//! // It's not secret.
+//! let info_str = b"Alice and Bob's weekly chat";
+//!
+//! // Alice initiates a session with Bob. OpModeS::Base means that Alice is not authenticating
+//! // herself at all. If she had a public key herself, or a pre-shared secret that Bob also
+//! // knew, she'd be able to authenticate herself. See the OpModeS and OpModeR types for more
+//! // detail.
+//! let (encapsulated_key, mut encryption_context) =
+//!     hpke::setup_sender::<Aead, Kdf, Kem, _>(&OpModeS::Base, &bob_pk, info_str, &mut csprng)
+//!         .expect("invalid server pubkey!");
+//!
+//! // Alice encrypts a message to Bob. msg gets encrypted in place, and aad is authenticated
+//! // associated data that is not encrypted.
+//! let mut msg = *b"fronthand or backhand?";
+//! let aad = b"a gentleman's game";
+//! let auth_tag = encryption_context
+//!     .seal(&mut msg, aad)
+//!     .expect("encryption failed!");
+//! // The msg was encrypted in-place. So rename it for clarity
+//! let ciphertext = msg;
+//! # let mut ciphertext = ciphertext; // Make it mutable so Bob can decrypt in place
+//!
+//! // ~~~
+//! // Alice sends the encapsulated key, message ciphertext, AAD, and auth tag to Bob over the
+//! // internet. Alice doesn't care if it's an insecure connection, because only Bob can read
+//! // her ciphertext.
+//! // ~~~
+//!
+//! // Somewhere far away, Bob receives the data and makes a decryption session
+//! let mut decryption_context =
+//!     hpke::setup_receiver::<Aead, Kdf, Kem>(
+//!         &OpModeR::Base,
+//!         &bob_sk,
+//!         &encapsulated_key,
+//!         info_str,
+//!     ).expect("failed to set up receiver!");
+//! decryption_context.open(&mut ciphertext, aad, &auth_tag).expect("invalid ciphertext!");
+//! // The ciphertext was decrypted in-place. So rename it for clarity
+//! let plaintext = ciphertext;
+//!
+//! assert_eq!(&plaintext, b"fronthand or backhand?");
+//! ```
+
 //-------- no_std stuff --------//
 #![no_std]
 
@@ -47,7 +115,7 @@ pub use crate::aead::{AeadCtxR, AeadCtxS};
 #[doc(inline)]
 pub use kem::{EncappedKey, Kem};
 #[doc(inline)]
-pub use kex::{Deserializable, KeyExchange, Serializable};
+pub use kex::{Deserializable, Serializable};
 #[doc(inline)]
 pub use op_mode::{OpModeR, OpModeS, PskBundle};
 #[doc(inline)]
