@@ -5,7 +5,7 @@ use crate::{
     HpkeError,
 };
 
-use digest::generic_array::GenericArray;
+use generic_array::GenericArray;
 use p256::{
     arithmetic::{AffinePoint, ProjectivePoint, Scalar},
     elliptic_curve::weierstrass::{

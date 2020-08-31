@@ -16,6 +16,8 @@ categories = ["cryptography", "no-std"]
 # "x25519" enables the use of the X25519 as a KEM
 default = ["p256", "x25519"]
 x25519 = ["x25519-dalek"]
+# Include serde Serialize/Deserialize impls for all relevant types
+serde_impls = ["serde", "generic-array/serde"]
 # The std feature has no function outside of doing KAT tests. There is no need to use this in
 # production.
 std = []
@@ -25,11 +27,13 @@ aead = "0.3"
 aes-gcm = "0.6"
 byteorder = { version = "1.3", default-features = false }
 chacha20poly1305 = "0.5"
+generic-array = { version = "0.14", default-features = false }
 digest = "0.9"
 hkdf = "0.9"
 rand = { version = "0.7", default-features = false }
 p256 = { version = "0.3", default-features = false, features = ["arithmetic"], optional = true}
 sha2 = { version = "0.9", default-features = false }
+serde = { version = "1.0", default-features = false, optional = true }
 subtle = { version = "2.2", default-features = false }
 
 [dependencies.x25519-dalek]

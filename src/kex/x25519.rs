@@ -5,7 +5,7 @@ use crate::{
     HpkeError,
 };
 
-use digest::generic_array::{typenum, GenericArray};
+use generic_array::{typenum, GenericArray};
 use subtle::ConstantTimeEq;
 
 // We wrap the types in order to abstract away the dalek dep

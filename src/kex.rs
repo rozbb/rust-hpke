@@ -1,6 +1,9 @@
 use crate::{kdf::Kdf as KdfTrait, util::KemSuiteId, HpkeError};
 
-use digest::generic_array::{typenum::marker_traits::Unsigned, ArrayLength, GenericArray};
+use generic_array::{typenum::marker_traits::Unsigned, ArrayLength, GenericArray};
+
+#[cfg(feature = "serde_impls")]
+use serde::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
 
 // This is currently the maximum value of all of Npk, Ndh, and Nenc. It's achieved by P-521
 pub(crate) const MAX_PUBKEY_SIZE: usize = 133;
@@ -27,11 +30,33 @@ pub trait Deserializable: Serializable + Sized {
 /// this functionality is hidden, though. Use `Kem::derive_keypair` or `Kem::gen_keypair` to make
 /// a keypair.
 pub trait KeyExchange {
+    // Public and private keys need to implement serde::{Serialize, Deserialize} if the serde_impls
+    // feature is set. So double up all the definitions: one with serde and one without.
+
     /// The key exchange's public key type. If you want to generate a keypair, see
     /// `Kem::gen_keypair` or `Kem::derive_keypair`
+    #[cfg(feature = "serde_impls")]
+    type PublicKey: Clone
+        + Serializable
+        + Deserializable
+        + SerdeSerialize
+        + for<'a> SerdeDeserialize<'a>;
+    /// The key exchange's public key type. If you want to generate a keypair, see
+    /// `Kem::gen_keypair` or `Kem::derive_keypair`
+    #[cfg(not(feature = "serde_impls"))]
     type PublicKey: Clone + Serializable + Deserializable;
+
     /// The key exchange's private key type. If you want to generate a keypair, see
     /// `Kem::gen_keypair` or `Kem::derive_keypair`
+    #[cfg(feature = "serde_impls")]
+    type PrivateKey: Clone
+        + Serializable
+        + Deserializable
+        + SerdeSerialize
+        + for<'a> SerdeDeserialize<'a>;
+    /// The key exchange's private key type. If you want to generate a keypair, see
+    /// `Kem::gen_keypair` or `Kem::derive_keypair`
+    #[cfg(not(feature = "serde_impls"))]
     type PrivateKey: Clone + Serializable + Deserializable;
 
     #[doc(hidden)]
@@ -51,11 +76,11 @@ pub trait KeyExchange {
 }
 
 #[cfg(feature = "p256")]
-mod ecdh_nistp;
+pub(crate) mod ecdh_nistp;
 #[cfg(feature = "p256")]
 pub use ecdh_nistp::DhP256;
 
 #[cfg(feature = "x25519-dalek")]
-mod x25519;
+pub(crate) mod x25519;
 #[cfg(feature = "x25519-dalek")]
 pub use x25519::X25519;

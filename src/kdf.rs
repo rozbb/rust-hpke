@@ -1,7 +1,8 @@
 use crate::kem::Kem as KemTrait;
 
 use byteorder::{BigEndian, ByteOrder};
-use digest::{generic_array::GenericArray, BlockInput, Digest, FixedOutput, Reset, Update};
+use digest::{BlockInput, Digest, FixedOutput, Reset, Update};
+use generic_array::GenericArray;
 use sha2::{Sha256, Sha384, Sha512};
 
 // This has a space because LabeledExtract calls for a space between the RFC string and the label

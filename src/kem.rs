@@ -5,7 +5,8 @@ use crate::{
     HpkeError,
 };
 
-use digest::{generic_array::GenericArray, FixedOutput};
+use digest::FixedOutput;
+use generic_array::GenericArray;
 use rand::{CryptoRng, RngCore};
 
 /// Defines a combination of key exchange mechanism and a KDF, which together form a KEM

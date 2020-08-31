@@ -7,7 +7,7 @@ use crate::{
     setup::ExporterSecret,
 };
 
-use digest::generic_array::GenericArray;
+use generic_array::GenericArray;
 use rand::{rngs::StdRng, CryptoRng, Rng, RngCore, SeedableRng};
 
 /// Returns a random 32-byte buffer

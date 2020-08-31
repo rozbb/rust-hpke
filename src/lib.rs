@@ -81,16 +81,13 @@ extern crate alloc;
 
 //-------- Testing stuff --------//
 
-// Re-export this version of generic_array, since that's what's used everywhere in this crate
-pub use digest::generic_array;
-
 // kat_tests tests all the implemented ciphersuites, and thus needs all the dependencies. It also
 // needs std for file IO.
-#[cfg(all(test, feature = "std", feature = "x25519-dalek", feature = "p256"))]
+#[cfg(all(test, feature = "std", feature = "x25519", feature = "p256"))]
 mod kat_tests;
 
 // kat_tests requires serde
-#[cfg(all(test, feature = "std", feature = "x25519-dalek", feature = "p256"))]
+#[cfg(all(test, feature = "std", feature = "x25519", feature = "p256"))]
 #[macro_use]
 extern crate serde_derive;
 
@@ -98,6 +95,9 @@ extern crate serde_derive;
 mod test_util;
 
 //-------- Modules and exports--------//
+
+// Re-export this version of generic_array, since that's what's used everywhere in this crate
+pub use generic_array;
 
 #[macro_use]
 mod util;
@@ -109,6 +109,9 @@ pub mod kex;
 pub mod op_mode;
 pub mod setup;
 pub mod single_shot;
+
+#[cfg(feature = "serde_impls")]
+mod serde_impls;
 
 #[doc(inline)]
 pub use crate::aead::{AeadCtxR, AeadCtxS};

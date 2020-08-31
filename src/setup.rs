@@ -8,7 +8,8 @@ use crate::{
     HpkeError,
 };
 
-use digest::{generic_array::GenericArray, Digest};
+use digest::Digest;
+use generic_array::GenericArray;
 use rand::{CryptoRng, RngCore};
 
 /// Secret generated in `derive_enc_ctx` and stored in `AeadCtx`

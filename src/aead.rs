@@ -11,7 +11,7 @@ use core::{marker::PhantomData, u8};
 
 use aead::{AeadInPlace as BaseAead, NewAead as BaseNewAead};
 use byteorder::{BigEndian, ByteOrder};
-use digest::generic_array::GenericArray;
+use generic_array::GenericArray;
 use hkdf::Hkdf;
 
 /// Represents authenticated encryption functionality
