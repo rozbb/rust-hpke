@@ -43,7 +43,6 @@ features = ["u64_backend"]
 optional = true
 
 [dev-dependencies]
-criterion = "0.3"
 hex = "0.4"
 serde = "1.0"
 serde_derive = "1.0"
@@ -57,7 +56,3 @@ required-features = ["x25519"]
 [[example]]
 name = "agility"
 required-features = ["p256", "x25519"]
-
-[[bench]]
-name = "benches"
-harness = false
