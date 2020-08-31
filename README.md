@@ -38,7 +38,7 @@ Feature flag list:
 
 * `x25519` - Enables X25519-based KEMs
 * `p256` - Enables NIST P-256-based KEMs
-* `serde_impls` - Includes implementations of `serde::Serialize` and `serde::Deserialize` for all `hpke::Serializable` and `hpke::Deserializable` types (i.e., AEAD tags, encapped keys, public keys, and private keys)
+* `serde_impls` - Includes implementations of `serde::Serialize` and `serde::Deserialize` for all `hpke::Serializable` and `hpke::Deserializable` types
 * `std` - Necessary for running known-answer tests. No need to enable unless you're debugging this crate.
 
 For info on how to omit or include feature flags, see the [cargo docs on features](https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html#choosing-features).
