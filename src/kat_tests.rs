@@ -328,7 +328,7 @@ macro_rules! dispatch_testcase {
 
 #[test]
 fn kat_test() {
-    let file = File::open("test-vectors-580119b.json").unwrap();
+    let file = File::open("test-vectors-403bf8c.json").unwrap();
     let tvs: Vec<MainTestVector> = serde_json::from_reader(file).unwrap();
 
     for tv in tvs.into_iter() {

@@ -5,7 +5,7 @@ use crate::{
     HpkeError,
 };
 
-use generic_array::GenericArray;
+use generic_array::{typenum, GenericArray};
 use p256::{
     arithmetic::{AffinePoint, ProjectivePoint, Scalar},
     elliptic_curve::weierstrass::{
@@ -121,12 +121,18 @@ impl Deserializable for PrivateKey {
 
 // DH results are serialized in the same way as public keys
 impl Serializable for KexResult {
-    // §4.1: Ndh equals Npk
-    type OutputSize = <PublicKey as Serializable>::OutputSize;
+    // §4.1: Ndh of DHKEM(P-256, HKDF-SHA256) is 32
+    type OutputSize = typenum::U32;
 
+    // §4.1: Representation of the KEX result is the serialization of the x-coordinate
     fn to_bytes(&self) -> GenericArray<u8, Self::OutputSize> {
-        // Rewrap and serialize
-        PublicKey(self.0).to_bytes()
+        // The tagged compressed representation is is 0x04 || x-coord. We strip the 0x04 and output
+        // the rest
+        let tagged_bytes = self.0.to_compressed_pubkey().into_bytes();
+        let x_coord_bytes =
+            GenericArray::<u8, Self::OutputSize>::clone_from_slice(&tagged_bytes[1..]);
+
+        x_coord_bytes
     }
 }
 
@@ -267,11 +273,9 @@ mod tests {
             "56FBF3CA366CC23E8157854C13C58D6AAC23F046ADA30F8353E74F33039872AB", // y-coordinate
         ))
         .unwrap();
-        let dh_res_bytes = hex::decode(concat!(
-            "04",                                                               // Uncompressed
+        let dh_res_xcoord_bytes = hex::decode(
             "D6840F6B42F6EDAFD13116E0E12565202FEF8E9ECE7DCE03812464D04B9442DE", // x-coordinate
-            "522BDE0AF0D8585B8DEF9C183B5AE38F50235206A8674ECB5D98EDB20EB153A2", // y-coordinate
-        ))
+        )
         .unwrap();
 
         // Deserialize the pubkey and privkey and do a DH operation
@@ -279,8 +283,12 @@ mod tests {
         let pk_sender = <Kex as KeyExchange>::PublicKey::from_bytes(&pk_sender_bytes).unwrap();
         let derived_dh = <Kex as KeyExchange>::kex(&sk_recip, &pk_sender).unwrap();
 
-        // Assert that the derived DH result matches the test vector
-        assert_eq!(derived_dh.to_bytes().as_slice(), dh_res_bytes.as_slice());
+        // Assert that the derived DH result matches the test vector. Recall that the HPKE DH
+        // result is just the x-coordinate, so that's all we can compare
+        assert_eq!(
+            derived_dh.to_bytes().as_slice(),
+            dh_res_xcoord_bytes.as_slice()
+        );
     }
 
     // Test vector comes from §8.1 of RFC5903

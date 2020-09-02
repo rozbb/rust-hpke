@@ -70,11 +70,13 @@ impl Deserializable for PrivateKey {
 }
 
 impl Serializable for KexResult {
-    // §7.1: Nsecret of DHKEM(X25519, HKDF-SHA256) is 32
+    // §4.1: Ndh of DHKEM(X25519, HKDF-SHA256) is 32
     type OutputSize = typenum::U32;
 
-    // Dalek lets us convert shared secrets to to [u8; 32]
+    // §4.1: Representation of the KEX result is the serialization of the x-coordinate. This is how
+    // X25519 represents things anyway, so we don't have to do anything special.
     fn to_bytes(&self) -> GenericArray<u8, typenum::U32> {
+        // Dalek lets us convert shared secrets to to [u8; 32]
         GenericArray::clone_from_slice(self.0.as_bytes())
     }
 }
