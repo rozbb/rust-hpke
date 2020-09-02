@@ -123,13 +123,9 @@ impl Serializable for KexResult {
     fn to_bytes(&self) -> GenericArray<u8, Self::OutputSize> {
         // The tagged compressed representation is is 0x04 || x-coord. We strip the 0x04 and output
         // the rest
-        let x_coord_bytes = {
-            let compressed_pubkey = self.0.to_pubkey(true);
-            let tagged_bytes = compressed_pubkey.as_bytes();
-            GenericArray::<u8, Self::OutputSize>::clone_from_slice(&tagged_bytes[1..])
-        };
-
-        x_coord_bytes
+        let compressed_pubkey = self.0.to_pubkey(true);
+        let tagged_bytes = compressed_pubkey.as_bytes();
+        GenericArray::<u8, Self::OutputSize>::clone_from_slice(&tagged_bytes[1..])
     }
 }
 
