@@ -31,7 +31,7 @@ generic-array = { version = "0.14", default-features = false }
 digest = "0.9"
 hkdf = "0.9"
 rand = { version = "0.7", default-features = false }
-p256 = { version = "0.3", default-features = false, features = ["arithmetic"], optional = true}
+p256 = { version = "0.4", default-features = false, features = ["arithmetic"], optional = true}
 sha2 = { version = "0.9", default-features = false }
 serde = { version = "1.0", default-features = false, optional = true }
 subtle = { version = "2.2", default-features = false }
