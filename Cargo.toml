@@ -56,3 +56,7 @@ required-features = ["x25519"]
 [[example]]
 name = "agility"
 required-features = ["p256", "x25519"]
+
+# Tell docs.rs to build docs with `--all-features`
+[package.metadata.docs.rs]
+all-features = true
