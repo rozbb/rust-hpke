@@ -23,7 +23,7 @@ pub struct PublicKey(AffinePoint);
 
 // The range invariant below is maintained so that sk_to_pk is a well-defined operation. If you
 // disagree with this decision, fight me.
-/// A ECDH-P256 private key. This is a scalar in the range `[1,p)`.
+/// An ECDH-P256 private key. This is a scalar in the range `[1,p)` where `p` is the group order.
 #[derive(Clone)]
 pub struct PrivateKey(Scalar);
 
@@ -158,9 +158,12 @@ impl KeyExchange for DhP256 {
         // Do the DH operation
         let dh_res_proj = pk_proj * &sk.0;
 
-        // We can unwrap here because we know pk is not the point at infinity (since this has no
-        // affine representation), and sk is not 0 mod p (due to the invariant we keep on
-        // PrivateKeys)
+        // We can unwrap here because we know
+        // 1. pk is not the point at infinity (since this has no affine representation)
+        // 2. sk is not 0 mod p (due to the invariant we keep on PrivateKeys)
+        // 3. Exponentiating a non-identity element of a prime-order group by something less than
+        //    the order yields a non-identity value
+        // Therefore, dh_res_proj cannot be the point at infinity
         Ok(KexResult(dh_res_proj.to_affine().unwrap()))
     }
 
