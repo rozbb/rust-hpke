@@ -48,8 +48,26 @@ Tests
 
 To run all tests, execute `cargo test --all-features`. This includes known-answer tests, which test against `test-vector-COMMIT_ID.json`,where `COMMIT_ID` is the short commit of the version of the [spec](https://github.com/cfrg/draft-irtf-cfrg-hpke) that the test vectors came from. See the [reference implementation](https://github.com/bifurcation/hpke) for information on how to generate a test vector.
 
-Examples
---------
+Benchmarks
+----------
+
+To run all benchmarks, execute `cargo bench --all-features`. If you set your own feature flags, the benchmarks will still work, and run the subset of benches that it is able to. The results of a benchmark can be read as a neat webpage at `target/criterion/report/index.html`.
+
+Ciphersuites benchmarked:
+
+* NIST Ciphersuite with 128-bit security: AES-GCM-128, HKDF-SHA256, ECDH-P256
+* Non-NIST Ciphersuite with 128-bit security: ChaCha20-Poly1305, HKDF-SHA256, X25519
+
+Functions benchmarked in each ciphersuite:
+
+* `Kem::gen_keypair`
+* `setup_sender` with OpModes of Base, Auth, Psk, and AuthPsk
+* `setup_receiver` with OpModes of Base, Auth, Psk, and AuthPsk
+* `AeadCtxS::seal` with plaintext length 64 and AAD length 64
+* `AeadCtxR::open` with ciphertext length 64 and AAD length 64
+
+Usage Examples
+--------------
 
 See the [client-server](examples/client_server.rs) example for an idea of how to use HPKE.
 
@@ -64,7 +82,6 @@ What's next
 -----------
 
 * Add support for more KEMs
-* Benchmarks
 * More examples
 
 License

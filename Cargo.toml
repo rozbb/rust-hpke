@@ -8,7 +8,7 @@ version = "0.3.1"
 authors = ["Michael Rosenberg <michael@mrosenberg.pub>"]
 edition = "2018"
 license = "MIT/Apache-2.0"
-keywords = ["cryptography", "key-exchange", "encryption", "aead"]
+keywords = ["cryptography", "crypto", "key-exchange", "encryption", "aead"]
 categories = ["cryptography", "no-std"]
 
 [features]
@@ -43,6 +43,7 @@ features = ["u64_backend"]
 optional = true
 
 [dev-dependencies]
+criterion = "0.3"
 hex = "0.4"
 serde = "1.0"
 serde_derive = "1.0"
@@ -60,3 +61,8 @@ required-features = ["p256", "x25519"]
 # Tell docs.rs to build docs with `--all-features`
 [package.metadata.docs.rs]
 all-features = true
+
+# Criteron benches
+[[bench]]
+name = "benches"
+harness = false

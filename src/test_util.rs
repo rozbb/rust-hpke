@@ -78,7 +78,7 @@ pub(crate) fn new_op_mode_pair<'a, Kex: KeyExchange, Kdf: KdfTrait>(
     psk_id: &'a [u8],
 ) -> (OpModeS<'a, Kex>, OpModeR<'a, Kex>) {
     let mut csprng = StdRng::from_entropy();
-    let (sk_sender_id, pk_sender_id) = kex_gen_keypair::<Kex, _>(&mut csprng);
+    let (sk_sender, pk_sender) = kex_gen_keypair::<Kex, _>(&mut csprng);
     let psk_bundle = PskBundle { psk, psk_id };
 
     match kind {
@@ -93,13 +93,13 @@ pub(crate) fn new_op_mode_pair<'a, Kex: KeyExchange, Kdf: KdfTrait>(
             (sender_mode, receiver_mode)
         }
         OpModeKind::Auth => {
-            let sender_mode = OpModeS::Auth((sk_sender_id, pk_sender_id.clone()));
-            let receiver_mode = OpModeR::Auth(pk_sender_id);
+            let sender_mode = OpModeS::Auth((sk_sender, pk_sender.clone()));
+            let receiver_mode = OpModeR::Auth(pk_sender);
             (sender_mode, receiver_mode)
         }
         OpModeKind::AuthPsk => {
-            let sender_mode = OpModeS::AuthPsk((sk_sender_id, pk_sender_id.clone()), psk_bundle);
-            let receiver_mode = OpModeR::AuthPsk(pk_sender_id, psk_bundle);
+            let sender_mode = OpModeS::AuthPsk((sk_sender, pk_sender.clone()), psk_bundle);
+            let receiver_mode = OpModeR::AuthPsk(pk_sender, psk_bundle);
             (sender_mode, receiver_mode)
         }
     }
