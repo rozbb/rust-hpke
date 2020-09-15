@@ -121,8 +121,11 @@ impl Serializable for KexResult {
 
     // §4.1: Representation of the KEX result is the serialization of the x-coordinate
     fn to_bytes(&self) -> GenericArray<u8, Self::OutputSize> {
-        // The tagged compressed representation is is 0x04 || x-coord. We strip the 0x04 and output
-        // the rest
+        // The tagged compressed representation (according to SECG SEC-1) is 0x02 || x-coord or
+        // 0x03 || x-coord, depending on the parity of the y-coord (note it cannot be the point at
+        // infinity because it is not representable by the underlying type AffinePoint). Since the
+        // KEX result is defined by HPKE to just be the x-coord, we strip the first byte and return
+        // the rest.
         let compressed_pubkey = self.0.to_pubkey(true);
         let tagged_bytes = compressed_pubkey.as_bytes();
         GenericArray::<u8, Self::OutputSize>::clone_from_slice(&tagged_bytes[1..])
