@@ -20,7 +20,6 @@ pub trait Kdf {
     type HashImpl: Digest + Update + BlockInput + FixedOutput + Reset + Default + Clone;
 
     /// The algorithm identifier for a KDF implementation
-    #[doc(hidden)]
     const KDF_ID: u16;
 }
 
@@ -36,7 +35,6 @@ impl KdfTrait for HkdfSha256 {
     #[doc(hidden)]
     type HashImpl = Sha256;
 
-    #[doc(hidden)]
     const KDF_ID: u16 = 0x0001;
 }
 
@@ -47,7 +45,6 @@ impl KdfTrait for HkdfSha384 {
     #[doc(hidden)]
     type HashImpl = Sha384;
 
-    #[doc(hidden)]
     const KDF_ID: u16 = 0x0002;
 }
 
@@ -58,7 +55,6 @@ impl KdfTrait for HkdfSha512 {
     #[doc(hidden)]
     type HashImpl = Sha512;
 
-    #[doc(hidden)]
     const KDF_ID: u16 = 0x0003;
 }
 
