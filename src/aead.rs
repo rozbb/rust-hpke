@@ -53,14 +53,14 @@ impl Aead for ChaCha20Poly1305 {
     const AEAD_ID: u16 = 0x0003;
 }
 
-// A nonce is the same thing as a sequence counter. But you never increment a nonce.
+// A nonce is a bytestring you only use for encryption once
 pub(crate) type AeadNonce<A> = GenericArray<u8, <<A as Aead>::AeadImpl as BaseAead>::NonceSize>;
 pub(crate) type AeadKey<A> = GenericArray<u8, <<A as Aead>::AeadImpl as aead::NewAead>::KeySize>;
 
 /// A sequence counter. This is set to `u64` instead of the true nonce size of an AEAD for two
 /// reasons:
 ///
-/// 1. No algorithm that would appear in HPKE would support nonce sizes less than `u64`.
+/// 1. No algorithm that would appear in HPKE would require nonce sizes less than `u64`.
 /// 2. It is just about physically impossible to encrypt 2^64 messages in sequence. If a computer
 ///    computes 1 encryption every nanosecond, it would take over 584 years to run out of nonces.
 ///    Notably, unlike randomized nonces, counting in sequence doesn't parallelize, so we don't
@@ -82,7 +82,7 @@ fn increment_seq(seq: &Seq) -> Option<Seq> {
 // def Context.ComputeNonce(seq):
 //   seq_bytes = I2OSP(seq, Nn)
 //   return xor(self.nonce, seq_bytes)
-/// Derives a nonce from the given nonce and a "sequence number". The sequence number is treated as
+/// Derives a nonce from the base nonce and a "sequence number". The sequence number is treated as
 /// a big-endian integer with length equal to the nonce length.
 fn mix_nonce<A: Aead>(base_nonce: &AeadNonce<A>, seq: &Seq) -> AeadNonce<A> {
     // Write `seq` in big-endian order into a byte buffer that's the size of a nonce
@@ -100,7 +100,7 @@ fn mix_nonce<A: Aead>(base_nonce: &AeadNonce<A>, seq: &Seq) -> AeadNonce<A> {
         .zip(seq_buf.iter())
         .map(|(nonce_byte, seq_byte)| nonce_byte ^ seq_byte);
 
-    // This cannot fail, as the length of Nonce<A> is precisely the length of Seq
+    // This cannot fail, as the length of AeadNonce<A> is precisely the length of Seq
     GenericArray::from_exact_iter(new_nonce_iter).unwrap()
 }
 
@@ -135,7 +135,7 @@ pub(crate) struct AeadCtx<A: Aead, Kdf: KdfTrait, Kem: KemTrait> {
     /// The underlying AEAD instance. This also does decryption.
     encryptor: A::AeadImpl,
     /// The base nonce which we XOR with sequence numbers
-    nonce: AeadNonce<A>,
+    base_nonce: AeadNonce<A>,
     /// The exporter secret, used in the `export()` method
     exporter_secret: ExporterSecret<Kdf>,
     /// The running sequence number
@@ -153,7 +153,7 @@ impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> Clone for AeadCtx<A, Kdf, Kem> {
         AeadCtx {
             overflowed: self.overflowed,
             encryptor: self.encryptor.clone(),
-            nonce: self.nonce.clone(),
+            base_nonce: self.base_nonce.clone(),
             exporter_secret: self.exporter_secret.clone(),
             seq: self.seq.clone(),
             src_kem: PhantomData,
@@ -166,14 +166,14 @@ impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AeadCtx<A, Kdf, Kem> {
     /// Makes an AeadCtx from a raw key and nonce
     pub(crate) fn new(
         key: &AeadKey<A>,
-        nonce: AeadNonce<A>,
+        base_nonce: AeadNonce<A>,
         exporter_secret: ExporterSecret<Kdf>,
     ) -> AeadCtx<A, Kdf, Kem> {
         let suite_id = full_suite_id::<A, Kdf, Kem>();
         AeadCtx {
             overflowed: false,
             encryptor: <A::AeadImpl as aead::NewAead>::new(key),
-            nonce,
+            base_nonce,
             exporter_secret,
             seq: <Seq as Default>::default(),
             src_kem: PhantomData,
@@ -240,11 +240,11 @@ impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AeadCtxR<A, Kdf, Kem> {
         tag: &AeadTag<A>,
     ) -> Result<(), HpkeError> {
         if self.0.overflowed {
-            // If the sequence counter overflowed, we've been used for far too long. Shut down.
+            // If the sequence counter overflowed, we've been used for too long. Shut down.
             Err(HpkeError::SeqOverflow)
         } else {
             // Compute the nonce and do the encryption in place
-            let nonce = mix_nonce::<A>(&self.0.nonce, &self.0.seq);
+            let nonce = mix_nonce::<A>(&self.0.base_nonce, &self.0.seq);
             let decrypt_res = self
                 .0
                 .encryptor
@@ -255,9 +255,8 @@ impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AeadCtxR<A, Kdf, Kem> {
                 return Err(HpkeError::InvalidTag);
             }
 
-            // Opening was a success
-            // Try to increment the sequence counter. If it fails, this was our last
-            // decryption.
+            // Opening was a success. Try to increment the sequence counter. If it fails, this was
+            // our last decryption.
             match increment_seq(&self.0.seq) {
                 Some(new_seq) => self.0.seq = new_seq,
                 None => self.0.overflowed = true,
@@ -320,7 +319,7 @@ impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AeadCtxS<A, Kdf, Kem> {
             Err(HpkeError::SeqOverflow)
         } else {
             // Compute the nonce and do the encryption in place
-            let nonce = mix_nonce::<A>(&self.0.nonce, &self.0.seq);
+            let nonce = mix_nonce::<A>(&self.0.base_nonce, &self.0.seq);
             let tag_res = self
                 .0
                 .encryptor
@@ -511,49 +510,50 @@ mod test {
     }
 
     #[cfg(feature = "x25519-dalek")]
-    test_export_idempotence!(test_export_idempotence_x25519, crate::kem::X25519HkdfSha256);
-    #[cfg(feature = "p256")]
-    test_export_idempotence!(test_export_idempotence_p256, crate::kem::DhP256HkdfSha256);
+    mod x25519_tests {
+        use super::*;
 
-    #[cfg(feature = "x25519-dalek")]
-    test_overflow!(test_overflow_x25519, crate::kem::X25519HkdfSha256);
-    #[cfg(feature = "p256")]
-    test_overflow!(test_overflow_p256, crate::kem::DhP256HkdfSha256);
+        test_export_idempotence!(test_export_idempotence_x25519, crate::kem::X25519HkdfSha256);
+        test_overflow!(test_overflow_x25519, crate::kem::X25519HkdfSha256);
 
-    #[cfg(feature = "x25519-dalek")]
-    test_ctx_correctness!(
-        test_ctx_correctness_aes128_x25519,
-        AesGcm128,
-        crate::kem::X25519HkdfSha256
-    );
+        test_ctx_correctness!(
+            test_ctx_correctness_aes128_x25519,
+            AesGcm128,
+            crate::kem::X25519HkdfSha256
+        );
+        test_ctx_correctness!(
+            test_ctx_correctness_aes256_x25519,
+            AesGcm256,
+            crate::kem::X25519HkdfSha256
+        );
+        test_ctx_correctness!(
+            test_ctx_correctness_chacha_x25519,
+            ChaCha20Poly1305,
+            crate::kem::X25519HkdfSha256
+        );
+    }
+
     #[cfg(feature = "p256")]
-    test_ctx_correctness!(
-        test_ctx_correctness_aes128_p256,
-        AesGcm128,
-        crate::kem::DhP256HkdfSha256
-    );
-    #[cfg(feature = "x25519-dalek")]
-    test_ctx_correctness!(
-        test_ctx_correctness_aes256_x25519,
-        AesGcm256,
-        crate::kem::X25519HkdfSha256
-    );
-    #[cfg(feature = "p256")]
-    test_ctx_correctness!(
-        test_ctx_correctness_aes256_p256,
-        AesGcm256,
-        crate::kem::DhP256HkdfSha256
-    );
-    #[cfg(feature = "x25519-dalek")]
-    test_ctx_correctness!(
-        test_ctx_correctness_chacha_x25519,
-        ChaCha20Poly1305,
-        crate::kem::X25519HkdfSha256
-    );
-    #[cfg(feature = "p256")]
-    test_ctx_correctness!(
-        test_ctx_correctness_chacha_p256,
-        ChaCha20Poly1305,
-        crate::kem::DhP256HkdfSha256
-    );
+    mod p256_tests {
+        use super::*;
+
+        test_export_idempotence!(test_export_idempotence_p256, crate::kem::DhP256HkdfSha256);
+        test_overflow!(test_overflow_p256, crate::kem::DhP256HkdfSha256);
+
+        test_ctx_correctness!(
+            test_ctx_correctness_aes128_p256,
+            AesGcm128,
+            crate::kem::DhP256HkdfSha256
+        );
+        test_ctx_correctness!(
+            test_ctx_correctness_aes256_p256,
+            AesGcm256,
+            crate::kem::DhP256HkdfSha256
+        );
+        test_ctx_correctness!(
+            test_ctx_correctness_chacha_p256,
+            ChaCha20Poly1305,
+            crate::kem::DhP256HkdfSha256
+        );
+    }
 }

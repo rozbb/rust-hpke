@@ -56,31 +56,33 @@ where
     let sched_context = &sched_context_buf[..sched_context_size];
 
     // In KeySchedule(),
-    //   psk_hash = LabeledExtract("", "psk_hash", psk)
-    //   secret = LabeledExtract(psk_hash, "secret", shared_secret)
+    //   secret = LabeledExtract(shared_secret, "secret", psk)
     //   key = LabeledExpand(secret, "key", key_schedule_context, Nk)
-    //   nonce = LabeledExpand(secret, "nonce", key_schedule_context, Nn)
+    //   base_nonce = LabeledExpand(secret, "base_nonce", key_schedule_context, Nn)
     //   exporter_secret = LabeledExpand(secret, "exp", key_schedule_context, Nh)
-    let (extracted_psk, _) =
-        labeled_extract::<Kdf>(&[], &suite_id, b"psk_hash", mode.get_psk_bytes());
     // Instead of `secret` we derive an HKDF context which we run .expand() on to derive the
     // key-nonce pair.
     let (_, secret_ctx) =
-        labeled_extract::<Kdf>(&extracted_psk, &suite_id, b"secret", &shared_secret);
+        labeled_extract::<Kdf>(&shared_secret, &suite_id, b"secret", &mode.get_psk_bytes());
 
     // Empty fixed-size buffers
     let mut key = crate::aead::AeadKey::<A>::default();
-    let mut nonce = crate::aead::AeadNonce::<A>::default();
+    let mut base_nonce = crate::aead::AeadNonce::<A>::default();
     let mut exporter_secret = <ExporterSecret<Kdf> as Default>::default();
 
-    // Fill the key, nonce, and exporter secret. This only errors if the output values are 255x the
-    // digest size of the hash function. Since these values are fixed at compile time, we don't
-    // worry about it.
+    // Fill the key, base nonce, and exporter secret. This only errors if the output values are
+    // 255x the digest size of the hash function. Since these values are fixed at compile time, we
+    // don't worry about it.
     secret_ctx
         .labeled_expand(&suite_id, b"key", &sched_context, key.as_mut_slice())
         .expect("aead key len is way too big");
     secret_ctx
-        .labeled_expand(&suite_id, b"nonce", &sched_context, nonce.as_mut_slice())
+        .labeled_expand(
+            &suite_id,
+            b"base_nonce",
+            &sched_context,
+            base_nonce.as_mut_slice(),
+        )
         .expect("nonce len is way too big");
     secret_ctx
         .labeled_expand(
@@ -91,7 +93,7 @@ where
         )
         .expect("exporter secret len is way too big");
 
-    AeadCtx::new(&key, nonce, exporter_secret)
+    AeadCtx::new(&key, base_nonce, exporter_secret)
 }
 
 // def SetupAuthPSKI(pkR, info, psk, psk_id, skI):
@@ -297,32 +299,38 @@ mod test {
     }
 
     #[cfg(feature = "x25519-dalek")]
-    test_setup_correctness!(
-        test_setup_correctness_x25519,
-        ChaCha20Poly1305,
-        HkdfSha256,
-        crate::kem::X25519HkdfSha256
-    );
-    #[cfg(feature = "p256")]
-    test_setup_correctness!(
-        test_setup_correctness_p256,
-        ChaCha20Poly1305,
-        HkdfSha256,
-        crate::kem::DhP256HkdfSha256
-    );
+    mod x25519_tests {
+        use super::*;
 
-    #[cfg(feature = "x25519-dalek")]
-    test_setup_soundness!(
-        test_setup_soundness_x25519,
-        ChaCha20Poly1305,
-        HkdfSha256,
-        crate::kem::X25519HkdfSha256
-    );
+        test_setup_correctness!(
+            test_setup_correctness_x25519,
+            ChaCha20Poly1305,
+            HkdfSha256,
+            crate::kem::X25519HkdfSha256
+        );
+        test_setup_soundness!(
+            test_setup_soundness_x25519,
+            ChaCha20Poly1305,
+            HkdfSha256,
+            crate::kem::X25519HkdfSha256
+        );
+    }
+
     #[cfg(feature = "p256")]
-    test_setup_soundness!(
-        test_setup_soundness_p256,
-        ChaCha20Poly1305,
-        HkdfSha256,
-        crate::kem::DhP256HkdfSha256
-    );
+    mod p256_tests {
+        use super::*;
+
+        test_setup_correctness!(
+            test_setup_correctness_p256,
+            ChaCha20Poly1305,
+            HkdfSha256,
+            crate::kem::DhP256HkdfSha256
+        );
+        test_setup_soundness!(
+            test_setup_soundness_p256,
+            ChaCha20Poly1305,
+            HkdfSha256,
+            crate::kem::DhP256HkdfSha256
+        );
+    }
 }

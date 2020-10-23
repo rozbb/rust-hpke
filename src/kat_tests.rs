@@ -54,11 +54,11 @@ struct MainTestVector {
     info: Vec<u8>,
 
     // Keying material
-    #[serde(rename = "seedR", deserialize_with = "bytes_from_hex")]
+    #[serde(rename = "ikmR", deserialize_with = "bytes_from_hex")]
     ikm_recip: Vec<u8>,
-    #[serde(default, rename = "seedS", deserialize_with = "bytes_from_hex_opt")]
+    #[serde(default, rename = "ikmS", deserialize_with = "bytes_from_hex_opt")]
     ikm_sender: Option<Vec<u8>>,
-    #[serde(rename = "seedE", deserialize_with = "bytes_from_hex")]
+    #[serde(rename = "ikmE", deserialize_with = "bytes_from_hex")]
     ikm_eph: Vec<u8>,
 
     // Private keys
@@ -94,8 +94,8 @@ struct MainTestVector {
     _key_schedule_secret: Vec<u8>,
     #[serde(rename = "key", deserialize_with = "bytes_from_hex")]
     _aead_key: Vec<u8>,
-    #[serde(rename = "nonce", deserialize_with = "bytes_from_hex")]
-    _aead_nonce: Vec<u8>,
+    #[serde(rename = "base_nonce", deserialize_with = "bytes_from_hex")]
+    _aead_base_nonce: Vec<u8>,
     #[serde(rename = "exporter_secret", deserialize_with = "bytes_from_hex")]
     _exporter_secret: Vec<u8>,
 
@@ -328,7 +328,7 @@ macro_rules! dispatch_testcase {
 
 #[test]
 fn kat_test() {
-    let file = File::open("test-vectors-403bf8c.json").unwrap();
+    let file = File::open("test-vectors-uncommitted.json").unwrap();
     let tvs: Vec<MainTestVector> = serde_json::from_reader(file).unwrap();
 
     for tv in tvs.into_iter() {

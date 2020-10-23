@@ -46,7 +46,7 @@ where
         csprng.fill_bytes(buf.as_mut_slice());
         buf
     };
-    let nonce = {
+    let base_nonce = {
         let mut buf = AeadNonce::<A>::default();
         csprng.fill_bytes(buf.as_mut_slice());
         buf
@@ -57,8 +57,8 @@ where
         buf
     };
 
-    let ctx1 = AeadCtx::new(&key, nonce.clone(), exporter_secret.clone());
-    let ctx2 = AeadCtx::new(&key, nonce.clone(), exporter_secret.clone());
+    let ctx1 = AeadCtx::new(&key, base_nonce.clone(), exporter_secret.clone());
+    let ctx2 = AeadCtx::new(&key, base_nonce.clone(), exporter_secret.clone());
 
     (ctx1.into(), ctx2.into())
 }

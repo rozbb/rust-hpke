@@ -430,12 +430,18 @@ mod tests {
     }
 
     #[cfg(feature = "x25519-dalek")]
-    test_encap_correctness!(test_encap_correctness_x25519, crate::kem::X25519HkdfSha256);
-    #[cfg(feature = "p256")]
-    test_encap_correctness!(test_encap_correctness_p256, crate::kem::DhP256HkdfSha256);
+    mod x25519_tests {
+        use super::*;
 
-    #[cfg(feature = "x25519-dalek")]
-    test_encapped_serialize!(test_encapped_serialize_x25519, crate::kem::X25519HkdfSha256);
+        test_encap_correctness!(test_encap_correctness_x25519, crate::kem::X25519HkdfSha256);
+        test_encapped_serialize!(test_encapped_serialize_x25519, crate::kem::X25519HkdfSha256);
+    }
+
     #[cfg(feature = "p256")]
-    test_encapped_serialize!(test_encapped_serialize_p256, crate::kem::DhP256HkdfSha256);
+    mod p256_tests {
+        use super::*;
+
+        test_encap_correctness!(test_encap_correctness_p256, crate::kem::DhP256HkdfSha256);
+        test_encapped_serialize!(test_encapped_serialize_p256, crate::kem::DhP256HkdfSha256);
+    }
 }
