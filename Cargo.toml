@@ -4,7 +4,7 @@ repository = "https://github.com/rozbb/rust-hpke"
 documentation = "https://docs.rs/rust-hpke"
 description = "An implementation of the HPKE hybrid encryption standard in pure Rust"
 readme = "README.md"
-version = "0.3.1"
+version = "0.4.0"
 authors = ["Michael Rosenberg <michael@mrosenberg.pub>"]
 edition = "2018"
 license = "MIT/Apache-2.0"
@@ -34,7 +34,7 @@ rand = { version = "0.7", default-features = false }
 p256 = { version = "0.4", default-features = false, features = ["arithmetic"], optional = true}
 sha2 = { version = "0.9", default-features = false }
 serde = { version = "1.0", default-features = false, optional = true }
-subtle = { version = "2.2", default-features = false }
+subtle = { version = "2.3", default-features = false }
 
 [dependencies.x25519-dalek]
 version = "0.6"
