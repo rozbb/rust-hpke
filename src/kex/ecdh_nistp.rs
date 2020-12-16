@@ -180,11 +180,11 @@ impl KeyExchange for DhP256 {
                 .unwrap();
 
             // Try to convert to a nonzero scalar
-            let sk_scalar = NonZeroScalar::from_repr(buf);
+            let sk_scalar_opt = NonZeroScalar::from_repr(buf);
 
             // If the conversion succeeded, return the keypair
-            if sk_scalar.is_some().into() {
-                let sk = PrivateKey(sk_scalar.unwrap());
+            if let Some(sk_scalar) = sk_scalar_opt {
+                let sk = PrivateKey(sk_scalar);
                 let pk = Self::sk_to_pk(&sk);
                 return (sk, pk);
             }
