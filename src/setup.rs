@@ -11,10 +11,32 @@ use crate::{
 use digest::Digest;
 use generic_array::GenericArray;
 use rand::{CryptoRng, RngCore};
+use zeroize::Zeroize;
 
 /// Secret generated in `derive_enc_ctx` and stored in `AeadCtx`
-pub(crate) type ExporterSecret<K> =
-    GenericArray<u8, <<K as KdfTrait>::HashImpl as Digest>::OutputSize>;
+pub(crate) struct ExporterSecret<K: KdfTrait>(
+    pub(crate) GenericArray<u8, <K::HashImpl as Digest>::OutputSize>,
+);
+
+// We use this to get an empty buffer we can read secret bytes into
+impl<K: KdfTrait> Default for ExporterSecret<K> {
+    fn default() -> ExporterSecret<K> {
+        ExporterSecret(GenericArray::<u8, <K::HashImpl as Digest>::OutputSize>::default())
+    }
+}
+
+impl<K: KdfTrait> Clone for ExporterSecret<K> {
+    fn clone(&self) -> ExporterSecret<K> {
+        ExporterSecret(self.0.clone())
+    }
+}
+
+// Zero exporter secrets on drop
+impl<K: KdfTrait> Drop for ExporterSecret<K> {
+    fn drop(&mut self) {
+        self.0.zeroize();
+    }
+}
 
 // This is the KeySchedule function defined in draft02 §6.1. It runs a KDF over all the parameters,
 // inputs, and secrets, and spits out a key-nonce pair to be used for symmetric encryption
@@ -74,14 +96,14 @@ where
     // 255x the digest size of the hash function. Since these values are fixed at compile time, we
     // don't worry about it.
     secret_ctx
-        .labeled_expand(&suite_id, b"key", &sched_context, key.as_mut_slice())
+        .labeled_expand(&suite_id, b"key", &sched_context, key.0.as_mut_slice())
         .expect("aead key len is way too big");
     secret_ctx
         .labeled_expand(
             &suite_id,
             b"base_nonce",
             &sched_context,
-            base_nonce.as_mut_slice(),
+            base_nonce.0.as_mut_slice(),
         )
         .expect("nonce len is way too big");
     secret_ctx
@@ -89,7 +111,7 @@ where
             &suite_id,
             b"exp",
             &sched_context,
-            exporter_secret.as_mut_slice(),
+            exporter_secret.0.as_mut_slice(),
         )
         .expect("exporter secret len is way too big");
 

@@ -13,6 +13,7 @@ use aead::{AeadInPlace as BaseAead, NewAead as BaseNewAead};
 use byteorder::{BigEndian, ByteOrder};
 use generic_array::GenericArray;
 use hkdf::Hkdf;
+use zeroize::Zeroize;
 
 /// Represents authenticated encryption functionality
 pub trait Aead {
@@ -24,8 +25,49 @@ pub trait Aead {
 }
 
 // A nonce is a bytestring you only use for encryption once
-pub(crate) type AeadNonce<A> = GenericArray<u8, <<A as Aead>::AeadImpl as BaseAead>::NonceSize>;
-pub(crate) type AeadKey<A> = GenericArray<u8, <<A as Aead>::AeadImpl as aead::NewAead>::KeySize>;
+pub(crate) struct AeadNonce<A: Aead>(
+    pub(crate) GenericArray<u8, <A::AeadImpl as BaseAead>::NonceSize>,
+);
+
+// We need this for ease of testing
+#[cfg(test)]
+impl<A: Aead> Clone for AeadNonce<A> {
+    fn clone(&self) -> AeadNonce<A> {
+        AeadNonce(self.0.clone())
+    }
+}
+
+// We use this to get an empty buffer we can read nonce material into
+impl<A: Aead> Default for AeadNonce<A> {
+    fn default() -> AeadNonce<A> {
+        AeadNonce(GenericArray::<u8, <A::AeadImpl as BaseAead>::NonceSize>::default())
+    }
+}
+
+// Zero out nonces on drop
+impl<A: Aead> Drop for AeadNonce<A> {
+    fn drop(&mut self) {
+        self.0.zeroize();
+    }
+}
+
+pub(crate) struct AeadKey<A: Aead>(
+    pub(crate) GenericArray<u8, <A::AeadImpl as aead::NewAead>::KeySize>,
+);
+
+// We use this to get an empty buffer we can read key material into
+impl<A: Aead> Default for AeadKey<A> {
+    fn default() -> AeadKey<A> {
+        AeadKey(GenericArray::<u8, <A::AeadImpl as aead::NewAead>::KeySize>::default())
+    }
+}
+
+// Zero out keys on drop
+impl<A: Aead> Drop for AeadKey<A> {
+    fn drop(&mut self) {
+        self.0.zeroize();
+    }
+}
 
 /// A sequence counter. This is set to `u64` instead of the true nonce size of an AEAD for two
 /// reasons:
@@ -36,7 +78,8 @@ pub(crate) type AeadKey<A> = GenericArray<u8, <<A as Aead>::AeadImpl as aead::Ne
 ///    Notably, unlike randomized nonces, counting in sequence doesn't parallelize, so we don't
 ///    have to imagine amortizing this computation across multiple computers. In conclusion, 64
 ///    bits should be enough for anybody.
-#[derive(Default, Clone)]
+#[derive(Clone, Default, Zeroize)]
+#[zeroize(drop)]
 struct Seq(u64);
 
 // def Context.IncrementSeq():
@@ -61,17 +104,18 @@ fn mix_nonce<A: Aead>(base_nonce: &AeadNonce<A>, seq: &Seq) -> AeadNonce<A> {
     // bits) are always bigger than the sequence buffer (64 bits). We write to the last 64 bits
     // because this is a big-endian number.
     let seq_size = core::mem::size_of::<Seq>();
-    let nonce_size = base_nonce.len();
-    BigEndian::write_u64(&mut seq_buf[nonce_size - seq_size..], seq.0);
+    let nonce_size = base_nonce.0.len();
+    BigEndian::write_u64(&mut seq_buf.0[nonce_size - seq_size..], seq.0);
 
     // XOR the base nonce bytes with the sequence bytes
     let new_nonce_iter = base_nonce
+        .0
         .iter()
-        .zip(seq_buf.iter())
+        .zip(seq_buf.0.iter())
         .map(|(nonce_byte, seq_byte)| nonce_byte ^ seq_byte);
 
     // This cannot fail, as the length of AeadNonce<A> is precisely the length of Seq
-    GenericArray::from_exact_iter(new_nonce_iter).unwrap()
+    AeadNonce(GenericArray::from_exact_iter(new_nonce_iter).unwrap())
 }
 
 /// An authenticated encryption tag
@@ -142,7 +186,7 @@ impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AeadCtx<A, Kdf, Kem> {
         let suite_id = full_suite_id::<A, Kdf, Kem>();
         AeadCtx {
             overflowed: false,
-            encryptor: <A::AeadImpl as aead::NewAead>::new(key),
+            encryptor: <A::AeadImpl as aead::NewAead>::new(&key.0),
             base_nonce,
             exporter_secret,
             seq: <Seq as Default>::default(),
@@ -159,7 +203,7 @@ impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AeadCtx<A, Kdf, Kem> {
         // Use our exporter secret as the PRK for an HKDF-Expand op. The only time this fails is
         // when the length of the PRK is not the the underlying hash function's digest size. But
         // that's guaranteed by the type system, so we can unwrap().
-        let hkdf_ctx = Hkdf::<Kdf::HashImpl>::from_prk(self.exporter_secret.as_slice()).unwrap();
+        let hkdf_ctx = Hkdf::<Kdf::HashImpl>::from_prk(self.exporter_secret.0.as_slice()).unwrap();
 
         // This call either succeeds or returns hkdf::InvalidLength (iff the buffer length is more
         // than 255x the digest size of the underlying hash function)
@@ -218,7 +262,7 @@ impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AeadCtxR<A, Kdf, Kem> {
             let decrypt_res = self
                 .0
                 .encryptor
-                .decrypt_in_place_detached(&nonce, &aad, ciphertext, &tag.0);
+                .decrypt_in_place_detached(&nonce.0, &aad, ciphertext, &tag.0);
 
             if decrypt_res.is_err() {
                 // Opening failed due to a bad tag
@@ -293,7 +337,7 @@ impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AeadCtxS<A, Kdf, Kem> {
             let tag_res = self
                 .0
                 .encryptor
-                .encrypt_in_place_detached(&nonce, &aad, plaintext);
+                .encrypt_in_place_detached(&nonce.0, &aad, plaintext);
 
             // Check if an error occurred when encrypting
             let tag = match tag_res {

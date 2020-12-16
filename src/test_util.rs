@@ -43,17 +43,17 @@ where
     // Initialize the key and nonce
     let key = {
         let mut buf = AeadKey::<A>::default();
-        csprng.fill_bytes(buf.as_mut_slice());
+        csprng.fill_bytes(buf.0.as_mut_slice());
         buf
     };
     let base_nonce = {
         let mut buf = AeadNonce::<A>::default();
-        csprng.fill_bytes(buf.as_mut_slice());
+        csprng.fill_bytes(buf.0.as_mut_slice());
         buf
     };
     let exporter_secret = {
         let mut buf = ExporterSecret::<Kdf>::default();
-        csprng.fill_bytes(buf.as_mut_slice());
+        csprng.fill_bytes(buf.0.as_mut_slice());
         buf
     };
 
