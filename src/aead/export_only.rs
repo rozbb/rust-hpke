@@ -22,7 +22,7 @@ impl BaseAead for EmptyAeadImpl {
         _: &[u8],
         _: &mut [u8],
     ) -> Result<aead::Tag<Self::TagSize>, aead::Error> {
-        panic!("Cannot encrypt with an empty encryption context!");
+        panic!("Cannot encrypt with an export-only encryption context!");
     }
 
     fn decrypt_in_place_detached(
@@ -32,7 +32,7 @@ impl BaseAead for EmptyAeadImpl {
         _: &mut [u8],
         _: &aead::Tag<Self::TagSize>,
     ) -> Result<(), aead::Error> {
-        panic!("Cannot decrypt with an empty encryption context!");
+        panic!("Cannot decrypt with an export-only encryption context!");
     }
 }
 
