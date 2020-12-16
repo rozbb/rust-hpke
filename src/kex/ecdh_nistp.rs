@@ -13,6 +13,7 @@ use p256::{
     elliptic_curve::{sec1::UncompressedPointSize, Curve},
     AffinePoint, NistP256, NonZeroScalar, Scalar,
 };
+use zeroize::Zeroize;
 
 /// An ECDH-P256 public key. This is never the point at infinity.
 #[derive(Clone)]
@@ -21,10 +22,13 @@ pub struct PublicKey(p256::PublicKey);
 // The range invariant below is maintained so that sk_to_pk is a well-defined operation. If you
 // disagree with this decision, fight me.
 /// An ECDH-P256 private key. This is a scalar in the range `[1,p)` where `p` is the group order.
-#[derive(Clone)]
+#[derive(Clone, Zeroize)]
+#[zeroize(drop)]
 pub struct PrivateKey(NonZeroScalar);
 
 // A bare DH computation result
+#[derive(Zeroize)]
+#[zeroize(drop)]
 pub struct KexResult(AffinePoint);
 
 // Everything is serialized and deserialized in uncompressed form
