@@ -5,8 +5,7 @@ use digest::{BlockInput, Digest, FixedOutput, Reset, Update};
 use generic_array::GenericArray;
 use sha2::{Sha256, Sha384, Sha512};
 
-// This has a space because LabeledExtract calls for a space between the RFC string and the label
-const RFC_STR: &[u8] = b"HPKE-06";
+const RFC_STR: &[u8] = b"HPKE-07";
 
 // This is currently the maximum value of Nh. It is achieved by HKDF-SHA512.
 pub(crate) const MAX_DIGEST_SIZE: usize = 512;
