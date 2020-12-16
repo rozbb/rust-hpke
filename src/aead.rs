@@ -7,11 +7,11 @@ use crate::{
     HpkeError,
 };
 
-use core::{marker::PhantomData, u8};
+use core::{default::Default, marker::PhantomData, u8};
 
 use aead::{AeadInPlace as BaseAead, NewAead as BaseNewAead};
 use byteorder::{BigEndian, ByteOrder};
-use generic_array::GenericArray;
+use generic_array::{typenum, GenericArray};
 use hkdf::Hkdf;
 
 /// Represents authenticated encryption functionality
@@ -24,12 +24,12 @@ pub trait Aead {
 }
 
 /// The implementation of AES-GCM-128
-pub struct AesGcm128 {}
+pub struct AesGcm128;
 
 impl Aead for AesGcm128 {
     type AeadImpl = aes_gcm::Aes128Gcm;
 
-    // draft02 §8.3: AES-GCM-128
+    // draft07 §7.3: AES-GCM-128
     const AEAD_ID: u16 = 0x0001;
 }
 
@@ -39,18 +39,70 @@ pub struct AesGcm256 {}
 impl Aead for AesGcm256 {
     type AeadImpl = aes_gcm::Aes256Gcm;
 
-    // draft02 §8.3: AES-GCM-256
+    // draft07 §7.3: AES-GCM-256
     const AEAD_ID: u16 = 0x0002;
 }
 
 /// The implementation of ChaCha20-Poly1305
-pub struct ChaCha20Poly1305 {}
+pub struct ChaCha20Poly1305;
 
 impl Aead for ChaCha20Poly1305 {
     type AeadImpl = chacha20poly1305::ChaCha20Poly1305;
 
-    // draft02 §8.3: ChaCha20Poly1305
+    // draft07 §7.3: ChaCha20Poly1305
     const AEAD_ID: u16 = 0x0003;
+}
+
+/// A dummy underlying Aead implementation. The open/seal routines panic. The `new()` function
+/// returns a `DummyAeadImpl`, and that is all of the functionality this struct has.
+#[derive(Clone)]
+pub struct DummyAeadImpl;
+
+impl BaseAead for DummyAeadImpl {
+    // The nonce size has to be bigger than the sequence size (currently u64), otherwise we get an
+    // underflow error on seal()/open() before we can even panic
+    type NonceSize = typenum::U128;
+    type TagSize = typenum::U0;
+    type CiphertextOverhead = typenum::U0;
+
+    fn encrypt_in_place_detached(
+        &self,
+        _: &aead::Nonce<Self::NonceSize>,
+        _: &[u8],
+        _: &mut [u8],
+    ) -> Result<aead::Tag<Self::TagSize>, aead::Error> {
+        panic!("Cannot encrypt with a dummy encryption context!");
+    }
+
+    fn decrypt_in_place_detached(
+        &self,
+        _: &aead::Nonce<Self::NonceSize>,
+        _: &[u8],
+        _: &mut [u8],
+        _: &aead::Tag<Self::TagSize>,
+    ) -> Result<(), aead::Error> {
+        panic!("Cannot decrypt with a dummy encryption context!");
+    }
+}
+
+impl BaseNewAead for DummyAeadImpl {
+    type KeySize = typenum::U0;
+
+    fn new(_: &aead::Key<Self>) -> Self {
+        DummyAeadImpl
+    }
+}
+
+/// An AEAD which can **only** be used for its `export()` function. The `open()` and `seal()`
+/// methods on an `AeadCtxR` or `AeadCtxS` which uses this AEAD underlyingly **will panic** if you
+/// call them
+pub struct ExportOnlyAead;
+
+impl Aead for ExportOnlyAead {
+    type AeadImpl = DummyAeadImpl;
+
+    // draft07 §7.3: Export-only
+    const AEAD_ID: u16 = 0xFFFF;
 }
 
 // A nonce is a bytestring you only use for encryption once
@@ -199,7 +251,7 @@ impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AeadCtx<A, Kdf, Kem> {
     }
 }
 
-/// The HPKE receiver's context. This is what you use to `open` ciphertexts.
+/// The HPKE receiver's context. This is what you use to `open` ciphertexts and `export` secrets.
 pub struct AeadCtxR<A: Aead, Kdf: KdfTrait, Kem: KemTrait>(AeadCtx<A, Kdf, Kem>);
 
 // AeadCtx -> AeadCtxR via wrapping
@@ -281,7 +333,7 @@ impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AeadCtxR<A, Kdf, Kem> {
     }
 }
 
-/// The HPKE senders's context. This is what you use to `seal` plaintexts.
+/// The HPKE senders's context. This is what you use to `seal` plaintexts and `export` secrets.
 pub struct AeadCtxS<A: Aead, Kdf: KdfTrait, Kem: KemTrait>(AeadCtx<A, Kdf, Kem>);
 
 // AeadCtx -> AeadCtxS via wrapping
@@ -359,8 +411,11 @@ impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AeadCtxS<A, Kdf, Kem> {
 
 #[cfg(test)]
 mod test {
-    use super::{AeadTag, AesGcm128, AesGcm256, ChaCha20Poly1305, Seq};
+    use super::{Aead, AeadTag, AesGcm128, AesGcm256, ChaCha20Poly1305, ExportOnlyAead, Seq};
     use crate::{kdf::HkdfSha256, kex::Deserializable, test_util::gen_ctx_simple_pair, HpkeError};
+
+    use aead::AeadInPlace as BaseAead;
+    use generic_array::GenericArray;
 
     /// Tests that encryption context secret export does not change behavior based on the
     /// underlying sequence number This logic is cipher-agnostic, so we don't make the test generic
@@ -397,6 +452,43 @@ mod test {
                     .unwrap();
 
                 assert_eq!(secret1, secret2);
+            }
+        };
+    }
+
+    /// Tests that anything other than `export()` called on an `ExportOnly` context results in a
+    /// panic
+    macro_rules! test_exportonly_panics {
+        ($test_name1:ident, $test_name2:ident, $kem_ty:ty) => {
+            #[should_panic]
+            #[test]
+            fn $test_name1() {
+                type Kem = $kem_ty;
+                type Kdf = HkdfSha256;
+                type A = ExportOnlyAead;
+
+                // Set up a context and try encrypting
+                let (mut sender_ctx, _) = gen_ctx_simple_pair::<A, Kdf, Kem>();
+                let mut plaintext = *b"back hand";
+                let _ = sender_ctx.seal(&mut plaintext[..], b"");
+            }
+
+            #[should_panic]
+            #[test]
+            fn $test_name2() {
+                type Kem = $kem_ty;
+                type Kdf = HkdfSha256;
+                type A = ExportOnlyAead;
+
+                // Set up a context and try encrypting
+                let (_, mut receiver_ctx) = gen_ctx_simple_pair::<A, Kdf, Kem>();
+                let mut ciphertext = *b"back hand";
+                let aad = b"with my prayers";
+                // The contents of the tag doesn't matter. This will panic before the take is read
+                type TagSize = <<A as Aead>::AeadImpl as BaseAead>::TagSize;
+                let tag = AeadTag(GenericArray::<u8, TagSize>::default());
+
+                let _ = receiver_ctx.open(&mut ciphertext[..], aad, &tag);
             }
         };
     }
@@ -514,6 +606,11 @@ mod test {
         use super::*;
 
         test_export_idempotence!(test_export_idempotence_x25519, crate::kem::X25519HkdfSha256);
+        test_exportonly_panics!(
+            test_exportonly_panics_x25519_seal,
+            test_exportonly_panics_x25519_open,
+            crate::kem::X25519HkdfSha256
+        );
         test_overflow!(test_overflow_x25519, crate::kem::X25519HkdfSha256);
 
         test_ctx_correctness!(
@@ -538,6 +635,11 @@ mod test {
         use super::*;
 
         test_export_idempotence!(test_export_idempotence_p256, crate::kem::DhP256HkdfSha256);
+        test_exportonly_panics!(
+            test_exportonly_panics_p256_seal,
+            test_exportonly_panics_p256_open,
+            crate::kem::DhP256HkdfSha256
+        );
         test_overflow!(test_overflow_p256, crate::kem::DhP256HkdfSha256);
 
         test_ctx_correctness!(
