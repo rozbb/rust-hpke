@@ -11,7 +11,7 @@ use core::{default::Default, marker::PhantomData, u8};
 
 use aead::{AeadInPlace as BaseAead, NewAead as BaseNewAead};
 use byteorder::{BigEndian, ByteOrder};
-use generic_array::{typenum, GenericArray};
+use generic_array::GenericArray;
 use hkdf::Hkdf;
 
 /// Represents authenticated encryption functionality
@@ -21,88 +21,6 @@ pub trait Aead {
 
     /// The algorithm identifier for an AEAD implementation
     const AEAD_ID: u16;
-}
-
-/// The implementation of AES-GCM-128
-pub struct AesGcm128;
-
-impl Aead for AesGcm128 {
-    type AeadImpl = aes_gcm::Aes128Gcm;
-
-    // draft07 §7.3: AES-GCM-128
-    const AEAD_ID: u16 = 0x0001;
-}
-
-/// The implementation of AES-GCM-128
-pub struct AesGcm256 {}
-
-impl Aead for AesGcm256 {
-    type AeadImpl = aes_gcm::Aes256Gcm;
-
-    // draft07 §7.3: AES-GCM-256
-    const AEAD_ID: u16 = 0x0002;
-}
-
-/// The implementation of ChaCha20-Poly1305
-pub struct ChaCha20Poly1305;
-
-impl Aead for ChaCha20Poly1305 {
-    type AeadImpl = chacha20poly1305::ChaCha20Poly1305;
-
-    // draft07 §7.3: ChaCha20Poly1305
-    const AEAD_ID: u16 = 0x0003;
-}
-
-/// A dummy underlying Aead implementation. The open/seal routines panic. The `new()` function
-/// returns a `DummyAeadImpl`, and that is all of the functionality this struct has.
-#[derive(Clone)]
-pub struct DummyAeadImpl;
-
-impl BaseAead for DummyAeadImpl {
-    // The nonce size has to be bigger than the sequence size (currently u64), otherwise we get an
-    // underflow error on seal()/open() before we can even panic
-    type NonceSize = typenum::U128;
-    type TagSize = typenum::U0;
-    type CiphertextOverhead = typenum::U0;
-
-    fn encrypt_in_place_detached(
-        &self,
-        _: &aead::Nonce<Self::NonceSize>,
-        _: &[u8],
-        _: &mut [u8],
-    ) -> Result<aead::Tag<Self::TagSize>, aead::Error> {
-        panic!("Cannot encrypt with a dummy encryption context!");
-    }
-
-    fn decrypt_in_place_detached(
-        &self,
-        _: &aead::Nonce<Self::NonceSize>,
-        _: &[u8],
-        _: &mut [u8],
-        _: &aead::Tag<Self::TagSize>,
-    ) -> Result<(), aead::Error> {
-        panic!("Cannot decrypt with a dummy encryption context!");
-    }
-}
-
-impl BaseNewAead for DummyAeadImpl {
-    type KeySize = typenum::U0;
-
-    fn new(_: &aead::Key<Self>) -> Self {
-        DummyAeadImpl
-    }
-}
-
-/// An AEAD which can **only** be used for its `export()` function. The `open()` and `seal()`
-/// methods on an `AeadCtxR` or `AeadCtxS` which uses this AEAD underlyingly **will panic** if you
-/// call them
-pub struct ExportOnlyAead;
-
-impl Aead for ExportOnlyAead {
-    type AeadImpl = DummyAeadImpl;
-
-    // draft07 §7.3: Export-only
-    const AEAD_ID: u16 = 0xFFFF;
 }
 
 // A nonce is a bytestring you only use for encryption once
@@ -408,6 +326,13 @@ impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AeadCtxS<A, Kdf, Kem> {
         self.0.export(info, out_buf)
     }
 }
+
+// Export all the AEAD implementations
+pub mod aes_gcm;
+pub mod chacha20_poly1305;
+pub mod export_only;
+#[doc(inline)]
+pub use crate::aead::{aes_gcm::*, chacha20_poly1305::*, export_only::*};
 
 #[cfg(test)]
 mod test {

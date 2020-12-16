@@ -337,7 +337,7 @@ fn kat_test() {
             continue;
         }
 
-        // This unrolls into 18 `if let` statements
+        // This unrolls into 24 `if let` statements
         dispatch_testcase!(
             tv,
             (AesGcm128, AesGcm256, ChaCha20Poly1305, ExportOnlyAead),
