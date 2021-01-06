@@ -11,7 +11,7 @@ use generic_array::{
 };
 use p256::{
     elliptic_curve::{sec1::UncompressedPointSize, Curve},
-    AffinePoint, NistP256, NonZeroScalar, Scalar,
+    NistP256, NonZeroScalar, Scalar,
 };
 use zeroize::Zeroize;
 
@@ -29,7 +29,7 @@ pub struct PrivateKey(NonZeroScalar);
 // A bare DH computation result
 #[derive(Zeroize)]
 #[zeroize(drop)]
-pub struct KexResult(AffinePoint);
+pub struct KexResult(GenericArray<u8, typenum::U32>);
 
 // Everything is serialized and deserialized in uncompressed form
 impl Serializable for PublicKey {
@@ -99,8 +99,7 @@ impl Serializable for KexResult {
 
     // §4.1: Representation of the KEX result is the serialization of the x-coordinate
     fn to_bytes(&self) -> GenericArray<u8, Self::OutputSize> {
-        let encoded = p256::EncodedPoint::from(self.0);
-        GenericArray::<u8, Self::OutputSize>::clone_from_slice(encoded.x())
+        self.0
     }
 }
 
@@ -118,11 +117,7 @@ impl KeyExchange for DhP256 {
     /// Converts an P256 private key to a public key
     #[doc(hidden)]
     fn sk_to_pk(sk: &PrivateKey) -> PublicKey {
-        // pk = sk·G where G is the generator. This maintains the invariant of the public key not
-        // being the point at infinity, since ord(G) = p, and sk is not 0 mod p (by the invariant
-        // we keep on PrivateKeys)
-        let pk = p256::AffinePoint::generator() * sk.0;
-        PublicKey(p256::PublicKey::from_affine(pk))
+        PublicKey(p256::PublicKey::from_secret_scalar(&sk.0))
     }
 
     /// Does the DH operation. Returns `HpkeError::InvalidKeyExchange` if and only if the DH
@@ -139,7 +134,13 @@ impl KeyExchange for DhP256 {
         // 3. Exponentiating a non-identity element of a prime-order group by something less than
         //    the order yields a non-identity value
         // Therefore, dh_res cannot be the point at infinity
-        Ok(KexResult(dh_res))
+
+        // Even though the last paragraph is correct, EncodedPoint performs the check internally anyways
+        let dh_res_encoded = p256::EncodedPoint::from(dh_res);
+        match dh_res_encoded.x() {
+            Some(&dh_res_x) => Ok(KexResult(dh_res_x)),
+            None => Err(HpkeError::InvalidKeyExchange),
+        }
     }
 
     // From the DeriveKeyPair section
