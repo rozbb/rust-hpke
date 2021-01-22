@@ -94,7 +94,7 @@ impl Serializable for KexResult {
 
     // §4.1: Representation of the KEX result is the serialization of the x-coordinate
     fn to_bytes(&self) -> GenericArray<u8, Self::OutputSize> {
-        self.0.as_bytes().clone()
+        *self.0.as_bytes()
     }
 }
 
