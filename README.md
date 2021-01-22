@@ -46,7 +46,7 @@ For info on how to omit or include feature flags, see the [cargo docs on feature
 Tests
 -----
 
-To run all tests, execute `cargo test --all-features`. This includes known-answer tests, which test against `test-vector-COMMIT_ID.json`,where `COMMIT_ID` is the short commit of the version of the [spec](https://github.com/cfrg/draft-irtf-cfrg-hpke) that the test vectors came from. See the [reference implementation](https://github.com/bifurcation/hpke) for information on how to generate a test vector.
+To run all tests, execute `cargo test --all-features`. This includes known-answer tests, which test against `test-vector-COMMIT_ID.json`,where `COMMIT_ID` is the short commit of the version of the [spec](https://github.com/cfrg/draft-irtf-cfrg-hpke) that the test vectors came from. See the [reference implementation](https://github.com/cisco/go-hpke) for information on how to generate a test vector.
 
 Benchmarks
 ----------
