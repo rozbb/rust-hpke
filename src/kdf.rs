@@ -5,7 +5,7 @@ use digest::{BlockInput, Digest, FixedOutput, Reset, Update};
 use generic_array::GenericArray;
 use sha2::{Sha256, Sha384, Sha512};
 
-const RFC_STR: &[u8] = b"HPKE-v1";
+const VERSION_LABEL: &[u8] = b"HPKE-v1";
 
 // This is currently the maximum value of Nh. It is achieved by HKDF-SHA512.
 pub(crate) const MAX_DIGEST_SIZE: usize = 512;
@@ -91,7 +91,7 @@ pub(crate) fn labeled_extract<Kdf: KdfTrait>(
 ) {
     // Call HKDF-Extract with the IKM being the concatenation of all of the above
     let mut extract_ctx = hkdf::HkdfExtract::<Kdf::HashImpl>::new(Some(&salt));
-    extract_ctx.input_ikm(RFC_STR);
+    extract_ctx.input_ikm(VERSION_LABEL);
     extract_ctx.input_ikm(suite_id);
     extract_ctx.input_ikm(label);
     extract_ctx.input_ikm(ikm);
@@ -130,7 +130,7 @@ impl<D: Update + BlockInput + FixedOutput + Reset + Default + Clone> LabeledExpa
         BigEndian::write_u16(&mut len_buf, out.len() as u16);
 
         // Call HKDF-Expand() with the info string set to the concatenation of all of the above
-        let labeled_info = [&len_buf, RFC_STR, suite_id, label, info];
+        let labeled_info = [&len_buf, VERSION_LABEL, suite_id, label, info];
         self.expand_multi_info(&labeled_info, out)
     }
 }
