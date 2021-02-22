@@ -5,7 +5,7 @@ use digest::{BlockInput, Digest, FixedOutput, Reset, Update};
 use generic_array::GenericArray;
 use sha2::{Sha256, Sha384, Sha512};
 
-const RFC_STR: &[u8] = b"HPKE-07";
+const RFC_STR: &[u8] = b"HPKE-v1";
 
 // This is currently the maximum value of Nh. It is achieved by HKDF-SHA512.
 pub(crate) const MAX_DIGEST_SIZE: usize = 512;
