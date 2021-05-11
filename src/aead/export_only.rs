@@ -1,6 +1,6 @@
 use crate::aead::Aead;
 
-use aead::{AeadCore, AeadInPlace, NewAead as BaseNewAead};
+use aead::{AeadCore as BaseAeadCore, AeadInPlace as BaseAeadInPlace, NewAead as BaseNewAead};
 use generic_array::typenum;
 
 /// An inert underlying Aead implementation. The open/seal routines panic. The `new()` function
@@ -9,7 +9,7 @@ use generic_array::typenum;
 #[derive(Clone)]
 pub struct EmptyAeadImpl;
 
-impl AeadCore for EmptyAeadImpl {
+impl BaseAeadCore for EmptyAeadImpl {
     // The nonce size has to be bigger than the sequence size (currently u64), otherwise we get an
     // underflow error on seal()/open() before we can even panic
     type NonceSize = typenum::U128;
@@ -17,7 +17,7 @@ impl AeadCore for EmptyAeadImpl {
     type CiphertextOverhead = typenum::U0;
 }
 
-impl AeadInPlace for EmptyAeadImpl {
+impl BaseAeadInPlace for EmptyAeadImpl {
     fn encrypt_in_place_detached(
         &self,
         _: &aead::Nonce<Self>,
