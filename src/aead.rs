@@ -86,7 +86,7 @@ struct Seq(u64);
 //   if self.seq >= (1 << (8*Nn)) - 1:
 //     raise NonceOverflowError
 //   self.seq += 1
-/// Increments the sequence counter. Returns None on overflow.
+/// Increments the sequence counter. Returns `None` on overflow.
 fn increment_seq(seq: &Seq) -> Option<Seq> {
     // Try to add 1
     seq.0.checked_add(1).map(Seq)
@@ -244,7 +244,7 @@ impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AeadCtxR<A, Kdf, Kem> {
     /// Return Value
     /// ============
     /// Returns `Ok(())` on success.  If this context has been used for so many encryptions that
-    /// the sequence number overflowed, returns `Err(HpkeError::SeqOverflow)`. If this happens,
+    /// the sequence number overflowed, returns `Err(HpkeError::MessageLimitReached)`. If this happens,
     /// `plaintext` will be unmodified. If the tag fails to validate, returns
     /// `Err(HpkeError::InvalidTag)`. If this happens, `plaintext` is in an undefined state.
     pub fn open(
@@ -255,7 +255,7 @@ impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AeadCtxR<A, Kdf, Kem> {
     ) -> Result<(), HpkeError> {
         if self.0.overflowed {
             // If the sequence counter overflowed, we've been used for too long. Shut down.
-            Err(HpkeError::SeqOverflow)
+            Err(HpkeError::MessageLimitReached)
         } else {
             // Compute the nonce and do the encryption in place
             let nonce = mix_nonce::<A>(&self.0.base_nonce, &self.0.seq);
@@ -324,13 +324,14 @@ impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AeadCtxS<A, Kdf, Kem> {
     /// Return Value
     /// ============
     /// Returns `Ok(tag)` on success.  If this context has been used for so many encryptions that
-    /// the sequence number overflowed, returns `Err(HpkeError::SeqOverflow)`. If this happens,
-    /// `plaintext` will be unmodified. If an unspecified error happened during encryption, returns
-    /// `Err(HpkeError::Encryption)`. If this happens, the contents of `plaintext` is undefined.
+    /// the sequence number overflowed, returns `Err(HpkeError::MessageLimitReached)`. If this
+    /// happens, `plaintext` will be unmodified. If an unspecified error happened during
+    /// encryption, returns `Err(HpkeError::Encryption)`. If this happens, the contents of
+    /// `plaintext` is undefined.
     pub fn seal(&mut self, plaintext: &mut [u8], aad: &[u8]) -> Result<AeadTag<A>, HpkeError> {
         if self.0.overflowed {
             // If the sequence counter overflowed, we've been used for far too long. Shut down.
-            Err(HpkeError::SeqOverflow)
+            Err(HpkeError::MessageLimitReached)
         } else {
             // Compute the nonce and do the encryption in place
             let nonce = mix_nonce::<A>(&self.0.base_nonce, &self.0.seq);
@@ -516,7 +517,7 @@ mod test {
                     let mut plaintext = *msg;
                     // Try to encrypt the plaintext
                     match sender_ctx.seal(&mut plaintext[..], aad) {
-                        Err(HpkeError::SeqOverflow) => {} // Good, this should have overflowed
+                        Err(HpkeError::MessageLimitReached) => {} // Good, this should have overflowed
                         Err(e) => panic!("seal() should have overflowed. Instead got {}", e),
                         _ => panic!("seal() should have overflowed. Instead it succeeded"),
                     }
@@ -527,7 +528,7 @@ mod test {
                     let dummy_tag = AeadTag::from_bytes(&[0; 16]).unwrap();
 
                     match receiver_ctx.open(&mut dummy_ciphertext[..], aad, &dummy_tag) {
-                        Err(HpkeError::SeqOverflow) => {} // Good, this should have overflowed
+                        Err(HpkeError::MessageLimitReached) => {} // Good, this should have overflowed
                         Err(e) => panic!("open() should have overflowed. Instead got {}", e),
                         _ => panic!("open() should have overflowed. Instead it succeeded"),
                     }
