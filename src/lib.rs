@@ -134,7 +134,7 @@ pub use single_shot::{single_shot_open, single_shot_seal};
 /// Describes things that can go wrong when trying to seal or open a ciphertext
 #[derive(Clone, Copy, Debug)]
 pub enum HpkeError {
-    /// The nonce sequence counter has overflowed
+    /// The message limit has been reached
     SeqOverflow,
     /// The authentication tag was invalid when opening
     InvalidTag,
@@ -151,7 +151,7 @@ pub enum HpkeError {
 impl core::fmt::Display for HpkeError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         let kind = match self {
-            HpkeError::SeqOverflow => "Sequence overflow",
+            HpkeError::SeqOverflow => "Message limit reached",
             HpkeError::InvalidTag => "Invalid tag",
             HpkeError::Encryption => "Encryption error",
             HpkeError::InvalidKeyExchange => "Key exchange validation error",
