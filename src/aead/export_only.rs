@@ -1,6 +1,6 @@
 use crate::aead::Aead;
 
-use aead::{AeadInPlace as BaseAead, NewAead as BaseNewAead};
+use aead::{AeadCore as BaseAeadCore, AeadInPlace as BaseAeadInPlace, NewAead as BaseNewAead};
 use generic_array::typenum;
 
 /// An inert underlying Aead implementation. The open/seal routines panic. The `new()` function
@@ -9,28 +9,30 @@ use generic_array::typenum;
 #[derive(Clone)]
 pub struct EmptyAeadImpl;
 
-impl BaseAead for EmptyAeadImpl {
+impl BaseAeadCore for EmptyAeadImpl {
     // The nonce size has to be bigger than the sequence size (currently u64), otherwise we get an
     // underflow error on seal()/open() before we can even panic
     type NonceSize = typenum::U128;
     type TagSize = typenum::U0;
     type CiphertextOverhead = typenum::U0;
+}
 
+impl BaseAeadInPlace for EmptyAeadImpl {
     fn encrypt_in_place_detached(
         &self,
-        _: &aead::Nonce<Self::NonceSize>,
+        _: &aead::Nonce<Self>,
         _: &[u8],
         _: &mut [u8],
-    ) -> Result<aead::Tag<Self::TagSize>, aead::Error> {
+    ) -> Result<aead::Tag<Self>, aead::Error> {
         panic!("Cannot encrypt with an export-only encryption context!");
     }
 
     fn decrypt_in_place_detached(
         &self,
-        _: &aead::Nonce<Self::NonceSize>,
+        _: &aead::Nonce<Self>,
         _: &[u8],
         _: &mut [u8],
-        _: &aead::Tag<Self::TagSize>,
+        _: &aead::Tag<Self>,
     ) -> Result<(), aead::Error> {
         panic!("Cannot decrypt with an export-only encryption context!");
     }

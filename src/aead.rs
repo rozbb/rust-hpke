@@ -9,7 +9,7 @@ use crate::{
 
 use core::{default::Default, marker::PhantomData, u8};
 
-use aead::{AeadInPlace as BaseAead, NewAead as BaseNewAead};
+use aead::{AeadCore as BaseAeadCore, AeadInPlace as BaseAeadInPlace, NewAead as BaseNewAead};
 use byteorder::{BigEndian, ByteOrder};
 use generic_array::GenericArray;
 use hkdf::Hkdf;
@@ -18,7 +18,7 @@ use zeroize::Zeroize;
 /// Represents authenticated encryption functionality
 pub trait Aead {
     /// The underlying AEAD implementation
-    type AeadImpl: BaseAead + BaseNewAead + Clone;
+    type AeadImpl: BaseAeadCore + BaseAeadInPlace + BaseNewAead + Clone;
 
     /// The algorithm identifier for an AEAD implementation
     const AEAD_ID: u16;
@@ -26,7 +26,7 @@ pub trait Aead {
 
 // A nonce is a bytestring you only use for encryption once
 pub(crate) struct AeadNonce<A: Aead>(
-    pub(crate) GenericArray<u8, <A::AeadImpl as BaseAead>::NonceSize>,
+    pub(crate) GenericArray<u8, <A::AeadImpl as BaseAeadCore>::NonceSize>,
 );
 
 // We need this for ease of testing
@@ -40,7 +40,7 @@ impl<A: Aead> Clone for AeadNonce<A> {
 // We use this to get an empty buffer we can read nonce material into
 impl<A: Aead> Default for AeadNonce<A> {
     fn default() -> AeadNonce<A> {
-        AeadNonce(GenericArray::<u8, <A::AeadImpl as BaseAead>::NonceSize>::default())
+        AeadNonce(GenericArray::<u8, <A::AeadImpl as BaseAeadCore>::NonceSize>::default())
     }
 }
 
@@ -119,10 +119,10 @@ fn mix_nonce<A: Aead>(base_nonce: &AeadNonce<A>, seq: &Seq) -> AeadNonce<A> {
 }
 
 /// An authenticated encryption tag
-pub struct AeadTag<A: Aead>(GenericArray<u8, <A::AeadImpl as BaseAead>::TagSize>);
+pub struct AeadTag<A: Aead>(GenericArray<u8, <A::AeadImpl as BaseAeadCore>::TagSize>);
 
 impl<A: Aead> Serializable for AeadTag<A> {
-    type OutputSize = <A::AeadImpl as BaseAead>::TagSize;
+    type OutputSize = <A::AeadImpl as BaseAeadCore>::TagSize;
 
     fn to_bytes(&self) -> GenericArray<u8, Self::OutputSize> {
         self.0.clone()
@@ -383,7 +383,7 @@ mod test {
     use super::{Aead, AeadTag, AesGcm128, AesGcm256, ChaCha20Poly1305, ExportOnlyAead, Seq};
     use crate::{kdf::HkdfSha256, kex::Deserializable, test_util::gen_ctx_simple_pair, HpkeError};
 
-    use aead::AeadInPlace as BaseAead;
+    use aead::AeadCore as BaseAeadCore;
     use generic_array::GenericArray;
 
     /// Tests that encryption context secret export does not change behavior based on the
@@ -454,7 +454,7 @@ mod test {
                 let mut ciphertext = *b"back hand";
                 let aad = b"with my prayers";
                 // The contents of the tag doesn't matter. This will panic before the take is read
-                type TagSize = <<A as Aead>::AeadImpl as BaseAead>::TagSize;
+                type TagSize = <<A as Aead>::AeadImpl as BaseAeadCore>::TagSize;
                 let tag = AeadTag(GenericArray::<u8, TagSize>::default());
 
                 let _ = receiver_ctx.open(&mut ciphertext[..], aad, &tag);
