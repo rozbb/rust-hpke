@@ -9,7 +9,6 @@
 //! ```
 //! # #[cfg(feature = "x25519")]
 //! # {
-//! # use rand::{rngs::StdRng, SeedableRng};
 //! # use hpke::{
 //! #     aead::ChaCha20Poly1305,
 //! #     kdf::HkdfSha384,
@@ -21,8 +20,7 @@
 //! type Aead = ChaCha20Poly1305;
 //! type Kdf = HkdfSha384;
 //!
-//! let mut csprng = StdRng::from_entropy();
-//! # let (bob_sk, bob_pk) = Kem::gen_keypair(&mut csprng);
+//! # let (bob_sk, bob_pk) = Kem::gen_keypair();
 //!
 //! // This is a description string for the session. Both Alice and Bob need to know this value.
 //! // It's not secret.
@@ -33,7 +31,7 @@
 //! // knew, she'd be able to authenticate herself. See the OpModeS and OpModeR types for more
 //! // detail.
 //! let (encapsulated_key, mut encryption_context) =
-//!     hpke::setup_sender::<Aead, Kdf, Kem, _>(&OpModeS::Base, &bob_pk, info_str, &mut csprng)
+//!     hpke::setup_sender::<Aead, Kdf, Kem>(&OpModeS::Base, &bob_pk, info_str)
 //!         .expect("invalid server pubkey!");
 //!
 //! // Alice encrypts a message to Bob. msg gets encrypted in place, and aad is authenticated

@@ -6,7 +6,7 @@ use hpke::{
 };
 
 use criterion::{black_box, criterion_main, Criterion};
-use rand::{rngs::StdRng, RngCore, SeedableRng};
+use getrandom::getrandom;
 use std::time::Instant;
 
 // Length of AAD for all seal/open benchmarks
@@ -23,28 +23,26 @@ where
     Kdf: KdfTrait,
     Kem: KemTrait,
 {
-    let mut csprng = StdRng::from_entropy();
-
     let mut group = c.benchmark_group(group_name);
 
     // Bench keypair generation
-    group.bench_function("gen_keypair", |b| b.iter(|| Kem::gen_keypair(&mut csprng)));
+    group.bench_function("gen_keypair", |b| b.iter(|| Kem::gen_keypair()));
 
     // Make a recipient keypair to encrypt to
-    let (sk_recip, pk_recip) = Kem::gen_keypair(&mut csprng);
+    let (sk_recip, pk_recip) = Kem::gen_keypair();
 
     // Make a PSK bundle for OpModePsk and OpModeAuthPsk
     let mut psk = [0u8; PSK_LEN];
     let mut psk_id = [0u8; 8];
-    csprng.fill_bytes(&mut psk);
-    csprng.fill_bytes(&mut psk_id);
+    getrandom(&mut psk).unwrap();
+    getrandom(&mut psk_id).unwrap();
     let psk_bundle = PskBundle {
         psk: &psk,
         psk_id: &psk_id,
     };
 
     // Make a sender keypair for OpModeAuth and OpModeAuthPsk
-    let (sk_sender, pk_sender) = Kem::gen_keypair(&mut csprng);
+    let (sk_sender, pk_sender) = Kem::gen_keypair();
 
     // Construct all the opmodes we'll use in setup_sender and setup_receiver
     let opmodes = ["base", "auth", "psk", "authpsk"];
@@ -65,28 +63,16 @@ where
     for (mode, opmode_s) in opmodes.iter().zip(opmodes_s.iter()) {
         let bench_name = format!("setup_sender[mode={}]", mode);
         group.bench_function(bench_name, |b| {
-            b.iter(|| {
-                setup_sender::<Aead, Kdf, Kem, _>(
-                    opmode_s,
-                    &pk_recip,
-                    b"bench setup sender",
-                    &mut csprng,
-                )
-            })
+            b.iter(|| setup_sender::<Aead, Kdf, Kem>(opmode_s, &pk_recip, b"bench setup sender"))
         });
     }
 
     // Collect the encapsulated keys from each setup_sender under each opmode. We will pass these
     // to setup_receiver in a moment
     let encapped_keys = opmodes_s.iter().map(|opmode_s| {
-        setup_sender::<Aead, Kdf, Kem, _>(
-            &opmode_s,
-            &pk_recip,
-            b"bench setup receiver",
-            &mut csprng,
-        )
-        .unwrap()
-        .0
+        setup_sender::<Aead, Kdf, Kem>(&opmode_s, &pk_recip, b"bench setup receiver")
+            .unwrap()
+            .0
     });
 
     // Bench setup_receiver for each opmode
@@ -107,8 +93,7 @@ where
 
     // Make the encryption context so we can benchmark seal()
     let (_, mut encryption_ctx) =
-        setup_sender::<Aead, Kdf, Kem, _>(&OpModeS::Base, &pk_recip, b"bench seal", &mut csprng)
-            .unwrap();
+        setup_sender::<Aead, Kdf, Kem>(&OpModeS::Base, &pk_recip, b"bench seal").unwrap();
 
     // Bench seal() on a MSG_LEN-byte plaintext and AAD_LEN-byte AAD
     let bench_name = format!("seal[msglen={},aadlen={}]", MSG_LEN, AAD_LEN);
@@ -116,8 +101,8 @@ where
         // Pick random inputs
         let mut plaintext = [0u8; MSG_LEN];
         let mut aad = [0u8; AAD_LEN];
-        csprng.fill_bytes(&mut plaintext);
-        csprng.fill_bytes(&mut aad);
+        getrandom(&mut plaintext).unwrap();
+        getrandom(&mut aad).unwrap();
 
         b.iter(|| encryption_ctx.seal(&mut plaintext, &aad).unwrap())
     });
@@ -157,13 +142,10 @@ where
     Kdf: KdfTrait,
     Kem: KemTrait,
 {
-    let mut csprng = StdRng::from_entropy();
-
     // Make up the recipient's keypair and setup an encryption context
-    let (sk_recip, pk_recip) = Kem::gen_keypair(&mut csprng);
+    let (sk_recip, pk_recip) = Kem::gen_keypair();
     let (encapped_key, mut encryption_ctx) =
-        setup_sender::<Aead, Kdf, Kem, _>(&OpModeS::Base, &pk_recip, b"bench seal", &mut csprng)
-            .unwrap();
+        setup_sender::<Aead, Kdf, Kem>(&OpModeS::Base, &pk_recip, b"bench seal").unwrap();
 
     // Construct num_ciphertext many (plaintext, aad) pairs and pass them through seal()
     let mut ciphertext_aad_tags = Vec::with_capacity(num_ciphertexts);
@@ -171,8 +153,8 @@ where
         // Make the plaintext and AAD random
         let mut plaintext = [0u8; MSG_LEN];
         let mut aad = [0u8; AAD_LEN];
-        csprng.fill_bytes(&mut plaintext);
-        csprng.fill_bytes(&mut aad);
+        getrandom(&mut plaintext).unwrap();
+        getrandom(&mut aad).unwrap();
 
         // Seal the random plaintext and AAD
         let tag = encryption_ctx.seal(&mut plaintext, &aad).unwrap();

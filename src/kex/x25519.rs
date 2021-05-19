@@ -147,6 +147,8 @@ impl KeyExchange for X25519 {
 
 #[cfg(test)]
 mod tests {
+    use getrandom::getrandom;
+
     use crate::{
         kex::{
             x25519::{PrivateKey, PublicKey, X25519},
@@ -154,7 +156,6 @@ mod tests {
         },
         test_util::kex_gen_keypair,
     };
-    use rand::{rngs::StdRng, RngCore, SeedableRng};
 
     // We need this in our serialize-deserialize tests
     impl PartialEq for PrivateKey {
@@ -175,12 +176,10 @@ mod tests {
     fn test_pubkey_serialize_correctness() {
         type Kex = X25519;
 
-        let mut csprng = StdRng::from_entropy();
-
         // Fill a buffer with randomness
         let orig_bytes = {
             let mut buf = vec![0u8; <Kex as KeyExchange>::PublicKey::size()];
-            csprng.fill_bytes(buf.as_mut_slice());
+            getrandom(buf.as_mut_slice()).unwrap();
             buf
         };
 
@@ -198,10 +197,8 @@ mod tests {
     fn test_dh_serialize_correctness() {
         type Kex = X25519;
 
-        let mut csprng = StdRng::from_entropy();
-
         // Make a random keypair and serialize it
-        let (sk, pk) = kex_gen_keypair::<Kex, _>(&mut csprng);
+        let (sk, pk) = kex_gen_keypair::<Kex>();
         let (sk_bytes, pk_bytes) = (sk.to_bytes(), pk.to_bytes());
 
         // Now deserialize those bytes

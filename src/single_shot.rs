@@ -8,8 +8,6 @@ use crate::{
     HpkeError,
 };
 
-use rand::{CryptoRng, RngCore};
-
 // def SealAuthPSK(pkR, info, aad, pt, psk, psk_id, skS):
 //   enc, ctx = SetupAuthPSKS(pkR, info, psk, psk_id, skS)
 //   ct = ctx.Seal(aad, pt)
@@ -24,23 +22,20 @@ use rand::{CryptoRng, RngCore};
 /// returns `Err(HpkeError::InvalidKeyExchange)`. If an unspecified error happened during
 /// encryption, returns `Err(HpkeError::Encryption)`. In this case, the contents of `plaintext` is
 /// undefined.
-pub fn single_shot_seal<A, Kdf, Kem, R>(
+pub fn single_shot_seal<A, Kdf, Kem>(
     mode: &OpModeS<Kem::Kex>,
     pk_recip: &<Kem::Kex as KeyExchange>::PublicKey,
     info: &[u8],
     plaintext: &mut [u8],
     aad: &[u8],
-    csprng: &mut R,
 ) -> Result<(EncappedKey<Kem::Kex>, AeadTag<A>), HpkeError>
 where
     A: Aead,
     Kdf: KdfTrait,
     Kem: KemTrait,
-    R: CryptoRng + RngCore,
 {
     // Encap a key
-    let (encapped_key, mut aead_ctx) =
-        setup_sender::<A, Kdf, Kem, R>(mode, pk_recip, info, csprng)?;
+    let (encapped_key, mut aead_ctx) = setup_sender::<A, Kdf, Kem>(mode, pk_recip, info)?;
     // Encrypt
     let tag = aead_ctx.seal(plaintext, aad)?;
 
@@ -90,8 +85,6 @@ mod test {
         test_util::{gen_rand_buf, kex_gen_keypair},
     };
 
-    use rand::{rngs::StdRng, SeedableRng};
-
     macro_rules! test_single_shot_correctness {
         ($test_name:ident, $aead:ty, $kdf:ty, $kem:ty) => {
             /// Tests that `single_shot_open` can open a `single_shot_seal` ciphertext. This
@@ -107,8 +100,6 @@ mod test {
                 let msg = b"Good night, a-ding ding ding ding ding";
                 let aad = b"Five four three two one";
 
-                let mut csprng = StdRng::from_entropy();
-
                 // Set up an arbitrary info string, a random PSK, and an arbitrary PSK ID
                 let info = b"why would you think in a million years that that would actually work";
                 let (psk, psk_id) = (gen_rand_buf(), gen_rand_buf());
@@ -118,8 +109,8 @@ mod test {
                 };
 
                 // Generate the sender's and receiver's long-term keypairs
-                let (sk_sender_id, pk_sender_id) = kex_gen_keypair::<Kex, _>(&mut csprng);
-                let (sk_recip, pk_recip) = kex_gen_keypair::<Kex, _>(&mut csprng);
+                let (sk_sender_id, pk_sender_id) = kex_gen_keypair::<Kex>();
+                let (sk_recip, pk_recip) = kex_gen_keypair::<Kex>();
 
                 // Construct the sender's encryption context, and get an encapped key
                 let sender_mode = OpModeS::<Kex>::AuthPsk(
@@ -132,13 +123,12 @@ mod test {
 
                 // Encrypt with the first context
                 let mut ciphertext = msg.clone();
-                let (encapped_key, tag) = single_shot_seal::<A, Kdf, Kem, _>(
+                let (encapped_key, tag) = single_shot_seal::<A, Kdf, Kem>(
                     &sender_mode,
                     &pk_recip,
                     &info[..],
                     &mut ciphertext[..],
                     aad,
-                    &mut csprng,
                 )
                 .expect("single_shot_seal() failed");
 

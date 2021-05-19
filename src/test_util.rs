@@ -8,25 +8,22 @@ use crate::{
 };
 
 use generic_array::GenericArray;
-use rand::{rngs::StdRng, CryptoRng, Rng, RngCore, SeedableRng};
+use getrandom::getrandom;
 
 /// Returns a random 32-byte buffer
 pub(crate) fn gen_rand_buf() -> [u8; 32] {
-    let mut csprng = StdRng::from_entropy();
     let mut buf = [0u8; 32];
-    csprng.fill_bytes(&mut buf);
+    getrandom(&mut buf).unwrap();
     buf
 }
 
 /// Generates a keypair without the need of a KEM
-pub(crate) fn kex_gen_keypair<Kex: KeyExchange, R: CryptoRng + RngCore>(
-    csprng: &mut R,
-) -> (Kex::PrivateKey, Kex::PublicKey) {
+pub(crate) fn kex_gen_keypair<Kex: KeyExchange>() -> (Kex::PrivateKey, Kex::PublicKey) {
     // Make some keying material that's the size of a private key
     let mut ikm: GenericArray<u8, <Kex::PrivateKey as Serializable>::OutputSize> =
         GenericArray::default();
     // Fill it with randomness
-    csprng.fill_bytes(&mut ikm);
+    getrandom(&mut ikm).unwrap();
     // Run derive_keypair with a nonsense ciphersuite. We use SHA-512 to satisfy any security level
     Kex::derive_keypair::<crate::kdf::HkdfSha512>(b"31337", &ikm)
 }
@@ -38,22 +35,20 @@ where
     Kdf: KdfTrait,
     Kem: KemTrait,
 {
-    let mut csprng = StdRng::from_entropy();
-
     // Initialize the key and nonce
     let key = {
         let mut buf = AeadKey::<A>::default();
-        csprng.fill_bytes(buf.0.as_mut_slice());
+        getrandom(buf.0.as_mut_slice()).unwrap();
         buf
     };
     let base_nonce = {
         let mut buf = AeadNonce::<A>::default();
-        csprng.fill_bytes(buf.0.as_mut_slice());
+        getrandom(buf.0.as_mut_slice()).unwrap();
         buf
     };
     let exporter_secret = {
         let mut buf = ExporterSecret::<Kdf>::default();
-        csprng.fill_bytes(buf.0.as_mut_slice());
+        getrandom(buf.0.as_mut_slice()).unwrap();
         buf
     };
 
@@ -77,8 +72,7 @@ pub(crate) fn new_op_mode_pair<'a, Kex: KeyExchange, Kdf: KdfTrait>(
     psk: &'a [u8],
     psk_id: &'a [u8],
 ) -> (OpModeS<'a, Kex>, OpModeR<'a, Kex>) {
-    let mut csprng = StdRng::from_entropy();
-    let (sk_sender, pk_sender) = kex_gen_keypair::<Kex, _>(&mut csprng);
+    let (sk_sender, pk_sender) = kex_gen_keypair::<Kex>();
     let psk_bundle = PskBundle { psk, psk_id };
 
     match kind {
@@ -111,19 +105,21 @@ pub(crate) fn aead_ctx_eq<A: Aead, Kdf: KdfTrait, Kem: KemTrait>(
     sender: &mut AeadCtxS<A, Kdf, Kem>,
     receiver: &mut AeadCtxR<A, Kdf, Kem>,
 ) -> bool {
-    let mut csprng = StdRng::from_entropy();
-
     // Some random input data
     let msg = {
-        let len = csprng.gen::<u8>();
-        let mut buf = vec![0u8; len as usize];
-        csprng.fill_bytes(&mut buf);
+        let mut len_buf = [0];
+        getrandom(&mut len_buf).unwrap();
+        let len = len_buf[0] as usize;
+        let mut buf = vec![0u8; len];
+        getrandom(&mut buf).unwrap();
         buf
     };
     let aad = {
-        let len = csprng.gen::<u8>();
-        let mut buf = vec![0u8; len as usize];
-        csprng.fill_bytes(&mut buf);
+        let mut len_buf = [0];
+        getrandom(&mut len_buf).unwrap();
+        let len = len_buf[0] as usize;
+        let mut buf = vec![0u8; len];
+        getrandom(&mut buf).unwrap();
         buf
     };
 

@@ -7,7 +7,7 @@ use crate::{
 
 use digest::FixedOutput;
 use generic_array::GenericArray;
-use rand::{CryptoRng, RngCore};
+use getrandom::getrandom;
 
 /// Defines a combination of key exchange mechanism and a KDF, which together form a KEM
 pub trait Kem: Sized {
@@ -35,9 +35,7 @@ pub trait Kem: Sized {
     }
 
     /// Generates a random keypair using the given RNG
-    fn gen_keypair<R: CryptoRng + RngCore>(
-        csprng: &mut R,
-    ) -> (
+    fn gen_keypair() -> (
         <Self::Kex as KeyExchange>::PrivateKey,
         <Self::Kex as KeyExchange>::PublicKey,
     ) {
@@ -47,7 +45,7 @@ pub trait Kem: Sized {
             <<Self::Kex as KeyExchange>::PrivateKey as Serializable>::OutputSize,
         > = GenericArray::default();
         // Fill it with randomness
-        csprng.fill_bytes(&mut ikm);
+        getrandom(&mut ikm).unwrap();
         // Run derive_keypair using the KEM's KDF
         Self::derive_keypair(&ikm)
     }
@@ -227,17 +225,15 @@ pub(crate) fn encap_with_eph<Kem: KemTrait>(
 /// ============
 /// Returns a shared secret and encapped key on success. If an error happened during key exchange,
 /// returns `Err(HpkeError::InvalidKeyExchange)`.
-pub(crate) fn encap<Kem: KemTrait, R>(
+pub(crate) fn encap<Kem: KemTrait>(
     pk_recip: &KemPubkey<Kem>,
     sender_id_keypair: Option<&(KemPrivkey<Kem>, KemPubkey<Kem>)>,
-    csprng: &mut R,
 ) -> Result<(SharedSecret<Kem>, EncappedKey<Kem::Kex>), HpkeError>
 where
     Kem: KemTrait,
-    R: CryptoRng + RngCore,
 {
     // Generate a new ephemeral keypair
-    let (sk_eph, _) = Kem::gen_keypair(csprng);
+    let (sk_eph, _) = Kem::gen_keypair();
     // Now pass to encap_with_eph
     encap_with_eph::<Kem>(pk_recip, sender_id_keypair, sk_eph)
 }
@@ -354,8 +350,6 @@ pub(crate) fn decap<Kem: KemTrait>(
 mod tests {
     use crate::kem::{decap, encap, Deserializable, EncappedKey, Kem as KemTrait, Serializable};
 
-    use rand::{rngs::StdRng, SeedableRng};
-
     macro_rules! test_encap_correctness {
         ($test_name:ident, $kem_ty:ty) => {
             /// Tests that encap and decap produce the same shared secret when composed
@@ -363,12 +357,10 @@ mod tests {
             fn $test_name() {
                 type Kem = $kem_ty;
 
-                let mut csprng = StdRng::from_entropy();
-                let (sk_recip, pk_recip) = Kem::gen_keypair(&mut csprng);
+                let (sk_recip, pk_recip) = Kem::gen_keypair();
 
                 // Encapsulate a random shared secret
-                let (auth_shared_secret, encapped_key) =
-                    encap::<Kem, _>(&pk_recip, None, &mut csprng).unwrap();
+                let (auth_shared_secret, encapped_key) = encap::<Kem>(&pk_recip, None).unwrap();
 
                 // Decap it
                 let decapped_auth_shared_secret =
@@ -382,15 +374,11 @@ mod tests {
                 //
 
                 // Make a sender identity keypair
-                let (sk_sender_id, pk_sender_id) = Kem::gen_keypair(&mut csprng);
+                let (sk_sender_id, pk_sender_id) = Kem::gen_keypair();
 
                 // Encapsulate a random shared secret
-                let (auth_shared_secret, encapped_key) = encap::<Kem, _>(
-                    &pk_recip,
-                    Some(&(sk_sender_id, pk_sender_id.clone())),
-                    &mut csprng,
-                )
-                .unwrap();
+                let (auth_shared_secret, encapped_key) =
+                    encap::<Kem>(&pk_recip, Some(&(sk_sender_id, pk_sender_id.clone()))).unwrap();
 
                 // Decap it
                 let decapped_auth_shared_secret =
@@ -411,9 +399,8 @@ mod tests {
 
                 // Encapsulate a random shared secret
                 let encapped_key = {
-                    let mut csprng = StdRng::from_entropy();
-                    let (_, pk_recip) = Kem::gen_keypair(&mut csprng);
-                    encap::<Kem, _>(&pk_recip, None, &mut csprng).unwrap().1
+                    let (_, pk_recip) = Kem::gen_keypair();
+                    encap::<Kem>(&pk_recip, None).unwrap().1
                 };
                 // Serialize it
                 let encapped_key_bytes = encapped_key.to_bytes();

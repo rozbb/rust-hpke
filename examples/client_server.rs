@@ -23,8 +23,6 @@ use hpke::{
     Deserializable, EncappedKey, Kem as KemTrait, OpModeR, OpModeS, Serializable,
 };
 
-use rand::{rngs::StdRng, SeedableRng};
-
 const INFO_STR: &'static [u8] = b"example session";
 
 // These are the only algorithms we're gonna use for this example
@@ -40,8 +38,7 @@ fn server_init() -> (
     <Kex as KeyExchange>::PrivateKey,
     <Kex as KeyExchange>::PublicKey,
 ) {
-    let mut csprng = StdRng::from_entropy();
-    Kem::gen_keypair(&mut csprng)
+    Kem::gen_keypair()
 }
 
 // Given a message and associated data, returns an encapsulated key, ciphertext, and tag. The
@@ -51,12 +48,10 @@ fn client_encrypt_msg(
     associated_data: &[u8],
     server_pk: &<Kex as KeyExchange>::PublicKey,
 ) -> (EncappedKey<Kex>, Vec<u8>, AeadTag<Aead>) {
-    let mut csprng = StdRng::from_entropy();
-
     // Encapsulate a key and use the resulting shared secret to encrypt a message. The AEAD context
     // is what you use to encrypt.
     let (encapped_key, mut sender_ctx) =
-        hpke::setup_sender::<Aead, Kdf, Kem, _>(&OpModeS::Base, server_pk, INFO_STR, &mut csprng)
+        hpke::setup_sender::<Aead, Kdf, Kem>(&OpModeS::Base, server_pk, INFO_STR)
             .expect("invalid server pubkey!");
 
     // On success, seal() will encrypt the plaintext in place

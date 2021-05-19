@@ -196,8 +196,6 @@ mod tests {
         test_util::kex_gen_keypair,
     };
 
-    use rand::{rngs::StdRng, SeedableRng};
-
     // We need this in our serialize-deserialize tests
     impl PartialEq for PrivateKey {
         fn eq(&self, other: &PrivateKey) -> bool {
@@ -295,13 +293,11 @@ mod tests {
     fn test_pubkey_serialize_correctness() {
         type Kex = DhP256;
 
-        let mut csprng = StdRng::from_entropy();
-
         // We can't do the same thing as in the X25519 tests, since a completely random point is
         // not likely to lie on the curve. Instead, we just generate a random point, serialize it,
         // deserialize it, and test whether it's the same using impl Eq for AffinePoint
 
-        let (_, pubkey) = kex_gen_keypair::<Kex, _>(&mut csprng);
+        let (_, pubkey) = kex_gen_keypair::<Kex>();
         let pubkey_bytes = pubkey.to_bytes();
         let rederived_pubkey = <Kex as KeyExchange>::PublicKey::from_bytes(&pubkey_bytes).unwrap();
 
@@ -314,10 +310,8 @@ mod tests {
     fn test_dh_serialize_correctness() {
         type Kex = DhP256;
 
-        let mut csprng = StdRng::from_entropy();
-
         // Make a random keypair and serialize it
-        let (sk, pk) = kex_gen_keypair::<Kex, _>(&mut csprng);
+        let (sk, pk) = kex_gen_keypair::<Kex>();
         let (sk_bytes, pk_bytes) = (sk.to_bytes(), pk.to_bytes());
 
         // Now deserialize those bytes
