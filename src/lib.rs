@@ -132,7 +132,7 @@ pub use single_shot::{single_shot_open, single_shot_seal};
 //-------- Top-level types --------//
 
 /// Describes things that can go wrong when trying to seal or open a ciphertext
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum HpkeError {
     /// The allowed number of message encryptions has been reached
     MessageLimitReached,
