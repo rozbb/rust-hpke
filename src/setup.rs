@@ -10,7 +10,7 @@ use crate::{
 
 use digest::Digest;
 use generic_array::GenericArray;
-use rand::{CryptoRng, RngCore};
+use rand_core::{CryptoRng, RngCore};
 use zeroize::Zeroize;
 
 /// Secret generated in `derive_enc_ctx` and stored in `AeadCtx`

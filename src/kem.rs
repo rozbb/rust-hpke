@@ -7,7 +7,7 @@ use crate::{
 
 use digest::FixedOutput;
 use generic_array::GenericArray;
-use rand::{CryptoRng, RngCore};
+use rand_core::{CryptoRng, RngCore};
 
 /// Defines a combination of key exchange mechanism and a KDF, which together form a KEM
 pub trait Kem: Sized {
@@ -61,7 +61,7 @@ use Kem as KemTrait;
 pub struct X25519HkdfSha256 {}
 
 #[cfg(feature = "x25519-dalek")]
-impl Kem for X25519HkdfSha256 {
+impl KemTrait for X25519HkdfSha256 {
     type Kex = crate::kex::X25519;
     type Kdf = crate::kdf::HkdfSha256;
 
@@ -74,7 +74,7 @@ impl Kem for X25519HkdfSha256 {
 pub struct DhP256HkdfSha256 {}
 
 #[cfg(feature = "p256")]
-impl Kem for DhP256HkdfSha256 {
+impl KemTrait for DhP256HkdfSha256 {
     type Kex = crate::kex::DhP256;
     type Kdf = crate::kdf::HkdfSha256;
 

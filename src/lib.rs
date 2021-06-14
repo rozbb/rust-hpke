@@ -136,8 +136,8 @@ pub use single_shot::{single_shot_open, single_shot_seal};
 pub enum HpkeError {
     /// The allowed number of message encryptions has been reached
     MessageLimitReached,
-    /// The authentication tag was invalid when opening
-    InvalidTag,
+    /// An error occurred while opening a ciphertext
+    OpenError,
     /// An unspecified error occured during encryption
     Encryption,
     /// A key exchange input or output was invalid
@@ -152,9 +152,9 @@ impl core::fmt::Display for HpkeError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         let kind = match self {
             HpkeError::MessageLimitReached => "Message limit reached",
-            HpkeError::InvalidTag => "Invalid tag",
-            HpkeError::Encryption => "Encryption error",
-            HpkeError::InvalidKeyExchange => "Key exchange validation error",
+            HpkeError::OpenError => "Cannot open ciphertext",
+            HpkeError::Encryption => "Encryption failed",
+            HpkeError::InvalidKeyExchange => "Key exchange failed validation",
             HpkeError::InvalidKdfLength => "Too many bytes requested from KDF",
             HpkeError::InvalidEncoding => "Cannot deserialize byte sequence: invalid encoding",
         };

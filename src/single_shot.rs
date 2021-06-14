@@ -8,7 +8,7 @@ use crate::{
     HpkeError,
 };
 
-use rand::{CryptoRng, RngCore};
+use rand_core::{CryptoRng, RngCore};
 
 // def SealAuthPSK(pkR, info, aad, pt, psk, psk_id, skS):
 //   enc, ctx = SetupAuthPSKS(pkR, info, psk, psk_id, skS)

@@ -246,7 +246,7 @@ impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AeadCtxR<A, Kdf, Kem> {
     /// Returns `Ok(())` on success.  If this context has been used for so many encryptions that
     /// the sequence number overflowed, returns `Err(HpkeError::MessageLimitReached)`. If this happens,
     /// `plaintext` will be unmodified. If the tag fails to validate, returns
-    /// `Err(HpkeError::InvalidTag)`. If this happens, `plaintext` is in an undefined state.
+    /// `Err(HpkeError::OpenError)`. If this happens, `plaintext` is in an undefined state.
     pub fn open(
         &mut self,
         ciphertext: &mut [u8],
@@ -266,7 +266,7 @@ impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AeadCtxR<A, Kdf, Kem> {
 
             if decrypt_res.is_err() {
                 // Opening failed due to a bad tag
-                return Err(HpkeError::InvalidTag);
+                return Err(HpkeError::OpenError);
             }
 
             // Opening was a success. Try to increment the sequence counter. If it fails, this was
