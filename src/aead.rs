@@ -3,7 +3,7 @@ use crate::{
     kem::Kem as KemTrait,
     kex::{Deserializable, Serializable},
     setup::ExporterSecret,
-    util::{full_suite_id, FullSuiteId},
+    util::{enforce_equal_len, full_suite_id, FullSuiteId},
     HpkeError,
 };
 
@@ -131,14 +131,12 @@ impl<A: Aead> Serializable for AeadTag<A> {
 
 impl<A: Aead> Deserializable for AeadTag<A> {
     fn from_bytes(encoded: &[u8]) -> Result<Self, HpkeError> {
-        if encoded.len() != Self::size() {
-            Err(HpkeError::InvalidEncoding)
-        } else {
-            // Copy to a fixed-size array
-            let mut arr = <GenericArray<u8, Self::OutputSize> as Default>::default();
-            arr.copy_from_slice(encoded);
-            Ok(AeadTag(arr))
-        }
+        enforce_equal_len(Self::size(), encoded.len())?;
+
+        // Copy to a fixed-size array
+        let mut arr = <GenericArray<u8, Self::OutputSize> as Default>::default();
+        arr.copy_from_slice(encoded);
+        Ok(AeadTag(arr))
     }
 }
 
@@ -199,6 +197,12 @@ impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AeadCtx<A, Kdf, Kem> {
     //   return LabeledExpand(self.exporter_secret, "sec", exporter_context, L)
     /// Fills a given buffer with secret bytes derived from this encryption context. This value
     /// does not depend on sequence number, so it is constant for the lifetime of this context.
+    ///
+    /// Return Value
+    /// ============
+    /// Returns `Ok(())` on success. If the buffer length is more than 255x the digest size of the
+    /// underlying hash function, returns an `Err(HpkeError::KdfOutputTooLong)`. Just don't use to
+    /// fill massive buffers and you'll be fine.
     pub fn export(&self, exporter_ctx: &[u8], out_buf: &mut [u8]) -> Result<(), HpkeError> {
         // Use our exporter secret as the PRK for an HKDF-Expand op. The only time this fails is
         // when the length of the PRK is not the the underlying hash function's digest size. But
@@ -209,7 +213,7 @@ impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AeadCtx<A, Kdf, Kem> {
         // than 255x the digest size of the underlying hash function)
         hkdf_ctx
             .labeled_expand(&self.suite_id, b"sec", exporter_ctx, out_buf)
-            .map_err(|_| HpkeError::InvalidKdfLength)
+            .map_err(|_| HpkeError::KdfOutputTooLong)
     }
 }
 
@@ -243,10 +247,10 @@ impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AeadCtxR<A, Kdf, Kem> {
     ///
     /// Return Value
     /// ============
-    /// Returns `Ok(())` on success.  If this context has been used for so many encryptions that
-    /// the sequence number overflowed, returns `Err(HpkeError::MessageLimitReached)`. If this happens,
-    /// `plaintext` will be unmodified. If the tag fails to validate, returns
-    /// `Err(HpkeError::OpenError)`. If this happens, `plaintext` is in an undefined state.
+    /// Returns `Ok(())` on success. If this context has been used for so many encryptions that the
+    /// sequence number overflowed, returns `Err(HpkeError::MessageLimitReached)`. If this happens,
+    /// `ciphertext` will be unmodified. If the tag fails to validate, returns
+    /// `Err(HpkeError::OpenError)`. If this happens, `ciphertext` is in an undefined state.
     pub fn open(
         &mut self,
         ciphertext: &mut [u8],
@@ -286,7 +290,7 @@ impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AeadCtxR<A, Kdf, Kem> {
     /// Return Value
     /// ============
     /// Returns `Ok(())` on success. If the buffer length is more than about 255x the digest size
-    /// of the underlying hash function, returns an `Err(HpkeError::InvalidKdfLength)`. The exact
+    /// of the underlying hash function, returns an `Err(HpkeError::KdfOutputTooLong)`. The exact
     /// number is given in the "Input Length Restrictions" section of the spec. Just don't use to
     /// fill massive buffers and you'll be fine.
     pub fn export(&self, info: &[u8], out_buf: &mut [u8]) -> Result<(), HpkeError> {
@@ -325,9 +329,8 @@ impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AeadCtxS<A, Kdf, Kem> {
     /// ============
     /// Returns `Ok(tag)` on success.  If this context has been used for so many encryptions that
     /// the sequence number overflowed, returns `Err(HpkeError::MessageLimitReached)`. If this
-    /// happens, `plaintext` will be unmodified. If an unspecified error happened during
-    /// encryption, returns `Err(HpkeError::Encryption)`. If this happens, the contents of
-    /// `plaintext` is undefined.
+    /// happens, `plaintext` will be unmodified. If an error happened during encryption, returns
+    /// `Err(HpkeError::SealError)`. If this happens, the contents of `plaintext` is undefined.
     pub fn seal(&mut self, plaintext: &mut [u8], aad: &[u8]) -> Result<AeadTag<A>, HpkeError> {
         if self.0.overflowed {
             // If the sequence counter overflowed, we've been used for far too long. Shut down.
@@ -335,16 +338,11 @@ impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AeadCtxS<A, Kdf, Kem> {
         } else {
             // Compute the nonce and do the encryption in place
             let nonce = mix_nonce::<A>(&self.0.base_nonce, &self.0.seq);
-            let tag_res = self
+            let tag = self
                 .0
                 .encryptor
-                .encrypt_in_place_detached(&nonce.0, &aad, plaintext);
-
-            // Check if an error occurred when encrypting
-            let tag = match tag_res {
-                Err(_) => return Err(HpkeError::Encryption),
-                Ok(t) => t,
-            };
+                .encrypt_in_place_detached(&nonce.0, &aad, plaintext)
+                .map_err(|_| HpkeError::SealError)?;
 
             // Try to increment the sequence counter. If it fails, this was our last encryption.
             match increment_seq(&self.0.seq) {
@@ -357,15 +355,14 @@ impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AeadCtxS<A, Kdf, Kem> {
         }
     }
 
-    // def Context.Export(exporter_context, L):
-    //   return LabeledExpand(self.exporter_secret, "sec", exporter_context, L)
     /// Fills a given buffer with secret bytes derived from this encryption context. This value
     /// does not depend on sequence number, so it is constant for the lifetime of this context.
     ///
     /// Return Value
     /// ============
     /// Returns `Ok(())` on success. If the buffer length is more than 255x the digest size of the
-    /// underlying hash function, returns an `Err(HpkeError::InvalidKdfLength)`.
+    /// underlying hash function, returns an `Err(HpkeError::KdfOutputTooLong)`. Just don't use to
+    /// fill massive buffers and you'll be fine.
     pub fn export(&self, info: &[u8], out_buf: &mut [u8]) -> Result<(), HpkeError> {
         // Pass to AeadCtx
         self.0.export(info, out_buf)
@@ -382,10 +379,33 @@ pub use crate::aead::{aes_gcm::*, chacha20_poly1305::*, export_only::*};
 #[cfg(test)]
 mod test {
     use super::{Aead, AeadTag, AesGcm128, AesGcm256, ChaCha20Poly1305, ExportOnlyAead, Seq};
-    use crate::{kdf::HkdfSha256, kex::Deserializable, test_util::gen_ctx_simple_pair, HpkeError};
+    use crate::{
+        kdf::HkdfSha256,
+        kex::{Deserializable, Serializable},
+        test_util::gen_ctx_simple_pair,
+        HpkeError,
+    };
 
     use aead::AeadCore as BaseAeadCore;
     use generic_array::GenericArray;
+
+    /// Tests that AeadKey::from_bytes fails on inputs of incorrect length
+    macro_rules! test_invalid_nonce {
+        ($test_name:ident, $aead_ty:ty) => {
+            #[test]
+            fn $test_name() {
+                type A = $aead_ty;
+
+                // No AEAD tag is 5 bytes long. This should give an IncorrectInputLength error
+                let tag_res = AeadTag::<A>::from_bytes(&[0; 5]);
+                if let Err(e) = tag_res {
+                    assert_eq!(e, HpkeError::IncorrectInputLength(AeadTag::<A>::size(), 5));
+                } else {
+                    panic!("AeadTag was unexpectedly valid");
+                }
+            }
+        };
+    }
 
     /// Tests that encryption context secret export does not change behavior based on the
     /// underlying sequence number This logic is cipher-agnostic, so we don't make the test generic
@@ -517,18 +537,23 @@ mod test {
                     let mut plaintext = *msg;
                     // Try to encrypt the plaintext
                     match sender_ctx.seal(&mut plaintext[..], aad) {
-                        Err(HpkeError::MessageLimitReached) => {} // Good, this should have overflowed
+                        Err(HpkeError::MessageLimitReached) => {
+                            // Good, this should have overflowed
+                        }
                         Err(e) => panic!("seal() should have overflowed. Instead got {}", e),
                         _ => panic!("seal() should have overflowed. Instead it succeeded"),
                     }
 
                     // Now try to decrypt something. This isn't a valid ciphertext or tag, but the
                     // overflow should fail before the tag check fails.
-                    let mut dummy_ciphertext = [0u8; 32];
-                    let dummy_tag = AeadTag::from_bytes(&[0; 16]).unwrap();
+                    let mut placeholder_ciphertext = [0u8; 32];
+                    let placeholder_tag = AeadTag::from_bytes(&[0; 16]).unwrap();
 
-                    match receiver_ctx.open(&mut dummy_ciphertext[..], aad, &dummy_tag) {
-                        Err(HpkeError::MessageLimitReached) => {} // Good, this should have overflowed
+                    match receiver_ctx.open(&mut placeholder_ciphertext[..], aad, &placeholder_tag)
+                    {
+                        Err(HpkeError::MessageLimitReached) => {
+                            // Good, this should have overflowed
+                        }
                         Err(e) => panic!("open() should have overflowed. Instead got {}", e),
                         _ => panic!("open() should have overflowed. Instead it succeeded"),
                     }
@@ -570,6 +595,10 @@ mod test {
             }
         };
     }
+
+    test_invalid_nonce!(test_invalid_nonce_aes128, AesGcm128);
+    test_invalid_nonce!(test_invalid_nonce_aes256, AesGcm128);
+    test_invalid_nonce!(test_invalid_nonce_chacha, ChaCha20Poly1305);
 
     #[cfg(feature = "x25519-dalek")]
     mod x25519_tests {

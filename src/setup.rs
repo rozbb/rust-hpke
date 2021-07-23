@@ -126,8 +126,8 @@ where
 /// Return Value
 /// ============
 /// On success, returns an encapsulated public key (intended to be sent to the recipient), and an
-/// encryption context. If an error happened during key exchange, returns
-/// `Err(HpkeError::InvalidKeyExchange)`. This is the only possible error.
+/// encryption context. If an error happened during key encapsulation, returns
+/// `Err(HpkeError::EncapError)`. This is the only possible error.
 pub fn setup_sender<A, Kdf, Kem, R>(
     mode: &OpModeS<Kem::Kex>,
     pk_recip: &<Kem::Kex as KeyExchange>::PublicKey,
@@ -158,8 +158,8 @@ where
 ///
 /// Return Value
 /// ============
-/// On success, returns a decryption context. If an error happened during key exchange, returns
-/// `Err(HpkeError::InvalidKeyExchange)`. This is the only possible error.
+/// On success, returns a decryption context. If an error happened during key decapsulation,
+/// returns `Err(HpkeError::DecapError)`. This is the only possible error.
 pub fn setup_receiver<A, Kdf, Kem>(
     mode: &OpModeR<Kem::Kex>,
     sk_recip: &<Kem::Kex as KeyExchange>::PrivateKey,

@@ -1,7 +1,7 @@
 use crate::{
     kdf::{labeled_extract, Kdf as KdfTrait, LabeledExpand},
     kex::{Deserializable, KeyExchange, Serializable},
-    util::KemSuiteId,
+    util::{enforce_equal_len, KemSuiteId},
     HpkeError,
 };
 
@@ -48,14 +48,12 @@ impl Deserializable for PublicKey {
     fn from_bytes(encoded: &[u8]) -> Result<Self, HpkeError> {
         // In order to parse as an uncompressed curve point, we first make sure the input length is
         // correct. This ensures we're receiving the uncompressed representation.
-        if encoded.len() != Self::OutputSize::to_usize() {
-            return Err(HpkeError::InvalidEncoding);
-        }
+        enforce_equal_len(Self::OutputSize::to_usize(), encoded.len())?;
 
         // Now just deserialize. The non-identity invariant is preserved because
         // PublicKey::from_sec1_bytes will error if it receives the point at infinity.
         let parsed =
-            p256::PublicKey::from_sec1_bytes(encoded).map_err(|_| HpkeError::InvalidEncoding)?;
+            p256::PublicKey::from_sec1_bytes(encoded).map_err(|_| HpkeError::ValidationError)?;
         Ok(PublicKey(parsed))
     }
 }
@@ -74,14 +72,12 @@ impl Serializable for PrivateKey {
 impl Deserializable for PrivateKey {
     fn from_bytes(encoded: &[u8]) -> Result<Self, HpkeError> {
         // Check the length
-        if encoded.len() != Self::OutputSize::to_usize() {
-            return Err(HpkeError::InvalidEncoding);
-        }
+        enforce_equal_len(Self::OutputSize::to_usize(), encoded.len())?;
 
         // Recall PrivateKeys aren't allowed to be 0 mod the curve order. Since p256::SecretKeys
         // are actually NonZeroScalars whenever feature="arithmetic", this invariant is checked for
         // us in NonZeroScalar::new()
-        let sk = p256::SecretKey::from_bytes(encoded).map_err(|_| HpkeError::InvalidEncoding)?;
+        let sk = p256::SecretKey::from_bytes(encoded).map_err(|_| HpkeError::ValidationError)?;
 
         Ok(PrivateKey(sk))
     }
@@ -118,10 +114,9 @@ impl KeyExchange for DhP256 {
         PublicKey(sk.0.public_key())
     }
 
-    /// Does the DH operation. Returns `HpkeError::InvalidKeyExchange` if and only if the DH
-    /// result was all zeros. This is required by the HPKE spec.
+    /// Does the DH operation. This function is infallible, thanks to invariants on its inputs.
     #[doc(hidden)]
-    fn kex(sk: &PrivateKey, pk: &PublicKey) -> Result<KexResult, HpkeError> {
+    fn kex(sk: &PrivateKey, pk: &PublicKey) -> Result<KexResult, ()> {
         // Do the DH operation
         let dh_res = diffie_hellman(sk.0.secret_scalar(), pk.0.as_affine());
 

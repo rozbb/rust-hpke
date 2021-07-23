@@ -1,4 +1,4 @@
-use crate::{aead::Aead, kdf::Kdf as KdfTrait, kem::Kem as KemTrait};
+use crate::{aead::Aead, kdf::Kdf as KdfTrait, kem::Kem as KemTrait, HpkeError};
 
 use byteorder::{BigEndian, ByteOrder};
 
@@ -74,4 +74,13 @@ macro_rules! concat_with_known_maxlen {
 pub(crate) fn write_to_buf<'a>(buf: &'a mut [u8], to_write: &[u8]) -> &'a mut [u8] {
     buf[..to_write.len()].copy_from_slice(to_write);
     &mut buf[to_write.len()..]
+}
+
+/// Takes two lengths and returns an `Err(HpkeError::IncorrectInputLength)` iff they don't match
+pub(crate) fn enforce_equal_len(expected_len: usize, given_len: usize) -> Result<(), HpkeError> {
+    if given_len != expected_len {
+        Err(HpkeError::IncorrectInputLength(expected_len, given_len))
+    } else {
+        Ok(())
+    }
 }

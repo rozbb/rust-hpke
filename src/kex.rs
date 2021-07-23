@@ -66,7 +66,7 @@ pub trait KeyExchange {
     fn sk_to_pk(sk: &Self::PrivateKey) -> Self::PublicKey;
 
     #[doc(hidden)]
-    fn kex(sk: &Self::PrivateKey, pk: &Self::PublicKey) -> Result<Self::KexResult, HpkeError>;
+    fn kex(sk: &Self::PrivateKey, pk: &Self::PublicKey) -> Result<Self::KexResult, ()>;
 
     #[doc(hidden)]
     fn derive_keypair<Kdf: KdfTrait>(

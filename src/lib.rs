@@ -131,34 +131,44 @@ pub use single_shot::{single_shot_open, single_shot_seal};
 
 //-------- Top-level types --------//
 
-/// Describes things that can go wrong when trying to seal or open a ciphertext
+/// Describes things that can go wrong in the HPKE protocol
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum HpkeError {
     /// The allowed number of message encryptions has been reached
     MessageLimitReached,
     /// An error occurred while opening a ciphertext
     OpenError,
-    /// An unspecified error occured during encryption
-    Encryption,
-    /// A key exchange input or output was invalid
-    InvalidKeyExchange,
+    /// An error occured while sealing a plaintext
+    SealError,
     /// The KDF was asked to output too many bytes
-    InvalidKdfLength,
-    /// The deserializer was given a bad encoding
-    InvalidEncoding,
+    KdfOutputTooLong,
+    /// An invalid input value was encountered
+    ValidationError,
+    /// Encapsulation failed
+    EncapError,
+    /// Decapsulation failed
+    DecapError,
+    /// An input isn't the right length. First value is the expected length, second is the given
+    /// length.
+    IncorrectInputLength(usize, usize),
 }
 
 impl core::fmt::Display for HpkeError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        let kind = match self {
-            HpkeError::MessageLimitReached => "Message limit reached",
-            HpkeError::OpenError => "Cannot open ciphertext",
-            HpkeError::Encryption => "Encryption failed",
-            HpkeError::InvalidKeyExchange => "Key exchange failed validation",
-            HpkeError::InvalidKdfLength => "Too many bytes requested from KDF",
-            HpkeError::InvalidEncoding => "Cannot deserialize byte sequence: invalid encoding",
-        };
-        f.write_str(kind)
+        match self {
+            HpkeError::MessageLimitReached => write!(f, "Message limit reached"),
+            HpkeError::OpenError => write!(f, "Failed to open ciphertext"),
+            HpkeError::SealError => write!(f, "Failed to seal plaintext"),
+            HpkeError::KdfOutputTooLong => write!(f, "Too many bytes requested from KDF"),
+            HpkeError::ValidationError => write!(f, "Input value is invalid"),
+            HpkeError::EncapError => write!(f, "Encapsulation failed"),
+            HpkeError::DecapError => write!(f, "Decapsulation failed"),
+            HpkeError::IncorrectInputLength(expected, given) => write!(
+                f,
+                "Incorrect input length. Expected {} bytes. Got {}.",
+                expected, given
+            ),
+        }
     }
 }
 

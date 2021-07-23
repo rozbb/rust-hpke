@@ -20,10 +20,9 @@ use rand_core::{CryptoRng, RngCore};
 ///
 /// Return Value
 /// ============
-/// Returns `Ok((encapped_key, auth_tag))` on success. If an error happened during key exchange,
-/// returns `Err(HpkeError::InvalidKeyExchange)`. If an unspecified error happened during
-/// encryption, returns `Err(HpkeError::Encryption)`. In this case, the contents of `plaintext` is
-/// undefined.
+/// Returns `Ok((encapped_key, auth_tag))` on success. If an error happened during key
+/// encapsulation, returns `Err(HpkeError::EncapError)`. If an error happened during encryption,
+/// returns `Err(HpkeError::SealError)`. In this case, the contents of `plaintext` is undefined.
 pub fn single_shot_seal<A, Kdf, Kem, R>(
     mode: &OpModeS<Kem::Kex>,
     pk_recip: &<Kem::Kex as KeyExchange>::PublicKey,
@@ -56,9 +55,9 @@ where
 ///
 /// Return Value
 /// ============
-/// Returns `Ok()` on success. If an error happened during key exchange, returns
-/// `Err(HpkeError::InvalidKeyExchange)`. If an unspecified error happened during decryption,
-/// returns `Err(HpkeError::Encryption)`. In this case, the contents of `ciphertext` is undefined.
+/// Returns `Ok()` on success. If an error happened during key decapsulation, returns
+/// `Err(HpkeError::DecapError)`. If an error happened during decryption, returns
+/// `Err(HpkeError::OpenError)`. In this case, the contents of `ciphertext` is undefined.
 pub fn single_shot_open<A, Kdf, Kem>(
     mode: &OpModeR<Kem::Kex>,
     sk_recip: &<Kem::Kex as KeyExchange>::PrivateKey,

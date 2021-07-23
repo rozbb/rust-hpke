@@ -141,7 +141,7 @@ pub(crate) type SharedSecret<Kem> =
 /// Return Value
 /// ============
 /// Returns a shared secret and encapped key on success. If an error happened during key exchange,
-/// returns `Err(HpkeError::InvalidKeyExchange)`.
+/// returns `Err(HpkeError::EncapError)`.
 pub(crate) fn encap_with_eph<Kem: KemTrait>(
     pk_recip: &KemPubkey<Kem>,
     sender_id_keypair: Option<&(KemPrivkey<Kem>, KemPubkey<Kem>)>,
@@ -151,7 +151,7 @@ pub(crate) fn encap_with_eph<Kem: KemTrait>(
     let suite_id = kem_suite_id::<Kem>();
 
     // Compute the shared secret from the ephemeral inputs
-    let kex_res_eph = Kem::Kex::kex(&sk_eph, pk_recip)?;
+    let kex_res_eph = Kem::Kex::kex(&sk_eph, pk_recip).map_err(|_| HpkeError::EncapError)?;
 
     // The encapped key is the ephemeral pubkey
     let encapped_key = {
@@ -175,7 +175,8 @@ pub(crate) fn encap_with_eph<Kem: KemTrait>(
 
         // We want to do an authed encap. Do KEX between the sender identity secret key and the
         // recipient's pubkey
-        let kex_res_identity = Kem::Kex::kex(sk_sender_id, pk_recip)?;
+        let kex_res_identity =
+            Kem::Kex::kex(sk_sender_id, pk_recip).map_err(|_| HpkeError::EncapError)?;
 
         // concatted_secrets = kex_res_eph || kex_res_identity
         // Same no-alloc concat trick as above
@@ -226,7 +227,7 @@ pub(crate) fn encap_with_eph<Kem: KemTrait>(
 /// Return Value
 /// ============
 /// Returns a shared secret and encapped key on success. If an error happened during key exchange,
-/// returns `Err(HpkeError::InvalidKeyExchange)`.
+/// returns `Err(HpkeError::EncapError)`.
 pub(crate) fn encap<Kem: KemTrait, R>(
     pk_recip: &KemPubkey<Kem>,
     sender_id_keypair: Option<&(KemPrivkey<Kem>, KemPubkey<Kem>)>,
@@ -268,7 +269,7 @@ where
 /// Return Value
 /// ============
 /// Returns a shared secret on success. If an error happened during key exchange, returns
-/// `Err(HpkeError::InvalidKeyExchange)`.
+/// `Err(HpkeError::DecapError)`.
 pub(crate) fn decap<Kem: KemTrait>(
     sk_recip: &KemPrivkey<Kem>,
     pk_sender_id: Option<&KemPubkey<Kem>>,
@@ -278,7 +279,8 @@ pub(crate) fn decap<Kem: KemTrait>(
     let suite_id = kem_suite_id::<Kem>();
 
     // Compute the shared secret from the ephemeral inputs
-    let kex_res_eph = Kem::Kex::kex(&sk_recip, &encapped_key.0)?;
+    let kex_res_eph =
+        Kem::Kex::kex(&sk_recip, &encapped_key.0).map_err(|_| HpkeError::DecapError)?;
 
     // Compute the sender's pubkey from their privkey
     let pk_recip = Kem::Kex::sk_to_pk(sk_recip);
@@ -299,7 +301,8 @@ pub(crate) fn decap<Kem: KemTrait>(
 
         // We want to do an authed encap. Do KEX between the sender identity secret key and the
         // recipient's pubkey
-        let kex_res_identity = Kem::Kex::kex(sk_recip, pk_sender_id)?;
+        let kex_res_identity =
+            Kem::Kex::kex(sk_recip, pk_sender_id).map_err(|_| HpkeError::DecapError)?;
 
         // concatted_secrets = kex_res_eph || kex_res_identity
         // Same no-alloc concat trick as above
