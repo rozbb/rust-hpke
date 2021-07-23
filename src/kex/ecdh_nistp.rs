@@ -10,7 +10,7 @@ use generic_array::{
     GenericArray,
 };
 use p256::{
-    elliptic_curve::{ecdh::diffie_hellman, sec1::UncompressedPointSize, Curve},
+    elliptic_curve::{ecdh::diffie_hellman, sec1::UncompressedPointSize, FieldSize},
     NistP256,
 };
 use zeroize::Zeroize;
@@ -61,7 +61,7 @@ impl Deserializable for PublicKey {
 impl Serializable for PrivateKey {
     // A fancy way of saying "32 bytes"
     // §7.1: Nsecret of DHKEM(P-256, HKDF-SHA256) is 32
-    type OutputSize = <NistP256 as Curve>::FieldSize;
+    type OutputSize = FieldSize<NistP256>;
 
     fn to_bytes(&self) -> GenericArray<u8, Self::OutputSize> {
         // SecretKeys already know how to convert to bytes
@@ -118,7 +118,7 @@ impl KeyExchange for DhP256 {
     #[doc(hidden)]
     fn kex(sk: &PrivateKey, pk: &PublicKey) -> Result<KexResult, KexError> {
         // Do the DH operation
-        let dh_res = diffie_hellman(sk.0.secret_scalar(), pk.0.as_affine());
+        let dh_res = diffie_hellman(sk.0.to_secret_scalar(), pk.0.as_affine());
 
         // §7.1.4: We MUST ensure that dh_res is not the point at infinity. This is already true,
         // though, since
