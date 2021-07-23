@@ -22,7 +22,7 @@ pub trait Kem: Sized {
     /// Requirements
     /// ============
     /// This keying material SHOULD have as many bits of entropy as the bit length of a secret key,
-    /// i.e., `8* Self::Kex::PrivateKey::size()`. For X25519 and P-256, this is 32 bytes of
+    /// i.e., `8 * Self::Kex::PrivateKey::size()`. For X25519 and P-256, this is 256 bits of
     /// entropy.
     fn derive_keypair(
         ikm: &[u8],

@@ -1,6 +1,6 @@
 use crate::{
     kdf::{labeled_extract, Kdf as KdfTrait, LabeledExpand},
-    kex::{Deserializable, KeyExchange, Serializable},
+    kex::{Deserializable, KexError, KeyExchange, Serializable},
     util::{enforce_equal_len, KemSuiteId},
     HpkeError,
 };
@@ -116,7 +116,7 @@ impl KeyExchange for DhP256 {
 
     /// Does the DH operation. This function is infallible, thanks to invariants on its inputs.
     #[doc(hidden)]
-    fn kex(sk: &PrivateKey, pk: &PublicKey) -> Result<KexResult, ()> {
+    fn kex(sk: &PrivateKey, pk: &PublicKey) -> Result<KexResult, KexError> {
         // Do the DH operation
         let dh_res = diffie_hellman(sk.0.secret_scalar(), pk.0.as_affine());
 

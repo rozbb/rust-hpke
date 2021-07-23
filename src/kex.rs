@@ -25,6 +25,11 @@ pub trait Deserializable: Serializable + Sized {
     fn from_bytes(encoded: &[u8]) -> Result<Self, HpkeError>;
 }
 
+#[doc(hidden)]
+/// Internal error type used to represent `KeyExchange::kex()` failing
+#[derive(Debug)]
+pub struct KexError;
+
 /// This trait captures the requirements of a key exchange mechanism. It must have a way to
 /// generate keypairs, perform the KEX computation, and serialize/deserialize KEX pubkeys. Most of
 /// this functionality is hidden, though. Use `Kem::derive_keypair` or `Kem::gen_keypair` to make
@@ -66,7 +71,7 @@ pub trait KeyExchange {
     fn sk_to_pk(sk: &Self::PrivateKey) -> Self::PublicKey;
 
     #[doc(hidden)]
-    fn kex(sk: &Self::PrivateKey, pk: &Self::PublicKey) -> Result<Self::KexResult, ()>;
+    fn kex(sk: &Self::PrivateKey, pk: &Self::PublicKey) -> Result<Self::KexResult, KexError>;
 
     #[doc(hidden)]
     fn derive_keypair<Kdf: KdfTrait>(

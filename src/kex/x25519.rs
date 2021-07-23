@@ -1,6 +1,6 @@
 use crate::{
     kdf::{labeled_extract, Kdf as KdfTrait, LabeledExpand},
-    kex::{Deserializable, KeyExchange, Serializable},
+    kex::{Deserializable, KexError, KeyExchange, Serializable},
     util::{enforce_equal_len, KemSuiteId},
     HpkeError,
 };
@@ -112,12 +112,12 @@ impl KeyExchange for X25519 {
     /// required by the HPKE spec. The error is converted into the appropriate higher-level error
     /// by the caller, i.e., `HpkeError::EncapError` or `HpkeError::DecapError`.
     #[doc(hidden)]
-    fn kex(sk: &PrivateKey, pk: &PublicKey) -> Result<KexResult, ()> {
+    fn kex(sk: &PrivateKey, pk: &PublicKey) -> Result<KexResult, KexError> {
         let res = sk.0.diffie_hellman(&pk.0);
         // "Senders and recipients MUST check whether the shared secret is the all-zero value
         // and abort if so"
         if res.as_bytes().ct_eq(&[0u8; 32]).into() {
-            Err(())
+            Err(KexError)
         } else {
             Ok(KexResult(res))
         }
