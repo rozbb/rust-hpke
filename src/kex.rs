@@ -5,7 +5,8 @@ use generic_array::{typenum::marker_traits::Unsigned, ArrayLength, GenericArray}
 #[cfg(feature = "serde_impls")]
 use serde::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
 
-// This is currently the maximum value of all of Npk, Ndh, and Nenc. It's achieved by P-521
+// This is currently the maximum value of all of Npk, Ndh, and Nenc. It's achieved by P-521 in
+// draft11 §7.1
 pub(crate) const MAX_PUBKEY_SIZE: usize = 133;
 
 /// Implemented by types that have a fixed-length byte representation
@@ -59,6 +60,7 @@ pub trait KeyExchange {
         + Deserializable
         + SerdeSerialize
         + for<'a> SerdeDeserialize<'a>;
+
     /// The key exchange's private key type. If you want to generate a keypair, see
     /// `Kem::gen_keypair` or `Kem::derive_keypair`
     #[cfg(not(feature = "serde_impls"))]

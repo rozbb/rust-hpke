@@ -25,7 +25,7 @@ pub struct KexResult(x25519_dalek::SharedSecret);
 
 // Oh I love me an excuse to break out type-level integers
 impl Serializable for PublicKey {
-    // §7.1: Nsecret of DHKEM(X25519, HKDF-SHA256) is 32
+    // draft11 §7.1: Npk of DHKEM(X25519, HKDF-SHA256) is 32
     type OutputSize = typenum::U32;
 
     // Dalek lets us convert pubkeys to [u8; 32]
@@ -49,6 +49,7 @@ impl Deserializable for PublicKey {
 }
 
 impl Serializable for PrivateKey {
+    // draft11 §7.1: Nsk of DHKEM(X25519, HKDF-SHA256) is 32
     type OutputSize = typenum::U32;
 
     // Dalek lets us convert scalars to [u8; 32]
@@ -80,11 +81,11 @@ impl Deserializable for PrivateKey {
 }
 
 impl Serializable for KexResult {
-    // §4.1: Ndh of DHKEM(X25519, HKDF-SHA256) is 32
+    // draft11 §4.1: Nsecret of DHKEM(X25519, HKDF-SHA256) is 32
     type OutputSize = typenum::U32;
 
-    // §4.1: Representation of the KEX result is the serialization of the x-coordinate. This is how
-    // X25519 represents things anyway, so we don't have to do anything special.
+    // draft11 §4.1: Representation of the KEX result is the serialization of the x-coordinate.
+    // This is how X25519 represents things anyway, so we don't have to do anything special.
     fn to_bytes(&self) -> GenericArray<u8, typenum::U32> {
         // Dalek lets us convert shared secrets to to [u8; 32]
         GenericArray::clone_from_slice(self.0.as_bytes())
@@ -123,10 +124,12 @@ impl KeyExchange for X25519 {
         }
     }
 
+    // draft11 §7.1.3
     // def DeriveKeyPair(ikm):
-    //   dkp_prk = LabeledExtract(zero(0), "dkp_prk", ikm)
-    //   sk = LabeledExpand(dkp_prk, "sk", zero(0), Nsk)
+    //   dkp_prk = LabeledExtract("", "dkp_prk", ikm)
+    //   sk = LabeledExpand(dkp_prk, "sk", "", Nsk)
     //   return (sk, pk(sk))
+
     /// Deterministically derives a keypair from the given input keying material and ciphersuite
     /// ID. The keying material SHOULD have as many bits of entropy as the bit length of a secret
     /// key, i.e., 256.

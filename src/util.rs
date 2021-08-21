@@ -9,8 +9,15 @@ pub(crate) type KemSuiteId = [u8; 5];
 /// KDF ID, and `ZZ` is the AEAD ID
 pub(crate) type FullSuiteId = [u8; 10];
 
-/// Constructs the `suite_id` used as binding context in all KDF functions in this file. Concretely,
-/// `suite_id = concat("HPKE", I2OSP(kem_id, 2), I2OSP(kdf_id, 2), I2OSP(aead_id, 2))`
+// draft11 §5.1
+// suite_id = concat(
+//   "HPKE",
+//   I2OSP(kem_id, 2),
+//   I2OSP(kdf_id, 2),
+//   I2OSP(aead_id, 2)
+// )
+
+/// Constructs the `suite_id` used as binding context in all functions in `setup` and `aead`
 pub(crate) fn full_suite_id<A, Kdf, Kem>() -> FullSuiteId
 where
     A: Aead,
@@ -28,8 +35,10 @@ where
     suite_id
 }
 
-/// Constructs the `suite_id` used as binding context in all KDF functions in this file.
-/// Concretely, `suite_id = concat("KEM", I2OSP(kem_id, 2))`
+// draft11 §4.1
+// suite_id = concat("KEM", I2OSP(kem_id, 2))
+
+/// Constructs the `suite_id` used as binding context in all functions in `kem`
 pub(crate) fn kem_suite_id<Kem: KemTrait>() -> KemSuiteId {
     // XX is the KEM ID
     let mut suite_id = *b"KEMXX";

@@ -76,7 +76,7 @@ pub(crate) trait OpMode<Kex: KeyExchange> {
 }
 
 impl<'a, Kex: KeyExchange> OpMode<Kex> for OpModeR<'a, Kex> {
-    // Defined in draft02 §5.0
+    // Defined in draft11 §5.0
     fn mode_id(&self) -> u8 {
         match self {
             OpModeR::Base => 0x00,
@@ -89,7 +89,7 @@ impl<'a, Kex: KeyExchange> OpMode<Kex> for OpModeR<'a, Kex> {
     // Returns the preshared key bytes if it's set in the mode, otherwise returns
     // [0u8; Kdf::HashImpl::OutputSize]
     fn get_psk_bytes(&self) -> &[u8] {
-        // default_psk = zero(0)
+        // draft11 §5.1: default_psk = ""
         match self {
             OpModeR::Psk(bundle) => &bundle.psk,
             OpModeR::AuthPsk(_, bundle) => &bundle.psk,
@@ -99,7 +99,7 @@ impl<'a, Kex: KeyExchange> OpMode<Kex> for OpModeR<'a, Kex> {
 
     // Returns the preshared key ID if it's set in the mode, otherwise returns the emtpy string
     fn get_psk_id(&self) -> &[u8] {
-        // default_pskID = zero(0)
+        // draft11 §5.1: default_psk_id = ""
         match self {
             OpModeR::Psk(p) => &p.psk_id,
             OpModeR::AuthPsk(_, p) => &p.psk_id,
@@ -111,7 +111,7 @@ impl<'a, Kex: KeyExchange> OpMode<Kex> for OpModeR<'a, Kex> {
 // I know there's a bunch of code reuse here, but it's not so much that I feel the need to abstract
 // something away
 impl<'a, Kex: KeyExchange> OpMode<Kex> for OpModeS<'a, Kex> {
-    // Defined in draft02 §5.0
+    // Defined in draft11 §5.0
     fn mode_id(&self) -> u8 {
         match self {
             OpModeS::Base => 0x00,
@@ -124,7 +124,7 @@ impl<'a, Kex: KeyExchange> OpMode<Kex> for OpModeS<'a, Kex> {
     // Returns the preshared key bytes if it's set in the mode, otherwise returns
     // [0u8; Kdf::Hashfunction::OutputSize]
     fn get_psk_bytes(&self) -> &[u8] {
-        // default_psk = zero(0)
+        // draft11 §5.1: default_psk = ""
         match self {
             OpModeS::Psk(bundle) => &bundle.psk,
             OpModeS::AuthPsk(_, bundle) => &bundle.psk,
@@ -134,7 +134,7 @@ impl<'a, Kex: KeyExchange> OpMode<Kex> for OpModeS<'a, Kex> {
 
     // Returns the preshared key ID if it's set in the mode, otherwise returns the emtpy string
     fn get_psk_id(&self) -> &[u8] {
-        // default_pskID = zero(0)
+        // draft11 §5.1: default_psk_id = ""
         match self {
             OpModeS::Psk(p) => &p.psk_id,
             OpModeS::AuthPsk(_, p) => &p.psk_id,

@@ -38,8 +38,26 @@ impl<K: KdfTrait> Drop for ExporterSecret<K> {
     }
 }
 
-// This is the KeySchedule function defined in draft02 §6.1. It runs a KDF over all the parameters,
-// inputs, and secrets, and spits out a key-nonce pair to be used for symmetric encryption
+// draft11 §5.1
+// def KeySchedule<ROLE>(mode, shared_secret, info, psk, psk_id):
+//   VerifyPSKInputs(mode, psk, psk_id)
+//
+//   psk_id_hash = LabeledExtract("", "psk_id_hash", psk_id)
+//   info_hash = LabeledExtract("", "info_hash", info)
+//   key_schedule_context = concat(mode, psk_id_hash, info_hash)
+//
+//   secret = LabeledExtract(shared_secret, "secret", psk)
+//
+//   key = LabeledExpand(secret, "key", key_schedule_context, Nk)
+//   base_nonce = LabeledExpand(secret, "base_nonce",
+//                              key_schedule_context, Nn)
+//   exporter_secret = LabeledExpand(secret, "exp",
+//                                   key_schedule_context, Nh)
+//
+//   return Context<ROLE>(key, base_nonce, 0, exporter_secret)
+
+// This is the KeySchedule function. It runs a KDF over all the parameters, inputs, and secrets,
+// and spits out a key-nonce pair to be used for symmetric encryption.
 fn derive_enc_ctx<A, Kdf, Kem, O>(
     mode: &O,
     shared_secret: SharedSecret<Kem>,
@@ -118,9 +136,12 @@ where
     AeadCtx::new(&key, base_nonce, exporter_secret)
 }
 
-// def SetupAuthPSKI(pkR, info, psk, psk_id, skI):
-//   shared_secret, enc = AuthEncap(pkR, skI)
-//   return enc, KeySchedule(mode_auth_psk, shared_secret, info, psk, psk_id)
+// draft11 §5.1.4:
+// def SetupAuthPSKS(pkR, info, psk, psk_id, skS):
+//   shared_secret, enc = AuthEncap(pkR, skS)
+//   return enc, KeyScheduleS(mode_auth_psk, shared_secret, info,
+//                            psk, psk_id)
+
 /// Initiates an encryption context to the given recipient public key
 ///
 /// Return Value
@@ -150,9 +171,12 @@ where
     Ok((encapped_key, enc_ctx.into()))
 }
 
-// def SetupAuthPSKR(enc, skR, info, psk, pskID, pkI):
-//   shared_secret = AuthDecap(enc, skR, pkI)
-//   return KeySchedule(mode_auth_psk, shared_secret, info, psk, psk_id)
+// draft11 §5.1.4
+// def SetupAuthPSKR(enc, skR, info, psk, psk_id, pkS):
+//   shared_secret = AuthDecap(enc, skR, pkS)
+//   return KeyScheduleR(mode_auth_psk, shared_secret, info,
+//                       psk, psk_id)
+
 /// Initiates a decryption context given a private key `sk_recip` and an encapsulated key which
 /// was encapsulated to `sk_recip`'s corresponding public key
 ///

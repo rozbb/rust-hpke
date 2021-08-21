@@ -41,7 +41,7 @@ impl BaseAeadInPlace for EmptyAeadImpl {
 impl BaseNewAead for EmptyAeadImpl {
     type KeySize = typenum::U0;
 
-    // Ignore the key, just return the object
+    // Ignore the key, since we can't encrypt or decrypt anything anyway. Just return the object
     fn new(_: &aead::Key<Self>) -> Self {
         EmptyAeadImpl
     }
@@ -55,6 +55,6 @@ pub struct ExportOnlyAead;
 impl Aead for ExportOnlyAead {
     type AeadImpl = EmptyAeadImpl;
 
-    // draft07 §7.3: Export-only
+    // draft11 §7.3: Export-only
     const AEAD_ID: u16 = 0xFFFF;
 }

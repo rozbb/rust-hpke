@@ -82,19 +82,24 @@ impl<A: Aead> Drop for AeadKey<A> {
 #[zeroize(drop)]
 struct Seq(u64);
 
-// def Context.IncrementSeq():
+// draft11 §5.2
+// def Context<ROLE>.IncrementSeq():
 //   if self.seq >= (1 << (8*Nn)) - 1:
-//     raise NonceOverflowError
+//     raise MessageLimitReachedError
 //   self.seq += 1
+//   self.seq += 1
+
 /// Increments the sequence counter. Returns `None` on overflow.
 fn increment_seq(seq: &Seq) -> Option<Seq> {
     // Try to add 1
     seq.0.checked_add(1).map(Seq)
 }
 
-// def Context.ComputeNonce(seq):
+// draft11 §5.2
+// def Context<ROLE>.ComputeNonce(seq):
 //   seq_bytes = I2OSP(seq, Nn)
-//   return xor(self.nonce, seq_bytes)
+//   return xor(self.base_nonce, seq_bytes)
+
 /// Derives a nonce from the base nonce and a "sequence number". The sequence number is treated as
 /// a big-endian integer with length equal to the nonce length.
 fn mix_nonce<A: Aead>(base_nonce: &AeadNonce<A>, seq: &Seq) -> AeadNonce<A> {
@@ -193,8 +198,11 @@ impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AeadCtx<A, Kdf, Kem> {
         }
     }
 
+    // draft11 §5.3
     // def Context.Export(exporter_context, L):
-    //   return LabeledExpand(self.exporter_secret, "sec", exporter_context, L)
+    //   return LabeledExpand(self.exporter_secret, "sec",
+    //                        exporter_context, L)
+
     /// Fills a given buffer with secret bytes derived from this encryption context. This value
     /// does not depend on sequence number, so it is constant for the lifetime of this context.
     ///
@@ -236,12 +244,14 @@ impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> Clone for AeadCtxR<A, Kdf, Kem> {
 }
 
 impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AeadCtxR<A, Kdf, Kem> {
-    // def Context.Open(aad, ct):
+    // draft11 §5.2
+    // def ContextR.Open(aad, ct):
     //   pt = Open(self.key, self.ComputeNonce(self.seq), aad, ct)
     //   if pt == OpenError:
     //     raise OpenError
     //   self.IncrementSeq()
     //   return pt
+
     /// Does a "detached open in place", meaning it overwrites `ciphertext` with the resulting
     /// plaintext, and takes the tag as a separate input.
     ///
@@ -318,10 +328,12 @@ impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> Clone for AeadCtxS<A, Kdf, Kem> {
 }
 
 impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AeadCtxS<A, Kdf, Kem> {
-    // def Context.Seal(aad, pt):
+    // draft11 §5.2
+    // def ContextS.Seal(aad, pt):
     //   ct = Seal(self.key, self.ComputeNonce(self.seq), aad, pt)
     //   self.IncrementSeq()
     //   return ct
+
     /// Does a "detached seal in place", meaning it overwrites `plaintext` with the resulting
     /// ciphertext, and returns the resulting authentication tag
     ///

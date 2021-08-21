@@ -57,7 +57,7 @@ pub trait Kem: Sized {
 use Kem as KemTrait;
 
 #[cfg(feature = "x25519-dalek")]
-/// Represents DHKEM(Curve25519, HKDF-SHA256)
+/// Represents DHKEM(X25519, HKDF-SHA256)
 pub struct X25519HkdfSha256 {}
 
 #[cfg(feature = "x25519-dalek")]
@@ -65,12 +65,12 @@ impl KemTrait for X25519HkdfSha256 {
     type Kex = crate::kex::X25519;
     type Kdf = crate::kdf::HkdfSha256;
 
-    // §7.1: DHKEM(X25519, HKDF-SHA256)
+    // draft11 §7.1: DHKEM(X25519, HKDF-SHA256)
     const KEM_ID: u16 = 0x0020;
 }
 
 #[cfg(feature = "p256")]
-/// Represents DHKEM(P256, HKDF-SHA256)
+/// Represents DHKEM(P-256, HKDF-SHA256)
 pub struct DhP256HkdfSha256 {}
 
 #[cfg(feature = "p256")]
@@ -78,7 +78,7 @@ impl KemTrait for DhP256HkdfSha256 {
     type Kex = crate::kex::DhP256;
     type Kdf = crate::kdf::HkdfSha256;
 
-    // §7.1: DHKEM(P-256, HKDF-SHA256)
+    // draft11 §7.1: DHKEM(P-256, HKDF-SHA256)
     const KEM_ID: u16 = 0x0010;
 }
 
@@ -115,25 +115,30 @@ impl<Kex: KeyExchange> Deserializable for EncappedKey<Kex> {
 pub(crate) type SharedSecret<Kem> =
     GenericArray<u8, <<<Kem as KemTrait>::Kdf as KdfTrait>::HashImpl as FixedOutput>::OutputSize>;
 
+// draft11 §4.1
 // def Encap(pkR):
 //   skE, pkE = GenerateKeyPair()
 //   dh = DH(skE, pkR)
-//   enc = Serialize(pkE)
+//   enc = SerializePublicKey(pkE)
 //
-//   pkRm = Serialize(pkR)
+//   pkRm = SerializePublicKey(pkR)
 //   kem_context = concat(enc, pkRm)
+//
+//   shared_secret = ExtractAndExpand(dh, kem_context)
+//   return shared_secret, enc
 //
 // def AuthEncap(pkR, skS):
 //   skE, pkE = GenerateKeyPair()
 //   dh = concat(DH(skE, pkR), DH(skS, pkR))
-//   enc = Serialize(pkE)
+//   enc = SerializePublicKey(pkE)
 //
-//   pkRm = Serialize(pkR)
-//   pkSm = Serialize(pk(skS))
+//   pkRm = SerializePublicKey(pkR)
+//   pkSm = SerializePublicKey(pk(skS))
 //   kem_context = concat(enc, pkRm, pkSm)
 //
 //   shared_secret = ExtractAndExpand(dh, kem_context)
 //   return shared_secret, enc
+
 /// Derives a shared secret that the owner of the recipient's pubkey can use to derive the same
 /// shared secret. If `sk_sender_id` is given, the sender's identity will be tied to the shared
 /// secret.
@@ -243,26 +248,28 @@ where
     encap_with_eph::<Kem>(pk_recip, sender_id_keypair, sk_eph)
 }
 
+// draft11 §4.1
 // def Decap(enc, skR):
-//   pkE = Deserialize(enc)
+//   pkE = DeserializePublicKey(enc)
 //   dh = DH(skR, pkE)
 //
-//   pkRm = Serialize(pk(skR))
+//   pkRm = SerializePublicKey(pk(skR))
 //   kem_context = concat(enc, pkRm)
 //
 //   shared_secret = ExtractAndExpand(dh, kem_context)
 //   return shared_secret
 //
 // def AuthDecap(enc, skR, pkS):
-//   pkE = Deserialize(enc)
+//   pkE = DeserializePublicKey(enc)
 //   dh = concat(DH(skR, pkE), DH(skR, pkS))
 //
-//   pkRm = Serialize(pk(skR))
-//   pkSm = Serialize(pkS)
+//   pkRm = SerializePublicKey(pk(skR))
+//   pkSm = SerializePublicKey(pkS)
 //   kem_context = concat(enc, pkRm, pkSm)
 //
 //   shared_secret = ExtractAndExpand(dh, kem_context)
 //   return shared_secret
+
 /// Derives a shared secret given the encapsulated key and the recipients secret key. If
 /// `pk_sender_id` is given, the sender's identity will be tied to the shared secret.
 ///

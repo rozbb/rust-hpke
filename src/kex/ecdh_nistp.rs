@@ -33,7 +33,7 @@ pub struct KexResult(p256::ecdh::SharedSecret);
 // Everything is serialized and deserialized in uncompressed form
 impl Serializable for PublicKey {
     // A fancy way of saying "65 bytes"
-    // §7.1: Npk of DHKEM(P-256, HKDF-SHA256) is 65
+    // draft11 §7.1: Npk of DHKEM(P-256, HKDF-SHA256) is 65
     type OutputSize = UncompressedPointSize<NistP256>;
 
     fn to_bytes(&self) -> GenericArray<u8, Self::OutputSize> {
@@ -60,7 +60,7 @@ impl Deserializable for PublicKey {
 
 impl Serializable for PrivateKey {
     // A fancy way of saying "32 bytes"
-    // §7.1: Nsecret of DHKEM(P-256, HKDF-SHA256) is 32
+    // draft11 §7.1: Nsk of DHKEM(P-256, HKDF-SHA256) is 32
     type OutputSize = FieldSize<NistP256>;
 
     fn to_bytes(&self) -> GenericArray<u8, Self::OutputSize> {
@@ -85,10 +85,10 @@ impl Deserializable for PrivateKey {
 
 // DH results are serialized in the same way as public keys
 impl Serializable for KexResult {
-    // §4.1: Ndh of DHKEM(P-256, HKDF-SHA256) is 32
+    // draft11 §4.1: Nsecret of DHKEM(P-256, HKDF-SHA256) is 32
     type OutputSize = typenum::U32;
 
-    // §4.1: Representation of the KEX result is the serialization of the x-coordinate
+    // draft11 §4.1: Representation of the KEX result is the serialization of the x-coordinate
     fn to_bytes(&self) -> GenericArray<u8, Self::OutputSize> {
         *self.0.as_bytes()
     }
@@ -120,8 +120,8 @@ impl KeyExchange for DhP256 {
         // Do the DH operation
         let dh_res = diffie_hellman(sk.0.to_secret_scalar(), pk.0.as_affine());
 
-        // §7.1.4: We MUST ensure that dh_res is not the point at infinity. This is already true,
-        // though, since
+        // draft 11 §7.1.4: We MUST ensure that dh_res is not the point at infinity. This is
+        // already true though, since:
         // 1. pk is not the point at infinity (due to the invariant we keep on PublicKeys)
         // 2. sk is not 0 mod p (due to the invariant we keep on PrivateKeys)
         // 3. Exponentiating a non-identity element of a prime-order group by something less than
@@ -130,24 +130,22 @@ impl KeyExchange for DhP256 {
         Ok(KexResult(dh_res))
     }
 
-    // From the DeriveKeyPair section
-    //   def DeriveKeyPair(ikm):
-    //     dkp_prk = LabeledExtract(
-    //       zero(0),
-    //       concat(I2OSP(kem_id, 2), "dkp_prk"),
-    //       ikm
-    //     )
-    //     sk = 0
-    //     counter = 0
-    //     while sk == 0 or sk >= order:
-    //       if counter > 255:
-    //         raise DeriveKeyPairError
-    //       bytes = LabeledExpand(dkp_prk, "candidate", I2OSP(counter, 1), Nsk)
-    //       bytes[0] = bytes[0] & bitmask
-    //       sk = OS2IP(bytes)
-    //       counter = counter + 1
-    //     return (sk, pk(sk))
+    // draft11 §7.1.3:
+    // def DeriveKeyPair(ikm):
+    //   dkp_prk = LabeledExtract("", "dkp_prk", ikm)
+    //   sk = 0
+    //   counter = 0
+    //   while sk == 0 or sk >= order:
+    //     if counter > 255:
+    //       raise DeriveKeyPairError
+    //     bytes = LabeledExpand(dkp_prk, "candidate",
+    //                           I2OSP(counter, 1), Nsk)
+    //     bytes[0] = bytes[0] & bitmask
+    //     sk = OS2IP(bytes)
+    //     counter = counter + 1
+    //   return (sk, pk(sk))
     //  where bitmask = 0xFF for P-256, i.e., the masking line is a no-op
+
     /// Deterministically derives a keypair from the given input keying material and ciphersuite
     /// ID. The keying material SHOULD have as many bits of entropy as the bit length of a secret
     /// key, i.e., 256.

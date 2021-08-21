@@ -7,8 +7,8 @@ use sha2::{Sha256, Sha384, Sha512};
 
 const VERSION_LABEL: &[u8] = b"HPKE-v1";
 
-// This is currently the maximum value of Nh. It is achieved by HKDF-SHA512.
-pub(crate) const MAX_DIGEST_SIZE: usize = 512;
+// This is currently the maximum value of Nh. It is achieved by HKDF-SHA512 in draft11 §7.2.
+pub(crate) const MAX_DIGEST_SIZE: usize = 64;
 
 // Pretty much all the KDF functionality is covered by the hkdf crate
 
@@ -28,12 +28,11 @@ use Kdf as KdfTrait;
 /// The implementation of HKDF-SHA256
 pub struct HkdfSha256 {}
 
-// The KDF_ID constant below come from §7.2
-
 impl KdfTrait for HkdfSha256 {
     #[doc(hidden)]
     type HashImpl = Sha256;
 
+    // draft11 §7.2: HKDF-SHA256
     const KDF_ID: u16 = 0x0001;
 }
 
@@ -44,6 +43,7 @@ impl KdfTrait for HkdfSha384 {
     #[doc(hidden)]
     type HashImpl = Sha384;
 
+    // draft11 §7.2: HKDF-SHA384
     const KDF_ID: u16 = 0x0002;
 }
 
@@ -54,13 +54,17 @@ impl KdfTrait for HkdfSha512 {
     #[doc(hidden)]
     type HashImpl = Sha512;
 
+    // draft11 §7.2: HKDF-SHA512
     const KDF_ID: u16 = 0x0003;
 }
 
-// def ExtractAndExpand(dh, kemContext):
-//   eae_prk = LabeledExtract(zero(0), "eae_prk", dh)
-//   shared_secret = LabeledExpand(eae_prk, "shared_secret", kemContext, Nsecret)
+// draft11 §4.1
+// def ExtractAndExpand(dh, kem_context):
+//   eae_prk = LabeledExtract("", "eae_prk", dh)
+//   shared_secret = LabeledExpand(eae_prk, "shared_secret",
+//                                 kem_context, Nsecret)
 //   return shared_secret
+
 /// Uses the given IKM to extract a secret, and then uses that secret, plus the given suite ID and
 /// info string, to expand to the output buffer
 pub(crate) fn extract_and_expand<Kem: KemTrait>(
@@ -69,16 +73,17 @@ pub(crate) fn extract_and_expand<Kem: KemTrait>(
     info: &[u8],
     out: &mut [u8],
 ) -> Result<(), hkdf::InvalidLength> {
-    // Construct the labels
     // Extract using given IKM
     let (_, hkdf_ctx) = labeled_extract::<Kem::Kdf>(&[], suite_id, b"eae_prk", ikm);
     // Expand using given info string
     hkdf_ctx.labeled_expand(suite_id, b"shared_secret", info, out)
 }
 
+// draft11 §4.0
 // def LabeledExtract(salt, label, ikm):
-//   labeled_ikm = concat("HPKE-05 ", suite_id, label, ikm)
+//   labeled_ikm = concat("HPKE-v1", suite_id, label, ikm)
 //   return Extract(salt, labeled_ikm)
+
 /// Returns the HKDF context derived from `(salt=salt, ikm="HPKE-05 "||suite_id||label||ikm)`
 pub(crate) fn labeled_extract<Kdf: KdfTrait>(
     salt: &[u8],
@@ -112,8 +117,10 @@ pub(crate) trait LabeledExpand {
 impl<D: Update + BlockInput + FixedOutput + Reset + Default + Clone> LabeledExpand
     for hkdf::Hkdf<D>
 {
+    // draft11 §4.0
     // def LabeledExpand(prk, label, info, L):
-    //   labeled_info = concat(I2OSP(L, 2), "HPKE-05 ", suite_id, label, info)
+    //   labeled_info = concat(I2OSP(L, 2), "HPKE-v1", suite_id,
+    //                         label, info)
     //   return Expand(prk, labeled_info, L)
     fn labeled_expand(
         &self,
