@@ -95,7 +95,7 @@ pub(crate) fn labeled_extract<Kdf: KdfTrait>(
     hkdf::Hkdf<Kdf::HashImpl>,
 ) {
     // Call HKDF-Extract with the IKM being the concatenation of all of the above
-    let mut extract_ctx = hkdf::HkdfExtract::<Kdf::HashImpl>::new(Some(&salt));
+    let mut extract_ctx = hkdf::HkdfExtract::<Kdf::HashImpl>::new(Some(salt));
     extract_ctx.input_ikm(VERSION_LABEL);
     extract_ctx.input_ikm(suite_id);
     extract_ctx.input_ikm(label);

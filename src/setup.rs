@@ -89,8 +89,8 @@ where
         concat_with_known_maxlen!(
             MAX_DIGEST_SIZE,
             &[mode.mode_id()],
-            &psk_id_hash.as_slice(),
-            &info_hash.as_slice()
+            psk_id_hash.as_slice(),
+            info_hash.as_slice()
         )
     };
     let sched_context = &sched_context_buf[..sched_context_size];
@@ -103,7 +103,7 @@ where
     // Instead of `secret` we derive an HKDF context which we run .expand() on to derive the
     // key-nonce pair.
     let (_, secret_ctx) =
-        labeled_extract::<Kdf>(&shared_secret, &suite_id, b"secret", &mode.get_psk_bytes());
+        labeled_extract::<Kdf>(&shared_secret, &suite_id, b"secret", mode.get_psk_bytes());
 
     // Empty fixed-size buffers
     let mut key = crate::aead::AeadKey::<A>::default();
@@ -114,13 +114,13 @@ where
     // 255x the digest size of the hash function. Since these values are fixed at compile time, we
     // don't worry about it.
     secret_ctx
-        .labeled_expand(&suite_id, b"key", &sched_context, key.0.as_mut_slice())
+        .labeled_expand(&suite_id, b"key", sched_context, key.0.as_mut_slice())
         .expect("aead key len is way too big");
     secret_ctx
         .labeled_expand(
             &suite_id,
             b"base_nonce",
-            &sched_context,
+            sched_context,
             base_nonce.0.as_mut_slice(),
         )
         .expect("nonce len is way too big");
@@ -128,7 +128,7 @@ where
         .labeled_expand(
             &suite_id,
             b"exp",
-            &sched_context,
+            sched_context,
             exporter_secret.0.as_mut_slice(),
         )
         .expect("exporter secret len is way too big");

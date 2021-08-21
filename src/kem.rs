@@ -197,7 +197,7 @@ pub(crate) fn encap_with_eph<Kem: KemTrait>(
         // HKDF-Expand call only errors if the output values are 255x the digest size of the hash
         // function. Since these values are fixed at compile time, we don't worry about it.
         let mut buf = <SharedSecret<Kem> as Default>::default();
-        extract_and_expand::<Kem>(&concatted_secrets, &suite_id, &kem_context, &mut buf)
+        extract_and_expand::<Kem>(concatted_secrets, &suite_id, kem_context, &mut buf)
             .expect("shared secret is way too big");
         buf
     } else {
@@ -216,7 +216,7 @@ pub(crate) fn encap_with_eph<Kem: KemTrait>(
         // digest size of the hash function. Since these values are fixed at compile time, we don't
         // worry about it.
         let mut buf = <SharedSecret<Kem> as Default>::default();
-        extract_and_expand::<Kem>(&kex_res_eph.to_bytes(), &suite_id, &kem_context, &mut buf)
+        extract_and_expand::<Kem>(&kex_res_eph.to_bytes(), &suite_id, kem_context, &mut buf)
             .expect("shared secret is way too big");
         buf
     };
@@ -287,7 +287,7 @@ pub(crate) fn decap<Kem: KemTrait>(
 
     // Compute the shared secret from the ephemeral inputs
     let kex_res_eph =
-        Kem::Kex::kex(&sk_recip, &encapped_key.0).map_err(|_| HpkeError::DecapError)?;
+        Kem::Kex::kex(sk_recip, &encapped_key.0).map_err(|_| HpkeError::DecapError)?;
 
     // Compute the sender's pubkey from their privkey
     let pk_recip = Kem::Kex::sk_to_pk(sk_recip);
@@ -326,9 +326,9 @@ pub(crate) fn decap<Kem: KemTrait>(
         // function. Since these values are fixed at compile time, we don't worry about it.
         let mut shared_secret = <SharedSecret<Kem> as Default>::default();
         extract_and_expand::<Kem>(
-            &concatted_secrets,
+            concatted_secrets,
             &suite_id,
-            &kem_context,
+            kem_context,
             &mut shared_secret,
         )
         .expect("shared secret is way too big");
@@ -352,7 +352,7 @@ pub(crate) fn decap<Kem: KemTrait>(
         extract_and_expand::<Kem>(
             &kex_res_eph.to_bytes(),
             &suite_id,
-            &kem_context,
+            kem_context,
             &mut shared_secret,
         )
         .expect("shared secret is way too big");

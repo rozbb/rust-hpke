@@ -91,8 +91,8 @@ impl<'a, Kex: KeyExchange> OpMode<Kex> for OpModeR<'a, Kex> {
     fn get_psk_bytes(&self) -> &[u8] {
         // draft11 §5.1: default_psk = ""
         match self {
-            OpModeR::Psk(bundle) => &bundle.psk,
-            OpModeR::AuthPsk(_, bundle) => &bundle.psk,
+            OpModeR::Psk(bundle) => bundle.psk,
+            OpModeR::AuthPsk(_, bundle) => bundle.psk,
             _ => &[],
         }
     }
@@ -101,8 +101,8 @@ impl<'a, Kex: KeyExchange> OpMode<Kex> for OpModeR<'a, Kex> {
     fn get_psk_id(&self) -> &[u8] {
         // draft11 §5.1: default_psk_id = ""
         match self {
-            OpModeR::Psk(p) => &p.psk_id,
-            OpModeR::AuthPsk(_, p) => &p.psk_id,
+            OpModeR::Psk(p) => p.psk_id,
+            OpModeR::AuthPsk(_, p) => p.psk_id,
             _ => &[],
         }
     }
@@ -126,8 +126,8 @@ impl<'a, Kex: KeyExchange> OpMode<Kex> for OpModeS<'a, Kex> {
     fn get_psk_bytes(&self) -> &[u8] {
         // draft11 §5.1: default_psk = ""
         match self {
-            OpModeS::Psk(bundle) => &bundle.psk,
-            OpModeS::AuthPsk(_, bundle) => &bundle.psk,
+            OpModeS::Psk(bundle) => bundle.psk,
+            OpModeS::AuthPsk(_, bundle) => bundle.psk,
             _ => &[],
         }
     }
@@ -136,8 +136,8 @@ impl<'a, Kex: KeyExchange> OpMode<Kex> for OpModeS<'a, Kex> {
     fn get_psk_id(&self) -> &[u8] {
         // draft11 §5.1: default_psk_id = ""
         match self {
-            OpModeS::Psk(p) => &p.psk_id,
-            OpModeS::AuthPsk(_, p) => &p.psk_id,
+            OpModeS::Psk(p) => p.psk_id,
+            OpModeS::AuthPsk(_, p) => p.psk_id,
             _ => &[],
         }
     }

@@ -276,7 +276,7 @@ impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AeadCtxR<A, Kdf, Kem> {
             let decrypt_res = self
                 .0
                 .encryptor
-                .decrypt_in_place_detached(&nonce.0, &aad, ciphertext, &tag.0);
+                .decrypt_in_place_detached(&nonce.0, aad, ciphertext, &tag.0);
 
             if decrypt_res.is_err() {
                 // Opening failed due to a bad tag
@@ -353,7 +353,7 @@ impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AeadCtxS<A, Kdf, Kem> {
             let tag = self
                 .0
                 .encryptor
-                .encrypt_in_place_detached(&nonce.0, &aad, plaintext)
+                .encrypt_in_place_detached(&nonce.0, aad, plaintext)
                 .map_err(|_| HpkeError::SealError)?;
 
             // Try to increment the sequence counter. If it fails, this was our last encryption.
