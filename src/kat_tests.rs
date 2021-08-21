@@ -105,13 +105,13 @@ struct MainTestVector {
 
 #[derive(Clone, Deserialize, Debug)]
 struct EncryptionTestVector {
-    #[serde(deserialize_with = "bytes_from_hex")]
+    #[serde(rename = "pt", deserialize_with = "bytes_from_hex")]
     plaintext: Vec<u8>,
     #[serde(deserialize_with = "bytes_from_hex")]
     aad: Vec<u8>,
     #[serde(rename = "nonce", deserialize_with = "bytes_from_hex")]
     _nonce: Vec<u8>,
-    #[serde(deserialize_with = "bytes_from_hex")]
+    #[serde(rename = "ct", deserialize_with = "bytes_from_hex")]
     ciphertext: Vec<u8>,
 }
 
@@ -328,7 +328,7 @@ macro_rules! dispatch_testcase {
 
 #[test]
 fn kat_test() {
-    let file = File::open("test-vectors-779d028.json").unwrap();
+    let file = File::open("test-vectors-5f503c5.json").unwrap();
     let tvs: Vec<MainTestVector> = serde_json::from_reader(file).unwrap();
 
     for tv in tvs.into_iter() {
