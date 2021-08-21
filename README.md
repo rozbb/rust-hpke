@@ -7,10 +7,15 @@ rust-hpke
 
 This is an **work-in-progress** implementation of the [HPKE](https://datatracker.ietf.org/doc/draft-irtf-cfrg-hpke/) hybrid encryption standard.
 
+Warning
+-------
+
+This code has not been audited in any sense of the word. Use at your own discretion.
+
 What it implements
 ------------------
 
-This implementation complies with the [HPKE draft](https://github.com/cfrg/draft-irtf-cfrg-hpke) up to and including commit [779d028](https://github.com/cfrg/draft-irtf-cfrg-hpke/tree/779d0285fe0e9407abb549ba0104e831d9677164).
+This implementation complies with the [HPKE draft](https://github.com/cfrg/draft-irtf-cfrg-hpke) up to and including commit [5f503c5](https://github.com/cfrg/draft-irtf-cfrg-hpke/tree/5f503c564da00b0687b3de75f1dfbdfc4079ad31).
 
 Here are all the primitives listed in the spec. The primitives with checked boxes are the ones that are implemented.
 
@@ -39,7 +44,7 @@ Feature flag list:
 * `x25519` - Enables X25519-based KEMs
 * `p256` - Enables NIST P-256-based KEMs
 * `serde_impls` - Includes implementations of `serde::Serialize` and `serde::Deserialize` for all `hpke::Serializable` and `hpke::Deserializable` types
-* `std` - Necessary for running known-answer tests. No need to enable unless you're debugging this crate.
+* `std` - Includes an implementation of `std::error::Error` for `HpkeError`
 
 For info on how to omit or include feature flags, see the [cargo docs on features](https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html#choosing-features).
 
@@ -93,8 +98,3 @@ Licensed under either of
  * MIT license ([LICENSE-MIT](LICENSE-MIT))
 
 at your option.
-
-Warning
--------
-
-This code has not been audited in any sense of the word. Use at your own discretion.
