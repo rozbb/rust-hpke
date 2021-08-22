@@ -3,7 +3,7 @@ use crate::{aead::Aead, kdf::Kdf as KdfTrait, kem::Kem as KemTrait, HpkeError};
 use byteorder::{BigEndian, ByteOrder};
 
 /// Represents a ciphersuite context. That's "KEMXX", where `XX` is the KEM ID
-pub(crate) type KemSuiteId = [u8; 5];
+pub type KemSuiteId = [u8; 5];
 
 /// Represents a ciphersuite context. That's "HPKEXXYYZZ", where `XX` is the KEM ID, `YY` is the
 /// KDF ID, and `ZZ` is the AEAD ID

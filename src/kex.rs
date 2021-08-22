@@ -64,8 +64,35 @@ pub trait KeyExchange {
     #[cfg(not(feature = "serde_impls"))]
     type PrivateKey: Clone + Serializable + Deserializable;
 
+    #[cfg(feature = "serde_impls")]
+    type EncappedKey: Clone
+        + Serializable
+        + Deserializable
+        + SerdeSerialize
+        + for<'a> SerdeDeserialize<'a>;
+    #[cfg(not(feature = "serde_impls"))]
+    type EncappedKey: Clone + Serializable + Deserializable;
+
+    #[doc(hidden)]
+    type EphemeralSecret;
+
+    #[doc(hidden)]
+    type DerivEphResult: Serializable;
+
     #[doc(hidden)]
     type KexResult: Serializable;
+
+    #[doc(hidden)]
+    fn derive_and_encap_eph(
+        sk: &Self::EphemeralSecret,
+        pk: &Self::PublicKey,
+    ) -> Result<(Self::DerivEphResult, Self::EncappedKey), KexError>;
+
+    #[doc(hidden)]
+    fn decap_eph(
+        sk: &Self::PrivateKey,
+        encapk: &Self::EncappedKey,
+    ) -> Result<Self::DerivEphResult, KexError>;
 
     #[doc(hidden)]
     fn sk_to_pk(sk: &Self::PrivateKey) -> Self::PublicKey;

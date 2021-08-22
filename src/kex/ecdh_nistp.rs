@@ -103,7 +103,29 @@ impl KeyExchange for DhP256 {
     #[doc(hidden)]
     type PrivateKey = PrivateKey;
     #[doc(hidden)]
+    type EphemeralSecret = PrivateKey;
+    #[doc(hidden)]
+    type EncappedKey = PublicKey;
+    #[doc(hidden)]
+    type DerivEphResult = KexResult;
+    #[doc(hidden)]
     type KexResult = KexResult;
+
+    #[doc(hidden)]
+    fn derive_and_encap_eph(
+        sk: &Self::EphemeralSecret,
+        pk: &Self::PublicKey,
+    ) -> Result<(Self::DerivEphResult, Self::EncappedKey), KexError> {
+        Ok((Self::kex(sk, pk)?, Self::sk_to_pk(sk)))
+    }
+
+    #[doc(hidden)]
+    fn decap_eph(
+        sk: &Self::PrivateKey,
+        encapk: &Self::EncappedKey,
+    ) -> Result<Self::DerivEphResult, KexError> {
+        Self::kex(sk, encapk)
+    }
 
     /// Converts an P256 private key to a public key
     #[doc(hidden)]

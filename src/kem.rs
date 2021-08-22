@@ -51,6 +51,12 @@ pub trait Kem: Sized {
         // Run derive_keypair using the KEM's KDF
         Self::derive_keypair(&ikm)
     }
+
+    // generate a random use as ephemeral secret
+    #[doc(hidden)]
+    fn gen_ephemeral_secret<R: CryptoRng + RngCore>(
+        csprng: &mut R,
+    ) -> <Self::Kex as KeyExchange>::EphemeralSecret;
 }
 
 // Kem is also used as a type parameter everywhere. To avoid confusion, alias it
@@ -67,6 +73,14 @@ impl KemTrait for X25519HkdfSha256 {
 
     // §7.1: DHKEM(X25519, HKDF-SHA256)
     const KEM_ID: u16 = 0x0020;
+
+    // In DH-based kem the ephemeral secret is a private key
+    #[doc(hidden)]
+    fn gen_ephemeral_secret<R: CryptoRng + RngCore>(
+        csprng: &mut R,
+    ) -> <Self::Kex as KeyExchange>::EphemeralSecret {
+        Self::gen_keypair(csprng).0
+    }
 }
 
 #[cfg(feature = "p256")]
@@ -80,21 +94,29 @@ impl KemTrait for DhP256HkdfSha256 {
 
     // §7.1: DHKEM(P-256, HKDF-SHA256)
     const KEM_ID: u16 = 0x0010;
+
+    // In DH-based kem the ephemeral secret is a private key
+    #[doc(hidden)]
+    fn gen_ephemeral_secret<R: CryptoRng + RngCore>(
+        csprng: &mut R,
+    ) -> <Self::Kex as KeyExchange>::EphemeralSecret {
+        Self::gen_keypair(csprng).0
+    }
 }
 
 /// Convenience types representing public/private keys corresponding to a KEM's underlying DH alg
 type KemPubkey<Kem> = <<Kem as KemTrait>::Kex as KeyExchange>::PublicKey;
 type KemPrivkey<Kem> = <<Kem as KemTrait>::Kex as KeyExchange>::PrivateKey;
+type KemEphSecret<Kem> = <<Kem as KemTrait>::Kex as KeyExchange>::EphemeralSecret;
 
 /// Holds the content of an encapsulated secret. This is what the receiver uses to derive the
 /// shared secret.
 // This just wraps a pubkey, because that's all an encapsulated key is in a DH-KEM
-pub struct EncappedKey<Kex: KeyExchange>(Kex::PublicKey);
+pub struct EncappedKey<Kex: KeyExchange>(Kex::EncappedKey);
 
-// EncappedKeys need to be serializable, since they're gonna be sent over the wire. Underlyingly,
-// they're just DH pubkeys, so we just serialize them the same way
+// EncappedKeys need to be serializable, since they're gonna be sent over the wire.
 impl<Kex: KeyExchange> Serializable for EncappedKey<Kex> {
-    type OutputSize = <Kex::PublicKey as Serializable>::OutputSize;
+    type OutputSize = <Kex::EncappedKey as Serializable>::OutputSize;
 
     // Pass to underlying to_bytes() impl
     fn to_bytes(&self) -> GenericArray<u8, Self::OutputSize> {
@@ -105,7 +127,7 @@ impl<Kex: KeyExchange> Serializable for EncappedKey<Kex> {
 impl<Kex: KeyExchange> Deserializable for EncappedKey<Kex> {
     // Pass to underlying from_bytes() impl
     fn from_bytes(encoded: &[u8]) -> Result<Self, HpkeError> {
-        let pubkey = <Kex::PublicKey as Deserializable>::from_bytes(encoded)?;
+        let pubkey = <Kex::EncappedKey as Deserializable>::from_bytes(encoded)?;
         Ok(EncappedKey(pubkey))
     }
 }
@@ -145,19 +167,14 @@ pub(crate) type SharedSecret<Kem> =
 pub(crate) fn encap_with_eph<Kem: KemTrait>(
     pk_recip: &KemPubkey<Kem>,
     sender_id_keypair: Option<&(KemPrivkey<Kem>, KemPubkey<Kem>)>,
-    sk_eph: KemPrivkey<Kem>,
+    sk_eph: KemEphSecret<Kem>,
 ) -> Result<(SharedSecret<Kem>, EncappedKey<Kem::Kex>), HpkeError> {
     // Put together the binding context used for all KDF operations
     let suite_id = kem_suite_id::<Kem>();
 
     // Compute the shared secret from the ephemeral inputs
-    let kex_res_eph = Kem::Kex::kex(&sk_eph, pk_recip).map_err(|_| HpkeError::EncapError)?;
-
-    // The encapped key is the ephemeral pubkey
-    let encapped_key = {
-        let pk_eph = Kem::Kex::sk_to_pk(&sk_eph);
-        EncappedKey(pk_eph)
-    };
+    let (kex_res_eph, encapped_key) =
+        Kem::Kex::derive_and_encap_eph(&sk_eph, pk_recip).map_err(|_| HpkeError::EncapError)?;
 
     // The shared secret is either gonna be kex_res_eph, or that along with another shared secret
     // that's tied to the sender's identity.
@@ -216,7 +233,7 @@ pub(crate) fn encap_with_eph<Kem: KemTrait>(
         buf
     };
 
-    Ok((shared_secret, encapped_key))
+    Ok((shared_secret, EncappedKey(encapped_key)))
 }
 
 /// Derives a shared secret and an ephemeral pubkey that the owner of the reciepint's pubkey can
@@ -238,7 +255,7 @@ where
     R: CryptoRng + RngCore,
 {
     // Generate a new ephemeral keypair
-    let (sk_eph, _) = Kem::gen_keypair(csprng);
+    let sk_eph = Kem::gen_ephemeral_secret(csprng);
     // Now pass to encap_with_eph
     encap_with_eph::<Kem>(pk_recip, sender_id_keypair, sk_eph)
 }
@@ -280,7 +297,7 @@ pub(crate) fn decap<Kem: KemTrait>(
 
     // Compute the shared secret from the ephemeral inputs
     let kex_res_eph =
-        Kem::Kex::kex(&sk_recip, &encapped_key.0).map_err(|_| HpkeError::DecapError)?;
+        Kem::Kex::decap_eph(&sk_recip, &encapped_key.0).map_err(|_| HpkeError::DecapError)?;
 
     // Compute the sender's pubkey from their privkey
     let pk_recip = Kem::Kex::sk_to_pk(sk_recip);

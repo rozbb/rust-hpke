@@ -80,7 +80,8 @@ pub(crate) fn extract_and_expand<Kem: KemTrait>(
 //   labeled_ikm = concat("HPKE-05 ", suite_id, label, ikm)
 //   return Extract(salt, labeled_ikm)
 /// Returns the HKDF context derived from `(salt=salt, ikm="HPKE-05 "||suite_id||label||ikm)`
-pub(crate) fn labeled_extract<Kdf: KdfTrait>(
+// need to be public to allow external implementation of kex::derive_keypair
+pub fn labeled_extract<Kdf: KdfTrait>(
     salt: &[u8],
     suite_id: &[u8],
     label: &[u8],
@@ -99,7 +100,8 @@ pub(crate) fn labeled_extract<Kdf: KdfTrait>(
 }
 
 // This trait only exists so I can implement it for hkdf::Hkdf
-pub(crate) trait LabeledExpand {
+// need to be public to allow external implementation of kex::derive_keypair
+pub trait LabeledExpand {
     fn labeled_expand(
         &self,
         suite_id: &[u8],

@@ -103,7 +103,7 @@ mod test_util;
 pub use generic_array;
 
 #[macro_use]
-mod util;
+pub mod util;
 
 pub mod aead;
 pub mod kdf;
