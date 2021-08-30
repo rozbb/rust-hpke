@@ -89,6 +89,7 @@ type KemPrivkey<Kem> = <<Kem as KemTrait>::Kex as KeyExchange>::PrivateKey;
 /// Holds the content of an encapsulated secret. This is what the receiver uses to derive the
 /// shared secret.
 // This just wraps a pubkey, because that's all an encapsulated key is in a DH-KEM
+#[derive(Clone)]
 pub struct EncappedKey<Kex: KeyExchange>(Kex::PublicKey);
 
 // EncappedKeys need to be serializable, since they're gonna be sent over the wire. Underlyingly,
