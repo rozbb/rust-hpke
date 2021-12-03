@@ -1,10 +1,10 @@
 use crate::{
     aead::{Aead, AeadTag, AesGcm128, AesGcm256, ChaCha20Poly1305, ExportOnlyAead},
     kdf::{HkdfSha256, HkdfSha384, HkdfSha512, Kdf as KdfTrait},
-    kem::{encap_with_eph, DhP256HkdfSha256, EncappedKey, Kem as KemTrait, X25519HkdfSha256},
-    kex::{Deserializable, KeyExchange, Serializable},
+    kem::{DhP256HkdfSha256, Kem as KemTrait, X25519HkdfSha256},
     op_mode::{OpModeR, PskBundle},
     setup::setup_receiver,
+    Deserializable, Serializable,
 };
 
 extern crate std;
@@ -127,17 +127,17 @@ struct ExporterTestVector {
 
 /// Returns a KEX keypair given the secret bytes and pubkey bytes, and ensures that the pubkey does
 /// indeed correspond to that secret key
-fn get_and_validate_keypair<Kex: KeyExchange>(
+fn get_and_validate_keypair<Kem: KemTrait>(
     sk_bytes: &[u8],
     pk_bytes: &[u8],
-) -> (Kex::PrivateKey, Kex::PublicKey) {
+) -> (Kem::PrivateKey, Kem::PublicKey) {
     // Deserialize the secret key
-    let sk = <Kex as KeyExchange>::PrivateKey::from_bytes(sk_bytes).unwrap();
+    let sk = <Kem as KemTrait>::PrivateKey::from_bytes(sk_bytes).unwrap();
     // Deserialize the pubkey
-    let pk = <Kex as KeyExchange>::PublicKey::from_bytes(pk_bytes).unwrap();
+    let pk = <Kem as KemTrait>::PublicKey::from_bytes(pk_bytes).unwrap();
 
     // Make sure the derived pubkey matches the given pubkey
-    assert_serializable_eq!(pk, Kex::sk_to_pk(&sk), "derived pubkey doesn't match given");
+    assert_serializable_eq!(pk, Kem::sk_to_pk(&sk), "derived pubkey doesn't match given");
 
     (sk, pk)
 }
@@ -145,12 +145,12 @@ fn get_and_validate_keypair<Kex: KeyExchange>(
 /// Constructs an `OpModeR` from the given components. The variant constructed is determined solely
 /// by `mode_id`. This will panic if there is insufficient data to construct the variants specified
 /// by `mode_id`.
-fn make_op_mode_r<'a, Kex: KeyExchange>(
+fn make_op_mode_r<'a, Kem: KemTrait>(
     mode_id: u8,
-    pk: Option<Kex::PublicKey>,
+    pk: Option<Kem::PublicKey>,
     psk: Option<&'a [u8]>,
     psk_id: Option<&'a [u8]>,
-) -> OpModeR<'a, Kex> {
+) -> OpModeR<'a, Kem> {
     // Deserialize the optional bundle
     let bundle = psk.map(|bytes| PskBundle {
         psk: bytes,
@@ -170,13 +170,13 @@ fn make_op_mode_r<'a, Kex: KeyExchange>(
 // This does all the legwork
 fn test_case<A: Aead, Kdf: KdfTrait, Kem: KemTrait>(tv: MainTestVector) {
     // First, deserialize all the relevant keys so we can reconstruct the encapped key
-    let recip_keypair = get_and_validate_keypair::<Kem::Kex>(&tv.sk_recip, &tv.pk_recip);
-    let eph_keypair = get_and_validate_keypair::<Kem::Kex>(&tv.sk_eph, &tv.pk_eph);
+    let recip_keypair = get_and_validate_keypair::<Kem>(&tv.sk_recip, &tv.pk_recip);
+    let eph_keypair = get_and_validate_keypair::<Kem>(&tv.sk_eph, &tv.pk_eph);
     let sender_keypair = {
         let pk_sender = &tv.pk_sender.as_ref();
         tv.sk_sender
             .as_ref()
-            .map(|sk| get_and_validate_keypair::<Kem::Kex>(sk, pk_sender.unwrap()))
+            .map(|sk| get_and_validate_keypair::<Kem>(sk, pk_sender.unwrap()))
     };
 
     // Make sure the keys match what we would've gotten had we used DeriveKeyPair
@@ -202,7 +202,7 @@ fn test_case<A: Aead, Kdf: KdfTrait, Kem: KemTrait>(tv: MainTestVector) {
     // Now derive the encapped key with the deterministic encap function, using all the inputs
     // above
     let (shared_secret, encapped_key) =
-        encap_with_eph::<Kem>(&pk_recip, sender_keypair.as_ref(), sk_eph.clone())
+        Kem::encap_with_eph(&pk_recip, sender_keypair.as_ref(), sk_eph.clone())
             .expect("encap failed");
 
     // Assert that the derived shared secret key is identical to the one provided
@@ -214,7 +214,8 @@ fn test_case<A: Aead, Kdf: KdfTrait, Kem: KemTrait>(tv: MainTestVector) {
 
     // Assert that the derived encapped key is identical to the one provided
     {
-        let provided_encapped_key = EncappedKey::<Kem::Kex>::from_bytes(&tv.encapped_key).unwrap();
+        let provided_encapped_key =
+            <Kem as KemTrait>::EncappedKey::from_bytes(&tv.encapped_key).unwrap();
         assert_serializable_eq!(
             encapped_key,
             provided_encapped_key,

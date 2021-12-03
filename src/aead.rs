@@ -1,10 +1,9 @@
 use crate::{
     kdf::{Kdf as KdfTrait, LabeledExpand},
     kem::Kem as KemTrait,
-    kex::{Deserializable, Serializable},
     setup::ExporterSecret,
     util::{enforce_equal_len, full_suite_id, FullSuiteId},
-    HpkeError,
+    Deserializable, HpkeError, Serializable,
 };
 
 use core::{default::Default, marker::PhantomData, u8};
@@ -392,10 +391,7 @@ pub use crate::aead::{aes_gcm::*, chacha20_poly1305::*, export_only::*};
 mod test {
     use super::{Aead, AeadTag, AesGcm128, AesGcm256, ChaCha20Poly1305, ExportOnlyAead, Seq};
     use crate::{
-        kdf::HkdfSha256,
-        kex::{Deserializable, Serializable},
-        test_util::gen_ctx_simple_pair,
-        HpkeError,
+        kdf::HkdfSha256, test_util::gen_ctx_simple_pair, Deserializable, HpkeError, Serializable,
     };
 
     use aead::AeadCore as BaseAeadCore;

@@ -14,7 +14,7 @@
 //! #     aead::ChaCha20Poly1305,
 //! #     kdf::HkdfSha384,
 //! #     kem::X25519HkdfSha256,
-//! #     EncappedKey, Kem as KemTrait, OpModeR, OpModeS, setup_receiver, setup_sender,
+//! #     Kem as KemTrait, OpModeR, OpModeS, setup_receiver, setup_sender,
 //! # };
 //! // These types define the ciphersuite Alice and Bob will be using
 //! type Kem = X25519HkdfSha256;
@@ -108,7 +108,7 @@ mod util;
 pub mod aead;
 pub mod kdf;
 pub mod kem;
-pub mod kex;
+mod kex;
 pub mod op_mode;
 pub mod setup;
 pub mod single_shot;
@@ -119,9 +119,7 @@ mod serde_impls;
 #[doc(inline)]
 pub use crate::aead::{AeadCtxR, AeadCtxS};
 #[doc(inline)]
-pub use kem::{EncappedKey, Kem};
-#[doc(inline)]
-pub use kex::{Deserializable, Serializable};
+pub use kem::Kem;
 #[doc(inline)]
 pub use op_mode::{OpModeR, OpModeS, PskBundle};
 #[doc(inline)]
@@ -130,6 +128,8 @@ pub use setup::{setup_receiver, setup_sender};
 pub use single_shot::{single_shot_open, single_shot_seal};
 
 //-------- Top-level types --------//
+
+use generic_array::{typenum::marker_traits::Unsigned, ArrayLength, GenericArray};
 
 /// Describes things that can go wrong in the HPKE protocol
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -170,6 +170,23 @@ impl core::fmt::Display for HpkeError {
             ),
         }
     }
+}
+
+/// Implemented by types that have a fixed-length byte representation
+pub trait Serializable {
+    type OutputSize: ArrayLength<u8>;
+
+    fn to_bytes(&self) -> GenericArray<u8, Self::OutputSize>;
+
+    /// Returns the size (in bytes) of this type when serialized
+    fn size() -> usize {
+        Self::OutputSize::to_usize()
+    }
+}
+
+/// Implemented by types that can be deserialized from byte representation
+pub trait Deserializable: Serializable + Sized {
+    fn from_bytes(encoded: &[u8]) -> Result<Self, HpkeError>;
 }
 
 // An Error type is just something that's Debug and Display

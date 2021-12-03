@@ -3,8 +3,7 @@
 
 use crate::{
     aead::{Aead, AeadTag},
-    kex::{self, KeyExchange},
-    Deserializable, EncappedKey, Serializable,
+    kem, kex, Deserializable, Serializable,
 };
 
 use digest::generic_array::GenericArray;
@@ -46,8 +45,7 @@ macro_rules! impl_serde_withparam {
     };
 }
 
-// Implement Serialize/Deserialize for EncappedKey<P: KeyExchange> and AeadTag<P: Aead>
-impl_serde_withparam!(EncappedKey, KeyExchange);
+// Implement Serialize/Deserialize for AeadTag<P: Aead>
 impl_serde_withparam!(AeadTag, Aead);
 
 // Implements serde::{Serialize, Deserialize} over a plain type t. This is almost identical to above.
@@ -91,11 +89,15 @@ macro_rules! impl_serde_noparam {
 impl_serde_noparam!(kex::x25519::PrivateKey);
 #[cfg(feature = "x25519")]
 impl_serde_noparam!(kex::x25519::PublicKey);
+#[cfg(feature = "x25519")]
+impl_serde_noparam!(kem::X25519HkdfSha256EncappedKey);
 
 #[cfg(feature = "p256")]
 impl_serde_noparam!(kex::ecdh_nistp::PrivateKey);
 #[cfg(feature = "p256")]
 impl_serde_noparam!(kex::ecdh_nistp::PublicKey);
+#[cfg(feature = "p256")]
+impl_serde_noparam!(kem::DhP256HkdfSha256EncappedKey);
 
 #[cfg(test)]
 mod test {
@@ -136,7 +138,6 @@ mod test {
                 type A = AesGcm128;
                 type Kdf = HkdfSha256;
                 type Kem = $kem;
-                type Kex = <Kem as KemTrait>::Kex;
 
                 let mut csprng = StdRng::from_entropy();
 
@@ -148,7 +149,7 @@ mod test {
                 let (sk_recip, pk_recip) = Kem::gen_keypair(&mut csprng);
                 let (psk, psk_id) = (gen_rand_buf(), gen_rand_buf());
                 let (sender_mode, _) =
-                    new_op_mode_pair::<Kex, Kdf>(OpModeKind::Base, &psk, &psk_id);
+                    new_op_mode_pair::<Kdf, Kem>(OpModeKind::Base, &psk, &psk_id);
                 let (encapped_key, mut aead_ctx) =
                     setup_sender::<A, Kdf, Kem, _>(&sender_mode, &pk_recip, &info[..], &mut csprng)
                         .unwrap();

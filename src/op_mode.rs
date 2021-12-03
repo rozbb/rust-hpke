@@ -1,4 +1,4 @@
-use crate::kex::KeyExchange;
+use crate::kem::Kem as KemTrait;
 
 /// Contains preshared key bytes and an identifier. This is intended to go inside an `OpModeR` or
 /// `OpModeS` struct.
@@ -14,21 +14,21 @@ pub struct PskBundle<'a> {
 /// their identity to the receiver. This authentication information can include a preshared key,
 /// the identity key of the sender, both, or neither. `Base` is the only mode that does not provide
 /// any kind of sender identity authentication.
-pub enum OpModeR<'a, Kex: KeyExchange> {
+pub enum OpModeR<'a, Kem: KemTrait> {
     /// No extra information included
     Base,
     /// A preshared key known to the sender and receiver
     Psk(PskBundle<'a>),
     /// The identity public key of the sender
-    Auth(Kex::PublicKey),
+    Auth(Kem::PublicKey),
     /// Both of the above
-    AuthPsk(Kex::PublicKey, PskBundle<'a>),
+    AuthPsk(Kem::PublicKey, PskBundle<'a>),
 }
 
 // Helper function for setup_receiver
-impl<'a, Kex: KeyExchange> OpModeR<'a, Kex> {
+impl<'a, Kem: KemTrait> OpModeR<'a, Kem> {
     /// Returns the sender's identity pubkey if it's specified
-    pub(crate) fn get_pk_sender_id(&self) -> Option<&Kex::PublicKey> {
+    pub(crate) fn get_pk_sender_id(&self) -> Option<&Kem::PublicKey> {
         match self {
             OpModeR::Auth(pk) => Some(pk),
             OpModeR::AuthPsk(pk, _) => Some(pk),
@@ -41,21 +41,21 @@ impl<'a, Kex: KeyExchange> OpModeR<'a, Kex> {
 /// their identity to the receiver. This authentication information can include a preshared key,
 /// the identity key of the sender, both, or neither. `Base` is the only mode that does not provide
 /// any kind of sender identity authentication.
-pub enum OpModeS<'a, Kex: KeyExchange> {
+pub enum OpModeS<'a, Kem: KemTrait> {
     /// No extra information included
     Base,
     /// A preshared key known to the sender and receiver
     Psk(PskBundle<'a>),
     /// The identity keypair of the sender
-    Auth((Kex::PrivateKey, Kex::PublicKey)),
+    Auth((Kem::PrivateKey, Kem::PublicKey)),
     /// Both of the above
-    AuthPsk((Kex::PrivateKey, Kex::PublicKey), PskBundle<'a>),
+    AuthPsk((Kem::PrivateKey, Kem::PublicKey), PskBundle<'a>),
 }
 
 // Helpers functions for setup_sender and testing
-impl<'a, Kex: KeyExchange> OpModeS<'a, Kex> {
+impl<'a, Kem: KemTrait> OpModeS<'a, Kem> {
     /// Returns the sender's identity pubkey if it's specified
-    pub(crate) fn get_sender_id_keypair(&self) -> Option<&(Kex::PrivateKey, Kex::PublicKey)> {
+    pub(crate) fn get_sender_id_keypair(&self) -> Option<&(Kem::PrivateKey, Kem::PublicKey)> {
         match self {
             OpModeS::Auth(keypair) => Some(keypair),
             OpModeS::AuthPsk(keypair, _) => Some(keypair),
@@ -66,7 +66,7 @@ impl<'a, Kex: KeyExchange> OpModeS<'a, Kex> {
 
 /// Represents the convenience methods necessary for getting default values out of the operation
 /// mode
-pub(crate) trait OpMode<Kex: KeyExchange> {
+pub(crate) trait OpMode<Kem: KemTrait> {
     /// Gets the mode ID (hardcoded based on variant)
     fn mode_id(&self) -> u8;
     /// If this is a PSK mode, returns the PSK. Otherwise returns the empty string.
@@ -75,7 +75,7 @@ pub(crate) trait OpMode<Kex: KeyExchange> {
     fn get_psk_id(&self) -> &[u8];
 }
 
-impl<'a, Kex: KeyExchange> OpMode<Kex> for OpModeR<'a, Kex> {
+impl<'a, Kem: KemTrait> OpMode<Kem> for OpModeR<'a, Kem> {
     // Defined in draft11 §5.0
     fn mode_id(&self) -> u8 {
         match self {
@@ -110,7 +110,7 @@ impl<'a, Kex: KeyExchange> OpMode<Kex> for OpModeR<'a, Kex> {
 
 // I know there's a bunch of code reuse here, but it's not so much that I feel the need to abstract
 // something away
-impl<'a, Kex: KeyExchange> OpMode<Kex> for OpModeS<'a, Kex> {
+impl<'a, Kem: KemTrait> OpMode<Kem> for OpModeS<'a, Kem> {
     // Defined in draft11 §5.0
     fn mode_id(&self) -> u8 {
         match self {

@@ -19,27 +19,20 @@ use hpke::{
     aead::{AeadTag, ChaCha20Poly1305},
     kdf::HkdfSha384,
     kem::X25519HkdfSha256,
-    kex::KeyExchange,
-    Deserializable, EncappedKey, Kem as KemTrait, OpModeR, OpModeS, Serializable,
+    Deserializable, Kem as KemTrait, OpModeR, OpModeS, Serializable,
 };
 
 use rand::{rngs::StdRng, SeedableRng};
 
-const INFO_STR: &'static [u8] = b"example session";
+const INFO_STR: &[u8] = b"example session";
 
 // These are the only algorithms we're gonna use for this example
 type Kem = X25519HkdfSha256;
 type Aead = ChaCha20Poly1305;
 type Kdf = HkdfSha384;
 
-// The KEX is dependent on the choice of KEM
-type Kex = <Kem as KemTrait>::Kex;
-
 // Initializes the server with a fresh keypair
-fn server_init() -> (
-    <Kex as KeyExchange>::PrivateKey,
-    <Kex as KeyExchange>::PublicKey,
-) {
+fn server_init() -> (<Kem as KemTrait>::PrivateKey, <Kem as KemTrait>::PublicKey) {
     let mut csprng = StdRng::from_entropy();
     Kem::gen_keypair(&mut csprng)
 }
@@ -49,8 +42,8 @@ fn server_init() -> (
 fn client_encrypt_msg(
     msg: &[u8],
     associated_data: &[u8],
-    server_pk: &<Kex as KeyExchange>::PublicKey,
-) -> (EncappedKey<Kex>, Vec<u8>, AeadTag<Aead>) {
+    server_pk: &<Kem as KemTrait>::PublicKey,
+) -> (<Kem as KemTrait>::EncappedKey, Vec<u8>, AeadTag<Aead>) {
     let mut csprng = StdRng::from_entropy();
 
     // Encapsulate a key and use the resulting shared secret to encrypt a message. The AEAD context
@@ -81,10 +74,10 @@ fn server_decrypt_msg(
 ) -> Vec<u8> {
     // We have to derialize the secret key, AEAD tag, and encapsulated pubkey. These fail if the
     // bytestrings are the wrong length.
-    let server_sk = <Kex as KeyExchange>::PrivateKey::from_bytes(server_sk_bytes)
+    let server_sk = <Kem as KemTrait>::PrivateKey::from_bytes(server_sk_bytes)
         .expect("could not deserialize server privkey!");
     let tag = AeadTag::<Aead>::from_bytes(tag_bytes).expect("could not deserialize AEAD tag!");
-    let encapped_key = EncappedKey::<Kex>::from_bytes(encapped_key_bytes)
+    let encapped_key = <Kem as KemTrait>::EncappedKey::from_bytes(encapped_key_bytes)
         .expect("could not deserialize the encapsulated pubkey!");
 
     // Decapsulate and derive the shared secret. This creates a shared AEAD context.

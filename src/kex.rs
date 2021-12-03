@@ -1,6 +1,4 @@
-use crate::{kdf::Kdf as KdfTrait, util::KemSuiteId, HpkeError};
-
-use generic_array::{typenum::marker_traits::Unsigned, ArrayLength, GenericArray};
+use crate::{kdf::Kdf as KdfTrait, util::KemSuiteId, Deserializable, HpkeError, Serializable};
 
 #[cfg(feature = "serde_impls")]
 use serde::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
@@ -8,23 +6,6 @@ use serde::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
 // This is currently the maximum value of all of Npk, Ndh, and Nenc. It's achieved by P-521 in
 // draft11 §7.1
 pub(crate) const MAX_PUBKEY_SIZE: usize = 133;
-
-/// Implemented by types that have a fixed-length byte representation
-pub trait Serializable {
-    type OutputSize: ArrayLength<u8>;
-
-    fn to_bytes(&self) -> GenericArray<u8, Self::OutputSize>;
-
-    /// Returns the size (in bytes) of this type when serialized
-    fn size() -> usize {
-        Self::OutputSize::to_usize()
-    }
-}
-
-/// Implemented by types that can be deserialized from byte representation
-pub trait Deserializable: Serializable + Sized {
-    fn from_bytes(encoded: &[u8]) -> Result<Self, HpkeError>;
-}
 
 #[doc(hidden)]
 /// Internal error type used to represent `KeyExchange::kex()` failing

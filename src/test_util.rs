@@ -2,9 +2,10 @@ use crate::{
     aead::{Aead, AeadCtx, AeadCtxR, AeadCtxS, AeadKey, AeadNonce},
     kdf::Kdf as KdfTrait,
     kem::Kem as KemTrait,
-    kex::{KeyExchange, Serializable},
+    kex::KeyExchange,
     op_mode::{OpModeR, OpModeS, PskBundle},
     setup::ExporterSecret,
+    Serializable,
 };
 
 use generic_array::GenericArray;
@@ -58,7 +59,7 @@ where
     };
 
     let ctx1 = AeadCtx::new(&key, base_nonce.clone(), exporter_secret.clone());
-    let ctx2 = AeadCtx::new(&key, base_nonce.clone(), exporter_secret.clone());
+    let ctx2 = AeadCtx::new(&key, base_nonce, exporter_secret);
 
     (ctx1.into(), ctx2.into())
 }
@@ -72,13 +73,13 @@ pub(crate) enum OpModeKind {
 }
 
 /// Makes an agreeing pair of `OpMode`s of the specified variant
-pub(crate) fn new_op_mode_pair<'a, Kex: KeyExchange, Kdf: KdfTrait>(
+pub(crate) fn new_op_mode_pair<'a, Kdf: KdfTrait, Kem: KemTrait>(
     kind: OpModeKind,
     psk: &'a [u8],
     psk_id: &'a [u8],
-) -> (OpModeS<'a, Kex>, OpModeR<'a, Kex>) {
+) -> (OpModeS<'a, Kem>, OpModeR<'a, Kem>) {
     let mut csprng = StdRng::from_entropy();
-    let (sk_sender, pk_sender) = kex_gen_keypair::<Kex, _>(&mut csprng);
+    let (sk_sender, pk_sender) = Kem::gen_keypair(&mut csprng);
     let psk_bundle = PskBundle { psk, psk_id };
 
     match kind {
@@ -134,12 +135,12 @@ pub(crate) fn aead_ctx_eq<A: Aead, Kdf: KdfTrait, Kem: KemTrait>(
         // Encrypt the plaintext
         let tag = sender
             .seal(&mut plaintext[..], &aad)
-            .expect(&format!("seal() #{} failed", i));
+            .unwrap_or_else(|_| panic!("seal() #{} failed", i));
         // Rename for clarity
         let mut ciphertext = plaintext;
 
         // Now to decrypt on the other side
-        if let Err(_) = receiver.open(&mut ciphertext[..], &aad, &tag) {
+        if receiver.open(&mut ciphertext[..], &aad, &tag).is_err() {
             // An error occurred in decryption. These encryption contexts are not identical.
             return false;
         }

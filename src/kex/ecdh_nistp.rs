@@ -1,8 +1,8 @@
 use crate::{
     kdf::{labeled_extract, Kdf as KdfTrait, LabeledExpand},
-    kex::{Deserializable, KexError, KeyExchange, Serializable},
+    kex::{KexError, KeyExchange},
     util::{enforce_equal_len, KemSuiteId},
-    HpkeError,
+    Deserializable, HpkeError, Serializable,
 };
 
 use generic_array::{
@@ -184,9 +184,10 @@ mod tests {
     use crate::{
         kex::{
             ecdh_nistp::{DhP256, PrivateKey, PublicKey},
-            Deserializable, KeyExchange, Serializable,
+            KeyExchange,
         },
         test_util::kex_gen_keypair,
+        Deserializable, Serializable,
     };
 
     use rand::{rngs::StdRng, SeedableRng};

@@ -1,8 +1,8 @@
 use crate::{
     kdf::{labeled_extract, Kdf as KdfTrait, LabeledExpand},
-    kex::{Deserializable, KexError, KeyExchange, Serializable},
+    kex::{KexError, KeyExchange},
     util::{enforce_equal_len, KemSuiteId},
-    HpkeError,
+    Deserializable, HpkeError, Serializable,
 };
 
 use generic_array::{
@@ -172,6 +172,13 @@ mod tests {
     impl PartialEq for PublicKey {
         fn eq(&self, other: &PublicKey) -> bool {
             self.0.as_bytes() == other.0.as_bytes()
+        }
+    }
+
+    // For KEM tests
+    impl core::fmt::Debug for PublicKey {
+        fn fmt(&self, f: &mut core::fmt::Formatter) -> Result<(), core::fmt::Error> {
+            write!(f, "PublicKey({:?})", self.0)
         }
     }
 

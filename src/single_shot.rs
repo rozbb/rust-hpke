@@ -1,8 +1,7 @@
 use crate::{
     aead::{Aead, AeadTag},
     kdf::Kdf as KdfTrait,
-    kem::{EncappedKey, Kem as KemTrait},
-    kex::KeyExchange,
+    kem::Kem as KemTrait,
     op_mode::{OpModeR, OpModeS},
     setup::{setup_receiver, setup_sender},
     HpkeError,
@@ -26,13 +25,13 @@ use rand_core::{CryptoRng, RngCore};
 /// encapsulation, returns `Err(HpkeError::EncapError)`. If an error happened during encryption,
 /// returns `Err(HpkeError::SealError)`. In this case, the contents of `plaintext` is undefined.
 pub fn single_shot_seal<A, Kdf, Kem, R>(
-    mode: &OpModeS<Kem::Kex>,
-    pk_recip: &<Kem::Kex as KeyExchange>::PublicKey,
+    mode: &OpModeS<Kem>,
+    pk_recip: &Kem::PublicKey,
     info: &[u8],
     plaintext: &mut [u8],
     aad: &[u8],
     csprng: &mut R,
-) -> Result<(EncappedKey<Kem::Kex>, AeadTag<A>), HpkeError>
+) -> Result<(Kem::EncappedKey, AeadTag<A>), HpkeError>
 where
     A: Aead,
     Kdf: KdfTrait,
@@ -63,9 +62,9 @@ where
 /// `Err(HpkeError::DecapError)`. If an error happened during decryption, returns
 /// `Err(HpkeError::OpenError)`. In this case, the contents of `ciphertext` is undefined.
 pub fn single_shot_open<A, Kdf, Kem>(
-    mode: &OpModeR<Kem::Kex>,
-    sk_recip: &<Kem::Kex as KeyExchange>::PrivateKey,
-    encapped_key: &EncappedKey<Kem::Kex>,
+    mode: &OpModeR<Kem>,
+    sk_recip: &Kem::PrivateKey,
+    encapped_key: &Kem::EncappedKey,
     info: &[u8],
     ciphertext: &mut [u8],
     aad: &[u8],
@@ -90,7 +89,7 @@ mod test {
         kdf::HkdfSha256,
         kem::Kem as KemTrait,
         op_mode::{OpModeR, OpModeS, PskBundle},
-        test_util::{gen_rand_buf, kex_gen_keypair},
+        test_util::gen_rand_buf,
     };
 
     use rand::{rngs::StdRng, SeedableRng};
@@ -105,7 +104,6 @@ mod test {
                 type A = $aead;
                 type Kdf = $kdf;
                 type Kem = $kem;
-                type Kex = <Kem as KemTrait>::Kex;
 
                 let msg = b"Good night, a-ding ding ding ding ding";
                 let aad = b"Five four three two one";
@@ -121,17 +119,17 @@ mod test {
                 };
 
                 // Generate the sender's and receiver's long-term keypairs
-                let (sk_sender_id, pk_sender_id) = kex_gen_keypair::<Kex, _>(&mut csprng);
-                let (sk_recip, pk_recip) = kex_gen_keypair::<Kex, _>(&mut csprng);
+                let (sk_sender_id, pk_sender_id) = Kem::gen_keypair(&mut csprng);
+                let (sk_recip, pk_recip) = Kem::gen_keypair(&mut csprng);
 
                 // Construct the sender's encryption context, and get an encapped key
-                let sender_mode = OpModeS::<Kex>::AuthPsk(
+                let sender_mode = OpModeS::<Kem>::AuthPsk(
                     (sk_sender_id, pk_sender_id.clone()),
                     psk_bundle.clone(),
                 );
 
                 // Use the encapped key to derive the reciever's encryption context
-                let receiver_mode = OpModeR::<Kex>::AuthPsk(pk_sender_id, psk_bundle);
+                let receiver_mode = OpModeR::<Kem>::AuthPsk(pk_sender_id, psk_bundle);
 
                 // Encrypt with the first context
                 let mut ciphertext = msg.clone();

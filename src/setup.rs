@@ -1,8 +1,7 @@
 use crate::{
     aead::{Aead, AeadCtx, AeadCtxR, AeadCtxS},
     kdf::{labeled_extract, Kdf as KdfTrait, LabeledExpand, MAX_DIGEST_SIZE},
-    kem::{self, EncappedKey, Kem as KemTrait, SharedSecret},
-    kex::KeyExchange,
+    kem::{Kem as KemTrait, SharedSecret},
     op_mode::{OpMode, OpModeR, OpModeS},
     util::full_suite_id,
     HpkeError,
@@ -67,7 +66,7 @@ where
     A: Aead,
     Kdf: KdfTrait,
     Kem: KemTrait,
-    O: OpMode<Kem::Kex>,
+    O: OpMode<Kem>,
 {
     // Put together the binding context used for all KDF operations
     let suite_id = full_suite_id::<A, Kdf, Kem>();
@@ -150,11 +149,11 @@ where
 /// encryption context. If an error happened during key encapsulation, returns
 /// `Err(HpkeError::EncapError)`. This is the only possible error.
 pub fn setup_sender<A, Kdf, Kem, R>(
-    mode: &OpModeS<Kem::Kex>,
-    pk_recip: &<Kem::Kex as KeyExchange>::PublicKey,
+    mode: &OpModeS<Kem>,
+    pk_recip: &Kem::PublicKey,
     info: &[u8],
     csprng: &mut R,
-) -> Result<(EncappedKey<Kem::Kex>, AeadCtxS<A, Kdf, Kem>), HpkeError>
+) -> Result<(Kem::EncappedKey, AeadCtxS<A, Kdf, Kem>), HpkeError>
 where
     A: Aead,
     Kdf: KdfTrait,
@@ -164,7 +163,7 @@ where
     // If the identity key is set, use it
     let sender_id_keypair = mode.get_sender_id_keypair();
     // Do the encapsulation
-    let (shared_secret, encapped_key) = kem::encap::<Kem, _>(pk_recip, sender_id_keypair, csprng)?;
+    let (shared_secret, encapped_key) = Kem::encap(pk_recip, sender_id_keypair, csprng)?;
     // Use everything to derive an encryption context
     let enc_ctx = derive_enc_ctx::<_, _, Kem, _>(mode, shared_secret, info);
 
@@ -185,9 +184,9 @@ where
 /// On success, returns a decryption context. If an error happened during key decapsulation,
 /// returns `Err(HpkeError::DecapError)`. This is the only possible error.
 pub fn setup_receiver<A, Kdf, Kem>(
-    mode: &OpModeR<Kem::Kex>,
-    sk_recip: &<Kem::Kex as KeyExchange>::PrivateKey,
-    encapped_key: &EncappedKey<Kem::Kex>,
+    mode: &OpModeR<Kem>,
+    sk_recip: &Kem::PrivateKey,
+    encapped_key: &Kem::EncappedKey,
     info: &[u8],
 ) -> Result<AeadCtxR<A, Kdf, Kem>, HpkeError>
 where
@@ -196,9 +195,9 @@ where
     Kem: KemTrait,
 {
     // If the identity key is set, use it
-    let pk_sender_id: Option<&<Kem::Kex as KeyExchange>::PublicKey> = mode.get_pk_sender_id();
+    let pk_sender_id: Option<&Kem::PublicKey> = mode.get_pk_sender_id();
     // Do the decapsulation
-    let shared_secret = kem::decap::<Kem>(sk_recip, pk_sender_id, encapped_key)?;
+    let shared_secret = Kem::decap(sk_recip, pk_sender_id, encapped_key)?;
 
     // Use everything to derive an encryption context
     let enc_ctx = derive_enc_ctx::<_, _, Kem, _>(mode, shared_secret, info);
@@ -222,7 +221,6 @@ mod test {
                 type A = $aead_ty;
                 type Kdf = $kdf_ty;
                 type Kem = $kem_ty;
-                type Kex = <Kem as KemTrait>::Kex;
 
                 let mut csprng = StdRng::from_entropy();
 
@@ -241,7 +239,7 @@ mod test {
                     // Generate a mutually agreeing op mode pair
                     let (psk, psk_id) = (gen_rand_buf(), gen_rand_buf());
                     let (sender_mode, receiver_mode) =
-                        new_op_mode_pair::<Kex, Kdf>(*op_mode_kind, &psk, &psk_id);
+                        new_op_mode_pair::<Kdf, Kem>(*op_mode_kind, &psk, &psk_id);
 
                     // Construct the sender's encryption context, and get an encapped key
                     let (encapped_key, mut aead_ctx1) = setup_sender::<A, Kdf, Kem, _>(
@@ -276,7 +274,6 @@ mod test {
                 type A = $aead;
                 type Kdf = $kdf;
                 type Kem = $kem;
-                type Kex = <Kem as KemTrait>::Kex;
 
                 let mut csprng = StdRng::from_entropy();
 
@@ -288,7 +285,7 @@ mod test {
                 // Generate a mutually agreeing op mode pair
                 let (psk, psk_id) = (gen_rand_buf(), gen_rand_buf());
                 let (sender_mode, receiver_mode) =
-                    new_op_mode_pair::<Kex, Kdf>(OpModeKind::Base, &psk, &psk_id);
+                    new_op_mode_pair::<Kdf, Kem>(OpModeKind::Base, &psk, &psk_id);
 
                 // Construct the sender's encryption context normally
                 let (encapped_key, sender_ctx) =

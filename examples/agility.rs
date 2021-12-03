@@ -16,9 +16,8 @@ use hpke::{
     aead::{Aead, AeadCtxR, AeadCtxS, AeadTag, AesGcm128, AesGcm256, ChaCha20Poly1305},
     kdf::{HkdfSha256, HkdfSha384, HkdfSha512, Kdf as KdfTrait},
     kem::{DhP256HkdfSha256, Kem as KemTrait, X25519HkdfSha256},
-    kex::{Deserializable, KeyExchange, Serializable},
     op_mode::PskBundle,
-    setup_receiver, setup_sender, EncappedKey, HpkeError, OpModeR, OpModeS,
+    setup_receiver, setup_sender, Deserializable, HpkeError, OpModeR, OpModeS, Serializable,
 };
 
 use rand::{rngs::StdRng, CryptoRng, RngCore, SeedableRng};
@@ -102,7 +101,7 @@ impl AeadAlg {
         Ok(res)
     }
 
-    fn to_u16(&self) -> u16 {
+    fn to_u16(self) -> u16 {
         match self {
             AeadAlg::AesGcm128 => 0x01,
             AeadAlg::AesGcm256 => 0x02,
@@ -138,7 +137,7 @@ impl KdfAlg {
         Ok(res)
     }
 
-    fn to_u16(&self) -> u16 {
+    fn to_u16(self) -> u16 {
         match self {
             KdfAlg::HkdfSha256 => 0x01,
             KdfAlg::HkdfSha384 => 0x02,
@@ -219,7 +218,7 @@ impl KemAlg {
         Ok(res)
     }
 
-    fn to_u16(&self) -> u16 {
+    fn to_u16(self) -> u16 {
         match self {
             KemAlg::DhP256HkdfSha256 => 0x10,
             KemAlg::DhP384HkdfSha384 => 0x11,
@@ -252,37 +251,37 @@ impl KemAlg {
 
 #[derive(Clone)]
 struct AgilePublicKey {
-    kex_alg: KexAlg,
+    kem_alg: KemAlg,
     pubkey_bytes: Vec<u8>,
 }
 
 impl AgilePublicKey {
-    fn try_lift<Kex: KeyExchange>(&self) -> Result<Kex::PublicKey, AgileHpkeError> {
-        Kex::PublicKey::from_bytes(&self.pubkey_bytes).map_err(|e| e.into())
+    fn try_lift<Kem: KemTrait>(&self) -> Result<Kem::PublicKey, AgileHpkeError> {
+        Kem::PublicKey::from_bytes(&self.pubkey_bytes).map_err(|e| e.into())
     }
 }
 
 #[derive(Clone)]
 struct AgileEncappedKey {
-    kex_alg: KexAlg,
+    kem_alg: KemAlg,
     encapped_key_bytes: Vec<u8>,
 }
 
 impl AgileEncappedKey {
-    fn try_lift<Kex: KeyExchange>(&self) -> Result<EncappedKey<Kex>, AgileHpkeError> {
-        EncappedKey::<Kex>::from_bytes(&self.encapped_key_bytes).map_err(|e| e.into())
+    fn try_lift<Kem: KemTrait>(&self) -> Result<Kem::EncappedKey, AgileHpkeError> {
+        Kem::EncappedKey::from_bytes(&self.encapped_key_bytes).map_err(|e| e.into())
     }
 }
 
 #[derive(Clone)]
 struct AgilePrivateKey {
-    kex_alg: KexAlg,
+    kem_alg: KemAlg,
     privkey_bytes: Vec<u8>,
 }
 
 impl AgilePrivateKey {
-    fn try_lift<Kex: KeyExchange>(&self) -> Result<Kex::PrivateKey, AgileHpkeError> {
-        Kex::PrivateKey::from_bytes(&self.privkey_bytes).map_err(|e| e.into())
+    fn try_lift<Kem: KemTrait>(&self) -> Result<Kem::PrivateKey, AgileHpkeError> {
+        Kem::PrivateKey::from_bytes(&self.privkey_bytes).map_err(|e| e.into())
     }
 }
 
@@ -290,17 +289,15 @@ impl AgilePrivateKey {
 struct AgileKeypair(AgilePrivateKey, AgilePublicKey);
 
 impl AgileKeypair {
-    fn try_lift<Kex: KeyExchange>(
-        &self,
-    ) -> Result<(Kex::PrivateKey, Kex::PublicKey), AgileHpkeError> {
-        Ok((self.0.try_lift::<Kex>()?, self.1.try_lift::<Kex>()?))
+    fn try_lift<Kem: KemTrait>(&self) -> Result<(Kem::PrivateKey, Kem::PublicKey), AgileHpkeError> {
+        Ok((self.0.try_lift::<Kem>()?, self.1.try_lift::<Kem>()?))
     }
 
     fn validate(&self) -> Result<(), AgileHpkeError> {
-        if self.0.kex_alg != self.1.kex_alg {
+        if self.0.kem_alg != self.1.kem_alg {
             Err(AgileHpkeError::AlgMismatch(
-                (self.0.kex_alg.name(), "AgileKeypair::privkey"),
-                (self.1.kex_alg.name(), "AgileKeypair::pubkey"),
+                (self.0.kem_alg.name(), "AgileKeypair::privkey"),
+                (self.1.kem_alg.name(), "AgileKeypair::pubkey"),
             ))
         } else {
             Ok(())
@@ -310,18 +307,18 @@ impl AgileKeypair {
 
 // The leg work of agile_gen_keypair
 macro_rules! do_gen_keypair {
-    ($kem_ty:ty, $kex_alg:ident, $csprng:ident) => {{
+    ($kem_ty:ty, $kem_alg:ident, $csprng:ident) => {{
         type Kem = $kem_ty;
-        let kex_alg = $kex_alg;
+        let kem_alg = $kem_alg;
         let csprng = $csprng;
 
         let (sk, pk) = Kem::gen_keypair(csprng);
         let sk = AgilePrivateKey {
-            kex_alg: kex_alg,
+            kem_alg,
             privkey_bytes: sk.to_bytes().to_vec(),
         };
         let pk = AgilePublicKey {
-            kex_alg: kex_alg,
+            kem_alg,
             pubkey_bytes: pk.to_bytes().to_vec(),
         };
 
@@ -330,28 +327,27 @@ macro_rules! do_gen_keypair {
 }
 
 fn agile_gen_keypair<R: CryptoRng + RngCore>(kem_alg: KemAlg, csprng: &mut R) -> AgileKeypair {
-    let kex_alg = kem_alg.kex_alg();
     match kem_alg {
-        KemAlg::X25519HkdfSha256 => do_gen_keypair!(X25519HkdfSha256, kex_alg, csprng),
-        KemAlg::DhP256HkdfSha256 => do_gen_keypair!(DhP256HkdfSha256, kex_alg, csprng),
+        KemAlg::X25519HkdfSha256 => do_gen_keypair!(X25519HkdfSha256, kem_alg, csprng),
+        KemAlg::DhP256HkdfSha256 => do_gen_keypair!(DhP256HkdfSha256, kem_alg, csprng),
         _ => unimplemented!(),
     }
 }
 
 #[derive(Clone)]
 struct AgileOpModeR<'a> {
-    kex_alg: KexAlg,
+    kem_alg: KemAlg,
     op_mode_ty: AgileOpModeRTy<'a>,
 }
 
 impl<'a> AgileOpModeR<'a> {
-    fn try_lift<Kex: KeyExchange, Kdf: KdfTrait>(self) -> Result<OpModeR<'a, Kex>, AgileHpkeError> {
+    fn try_lift<Kem: KemTrait, Kdf: KdfTrait>(self) -> Result<OpModeR<'a, Kem>, AgileHpkeError> {
         let res = match self.op_mode_ty {
             AgileOpModeRTy::Base => OpModeR::Base,
             AgileOpModeRTy::Psk(bundle) => OpModeR::Psk(bundle.try_lift::<Kdf>()?),
-            AgileOpModeRTy::Auth(pk) => OpModeR::Auth(pk.try_lift::<Kex>()?),
+            AgileOpModeRTy::Auth(pk) => OpModeR::Auth(pk.try_lift::<Kem>()?),
             AgileOpModeRTy::AuthPsk(pk, bundle) => {
-                OpModeR::AuthPsk(pk.try_lift::<Kex>()?, bundle.try_lift::<Kdf>()?)
+                OpModeR::AuthPsk(pk.try_lift::<Kem>()?, bundle.try_lift::<Kdf>()?)
             }
         };
 
@@ -361,22 +357,22 @@ impl<'a> AgileOpModeR<'a> {
     fn validate(&self) -> Result<(), AgileHpkeError> {
         match &self.op_mode_ty {
             AgileOpModeRTy::Auth(pk) => {
-                if pk.kex_alg != self.kex_alg {
+                if pk.kem_alg != self.kem_alg {
                     return Err(AgileHpkeError::AlgMismatch(
-                        (self.kex_alg.name(), "AgileOpModeR::kex_alg"),
+                        (self.kem_alg.name(), "AgileOpModeR::kex_alg"),
                         (
-                            pk.kex_alg.name(),
+                            pk.kem_alg.name(),
                             "AgileOpModeR::op_mode_ty::AgilePublicKey::kex_alg",
                         ),
                     ));
                 }
             }
             AgileOpModeRTy::AuthPsk(pk, _) => {
-                if pk.kex_alg != self.kex_alg {
+                if pk.kem_alg != self.kem_alg {
                     return Err(AgileHpkeError::AlgMismatch(
-                        (self.kex_alg.name(), "AgileOpModeR::kex_alg"),
+                        (self.kem_alg.name(), "AgileOpModeR::kex_alg"),
                         (
-                            pk.kex_alg.name(),
+                            pk.kem_alg.name(),
                             "AgileOpModeR::op_mode_ty::AgilePublicKey::kex_alg",
                         ),
                     ));
@@ -399,18 +395,18 @@ enum AgileOpModeRTy<'a> {
 
 #[derive(Clone)]
 struct AgileOpModeS<'a> {
-    kex_alg: KexAlg,
+    kem_alg: KemAlg,
     op_mode_ty: AgileOpModeSTy<'a>,
 }
 
 impl<'a> AgileOpModeS<'a> {
-    fn try_lift<Kex: KeyExchange, Kdf: KdfTrait>(self) -> Result<OpModeS<'a, Kex>, AgileHpkeError> {
+    fn try_lift<Kem: KemTrait, Kdf: KdfTrait>(self) -> Result<OpModeS<'a, Kem>, AgileHpkeError> {
         let res = match self.op_mode_ty {
             AgileOpModeSTy::Base => OpModeS::Base,
             AgileOpModeSTy::Psk(bundle) => OpModeS::Psk(bundle.try_lift::<Kdf>()?),
-            AgileOpModeSTy::Auth(keypair) => OpModeS::Auth(keypair.try_lift::<Kex>()?),
+            AgileOpModeSTy::Auth(keypair) => OpModeS::Auth(keypair.try_lift::<Kem>()?),
             AgileOpModeSTy::AuthPsk(keypair, bundle) => {
-                OpModeS::AuthPsk(keypair.try_lift::<Kex>()?, bundle.try_lift::<Kdf>()?)
+                OpModeS::AuthPsk(keypair.try_lift::<Kem>()?, bundle.try_lift::<Kdf>()?)
             }
         };
 
@@ -421,11 +417,11 @@ impl<'a> AgileOpModeS<'a> {
         match &self.op_mode_ty {
             AgileOpModeSTy::Auth(keypair) => {
                 keypair.validate()?;
-                if keypair.0.kex_alg != self.kex_alg {
+                if keypair.0.kem_alg != self.kem_alg {
                     return Err(AgileHpkeError::AlgMismatch(
-                        (self.kex_alg.name(), "AgileOpModeS::kex_alg"),
+                        (self.kem_alg.name(), "AgileOpModeS::kex_alg"),
                         (
-                            keypair.0.kex_alg.name(),
+                            keypair.0.kem_alg.name(),
                             "AgileOpModeS::op_mode_ty::AgilePrivateKey::kex_alg",
                         ),
                     ));
@@ -433,11 +429,11 @@ impl<'a> AgileOpModeS<'a> {
             }
             AgileOpModeSTy::AuthPsk(keypair, _) => {
                 keypair.validate()?;
-                if keypair.0.kex_alg != self.kex_alg {
+                if keypair.0.kem_alg != self.kem_alg {
                     return Err(AgileHpkeError::AlgMismatch(
-                        (self.kex_alg.name(), "AgileOpModeS::kex_alg"),
+                        (self.kem_alg.name(), "AgileOpModeS::kex_alg"),
                         (
-                            keypair.0.kex_alg.name(),
+                            keypair.0.kem_alg.name(),
                             "AgileOpModeS::op_mode_ty::AgilePrivateKey::kex_alg",
                         ),
                     ));
@@ -549,13 +545,13 @@ where
     Kem: 'static + KemTrait,
     R: CryptoRng + RngCore,
 {
-    let kex_alg = mode.kex_alg;
-    let mode = mode.clone().try_lift::<Kem::Kex, Kdf>()?;
-    let pk_recip = pk_recip.try_lift::<Kem::Kex>()?;
+    let kem_alg = mode.kem_alg;
+    let mode = mode.clone().try_lift::<Kem, Kdf>()?;
+    let pk_recip = pk_recip.try_lift::<Kem>()?;
 
     let (encapped_key, aead_ctx) = setup_sender::<A, Kdf, Kem, _>(&mode, &pk_recip, info, csprng)?;
     let encapped_key = AgileEncappedKey {
-        kex_alg,
+        kem_alg,
         encapped_key_bytes: encapped_key.to_bytes().to_vec(),
     };
 
@@ -573,22 +569,16 @@ fn agile_setup_sender<R: CryptoRng + RngCore>(
 ) -> Result<(AgileEncappedKey, Box<dyn AgileAeadCtxS>), AgileHpkeError> {
     // Do all the necessary validation
     mode.validate()?;
-    if mode.kex_alg != pk_recip.kex_alg {
+    if mode.kem_alg != pk_recip.kem_alg {
         return Err(AgileHpkeError::AlgMismatch(
-            (mode.kex_alg.name(), "mode::kex_alg"),
-            (pk_recip.kex_alg.name(), "pk_recip::kex_alg"),
+            (mode.kem_alg.name(), "mode::kex_alg"),
+            (pk_recip.kem_alg.name(), "pk_recip::kex_alg"),
         ));
     }
-    if kem_alg.kex_alg() != mode.kex_alg {
+    if kem_alg != mode.kem_alg {
         return Err(AgileHpkeError::AlgMismatch(
-            (kem_alg.kex_alg().name(), "kem_alg::kex_alg"),
-            (mode.kex_alg.name(), "mode::kex_alg"),
-        ));
-    }
-    if pk_recip.kex_alg != mode.kex_alg {
-        return Err(AgileHpkeError::AlgMismatch(
-            (pk_recip.kex_alg.name(), "pk_recip::kex_alg"),
-            (mode.kex_alg.name(), "mode::kex_alg"),
+            (kem_alg.name(), "kem_alg::kex_alg"),
+            (mode.kem_alg.name(), "mode::kex_alg"),
         ));
     }
 
@@ -632,9 +622,9 @@ where
     Kdf: 'static + KdfTrait,
     Kem: 'static + KemTrait,
 {
-    let mode = mode.clone().try_lift::<Kem::Kex, Kdf>()?;
-    let (sk_recip, _) = recip_keypair.try_lift::<Kem::Kex>()?;
-    let encapped_key = encapped_key.try_lift::<Kem::Kex>()?;
+    let mode = mode.clone().try_lift::<Kem, Kdf>()?;
+    let (sk_recip, _) = recip_keypair.try_lift::<Kem>()?;
+    let encapped_key = encapped_key.try_lift::<Kem>()?;
 
     let aead_ctx = setup_receiver::<A, Kdf, Kem>(&mode, &sk_recip, &encapped_key, info)?;
     Ok(Box::new(aead_ctx))
@@ -652,22 +642,22 @@ fn agile_setup_receiver(
     // Do all the necessary validation
     recip_keypair.validate()?;
     mode.validate()?;
-    if mode.kex_alg != recip_keypair.0.kex_alg {
+    if mode.kem_alg != recip_keypair.0.kem_alg {
         return Err(AgileHpkeError::AlgMismatch(
-            (mode.kex_alg.name(), "mode::kex_alg"),
-            (recip_keypair.0.kex_alg.name(), "recip_keypair::kex_alg"),
+            (mode.kem_alg.name(), "mode::kex_alg"),
+            (recip_keypair.0.kem_alg.name(), "recip_keypair::kex_alg"),
         ));
     }
-    if kem_alg.kex_alg() != mode.kex_alg {
+    if kem_alg != mode.kem_alg {
         return Err(AgileHpkeError::AlgMismatch(
-            (kem_alg.kex_alg().name(), "kem_alg::kex_alg"),
-            (mode.kex_alg.name(), "mode::kex_alg"),
+            (kem_alg.name(), "kem_alg::kex_alg"),
+            (mode.kem_alg.name(), "mode::kex_alg"),
         ));
     }
-    if recip_keypair.0.kex_alg != encapped_key.kex_alg {
+    if recip_keypair.0.kem_alg != encapped_key.kem_alg {
         return Err(AgileHpkeError::AlgMismatch(
-            (recip_keypair.0.kex_alg.name(), "recip_keypair::kex_alg"),
-            (encapped_key.kex_alg.name(), "encapped_key::kex_alg"),
+            (recip_keypair.0.kem_alg.name(), "recip_keypair::kex_alg"),
+            (encapped_key.kem_alg.name(), "encapped_key::kex_alg"),
         ));
     }
 
@@ -718,7 +708,6 @@ fn main() {
         for &kem_alg in supported_kem_algs {
             for &kdf_alg in supported_kdf_algs {
                 let info = b"we're gonna agile him in his clavicle";
-                let kex_alg = kem_alg.kex_alg();
 
                 // Make a random sender keypair and PSK bundle
                 let sender_keypair = agile_gen_keypair(kem_alg, &mut csprng);
@@ -734,15 +723,14 @@ fn main() {
 
                 // Make two agreeing OpModes (AuthPsk is the most complicated, so we're just using
                 // that).
-                let op_mode_s_ty =
-                    AgileOpModeSTy::AuthPsk(sender_keypair.clone(), psk_bundle.clone());
+                let op_mode_s_ty = AgileOpModeSTy::AuthPsk(sender_keypair.clone(), psk_bundle);
                 let op_mode_s = AgileOpModeS {
-                    kex_alg,
+                    kem_alg,
                     op_mode_ty: op_mode_s_ty,
                 };
-                let op_mode_r_ty = AgileOpModeRTy::AuthPsk(sender_keypair.1, psk_bundle.clone());
+                let op_mode_r_ty = AgileOpModeRTy::AuthPsk(sender_keypair.1, psk_bundle);
                 let op_mode_r = AgileOpModeR {
-                    kex_alg,
+                    kem_alg,
                     op_mode_ty: op_mode_r_ty,
                 };
 
