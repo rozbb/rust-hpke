@@ -1,4 +1,4 @@
-use crate::{kdf::Kdf as KdfTrait, util::KemSuiteId, Deserializable, HpkeError, Serializable};
+use crate::{kdf::Kdf as KdfTrait, util::KemSuiteId, Deserializable, Serializable};
 
 #[cfg(feature = "serde_impls")]
 use serde::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
@@ -8,15 +8,14 @@ use serde::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
 pub(crate) const MAX_PUBKEY_SIZE: usize = 133;
 
 #[doc(hidden)]
-/// Internal error type used to represent `KeyExchange::kex()` failing
+/// Internal error type used to represent `DhKeyExchange::dh()` failing
 #[derive(Debug)]
-pub struct KexError;
+pub struct DhError;
 
-/// This trait captures the requirements of a key exchange mechanism. It must have a way to
-/// generate keypairs, perform the KEX computation, and serialize/deserialize KEX pubkeys. Most of
-/// this functionality is hidden, though. Use `Kem::derive_keypair` or `Kem::gen_keypair` to make
-/// a keypair.
-pub trait KeyExchange {
+/// This trait captures the requirements of a Diffie-Hellman key exchange mechanism. It must have a
+/// way to generate keypairs, perform the Diffie-Hellman operation, and serialize/deserialize
+/// pubkeys. This is built into a KEM in `kem/dhkem.rs`.
+pub trait DhKeyExchange {
     // Public and private keys need to implement serde::{Serialize, Deserialize} if the serde_impls
     // feature is set. So double up all the definitions: one with serde and one without.
 
@@ -47,15 +46,20 @@ pub trait KeyExchange {
     #[cfg(not(feature = "serde_impls"))]
     type PrivateKey: Clone + Serializable + Deserializable;
 
+    /// The result of a DH operation
     #[doc(hidden)]
     type KexResult: Serializable;
 
+    /// Computes the public key of a given private key
     #[doc(hidden)]
     fn sk_to_pk(sk: &Self::PrivateKey) -> Self::PublicKey;
 
+    /// Does the Diffie-Hellman operation
     #[doc(hidden)]
-    fn kex(sk: &Self::PrivateKey, pk: &Self::PublicKey) -> Result<Self::KexResult, KexError>;
+    fn dh(sk: &Self::PrivateKey, pk: &Self::PublicKey) -> Result<Self::KexResult, DhError>;
 
+    /// Computes a keypair given key material `ikm` of sufficient entropy. See
+    /// [`crate::kem::Kem::derive_keypair`] for discussion of entropy.
     #[doc(hidden)]
     fn derive_keypair<Kdf: KdfTrait>(
         suite_id: &KemSuiteId,

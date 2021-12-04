@@ -1,6 +1,6 @@
 use crate::{
+    dhkex::{DhError, DhKeyExchange},
     kdf::{labeled_extract, Kdf as KdfTrait, LabeledExpand},
-    kex::{KexError, KeyExchange},
     util::{enforce_equal_len, KemSuiteId},
     Deserializable, HpkeError, Serializable,
 };
@@ -16,14 +16,17 @@ use subtle::ConstantTimeEq;
 /// An X25519 public key
 #[derive(Clone)]
 pub struct PublicKey(x25519_dalek::PublicKey);
+
+// The underlying type is zeroize-on-drop
 /// An X25519 private key
 #[derive(Clone)]
 pub struct PrivateKey(x25519_dalek::StaticSecret);
 
-// A bare DH computation result
+// The underlying type is zeroize-on-drop
+/// A bare DH computation result
 pub struct KexResult(x25519_dalek::SharedSecret);
 
-// Oh I love me an excuse to break out type-level integers
+// Oh I love an excuse to break out type-level integers
 impl Serializable for PublicKey {
     // draft11 §7.1: Npk of DHKEM(X25519, HKDF-SHA256) is 32
     type OutputSize = typenum::U32;
@@ -95,7 +98,7 @@ impl Serializable for KexResult {
 /// Represents ECDH functionality over the X25519 group
 pub struct X25519 {}
 
-impl KeyExchange for X25519 {
+impl DhKeyExchange for X25519 {
     #[doc(hidden)]
     type PublicKey = PublicKey;
     #[doc(hidden)]
@@ -113,12 +116,12 @@ impl KeyExchange for X25519 {
     /// required by the HPKE spec. The error is converted into the appropriate higher-level error
     /// by the caller, i.e., `HpkeError::EncapError` or `HpkeError::DecapError`.
     #[doc(hidden)]
-    fn kex(sk: &PrivateKey, pk: &PublicKey) -> Result<KexResult, KexError> {
+    fn dh(sk: &PrivateKey, pk: &PublicKey) -> Result<KexResult, DhError> {
         let res = sk.0.diffie_hellman(&pk.0);
         // "Senders and recipients MUST check whether the shared secret is the all-zero value
         // and abort if so"
         if res.as_bytes().ct_eq(&[0u8; 32]).into() {
-            Err(KexError)
+            Err(DhError)
         } else {
             Ok(KexResult(res))
         }
@@ -153,11 +156,11 @@ impl KeyExchange for X25519 {
 #[cfg(test)]
 mod tests {
     use crate::{
-        kex::{
+        dhkex::{
             x25519::{PrivateKey, PublicKey, X25519},
-            Deserializable, KeyExchange, Serializable,
+            Deserializable, DhKeyExchange, Serializable,
         },
-        test_util::kex_gen_keypair,
+        test_util::dhkex_gen_keypair,
     };
     use rand::{rngs::StdRng, RngCore, SeedableRng};
 
@@ -191,14 +194,14 @@ mod tests {
 
         // Fill a buffer with randomness
         let orig_bytes = {
-            let mut buf = vec![0u8; <Kex as KeyExchange>::PublicKey::size()];
+            let mut buf = vec![0u8; <Kex as DhKeyExchange>::PublicKey::size()];
             csprng.fill_bytes(buf.as_mut_slice());
             buf
         };
 
         // Make a pubkey with those random bytes. Note, that from_bytes() does not clamp the input
         // bytes. This is why this test passes.
-        let pk = <Kex as KeyExchange>::PublicKey::from_bytes(&orig_bytes).unwrap();
+        let pk = <Kex as DhKeyExchange>::PublicKey::from_bytes(&orig_bytes).unwrap();
         let pk_bytes = pk.to_bytes();
 
         // See if the re-serialized bytes are the same as the input
@@ -213,12 +216,12 @@ mod tests {
         let mut csprng = StdRng::from_entropy();
 
         // Make a random keypair and serialize it
-        let (sk, pk) = kex_gen_keypair::<Kex, _>(&mut csprng);
+        let (sk, pk) = dhkex_gen_keypair::<Kex, _>(&mut csprng);
         let (sk_bytes, pk_bytes) = (sk.to_bytes(), pk.to_bytes());
 
         // Now deserialize those bytes
-        let new_sk = <Kex as KeyExchange>::PrivateKey::from_bytes(&sk_bytes).unwrap();
-        let new_pk = <Kex as KeyExchange>::PublicKey::from_bytes(&pk_bytes).unwrap();
+        let new_sk = <Kex as DhKeyExchange>::PrivateKey::from_bytes(&sk_bytes).unwrap();
+        let new_pk = <Kex as DhKeyExchange>::PublicKey::from_bytes(&pk_bytes).unwrap();
 
         // See if the deserialized values are the same as the initial ones
         assert!(new_sk == sk, "private key doesn't serialize correctly");

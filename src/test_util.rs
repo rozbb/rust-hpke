@@ -1,8 +1,8 @@
 use crate::{
     aead::{Aead, AeadCtx, AeadCtxR, AeadCtxS, AeadKey, AeadNonce},
+    dhkex::DhKeyExchange,
     kdf::Kdf as KdfTrait,
     kem::Kem as KemTrait,
-    kex::KeyExchange,
     op_mode::{OpModeR, OpModeS, PskBundle},
     setup::ExporterSecret,
     Serializable,
@@ -20,7 +20,7 @@ pub(crate) fn gen_rand_buf() -> [u8; 32] {
 }
 
 /// Generates a keypair without the need of a KEM
-pub(crate) fn kex_gen_keypair<Kex: KeyExchange, R: CryptoRng + RngCore>(
+pub(crate) fn dhkex_gen_keypair<Kex: DhKeyExchange, R: CryptoRng + RngCore>(
     csprng: &mut R,
 ) -> (Kex::PrivateKey, Kex::PublicKey) {
     // Make some keying material that's the size of a private key

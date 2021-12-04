@@ -16,8 +16,8 @@ use hpke::{
     aead::{Aead, AeadCtxR, AeadCtxS, AeadTag, AesGcm128, AesGcm256, ChaCha20Poly1305},
     kdf::{HkdfSha256, HkdfSha384, HkdfSha512, Kdf as KdfTrait},
     kem::{DhP256HkdfSha256, Kem as KemTrait, X25519HkdfSha256},
-    op_mode::PskBundle,
-    setup_receiver, setup_sender, Deserializable, HpkeError, OpModeR, OpModeS, Serializable,
+    setup_receiver, setup_sender, Deserializable, HpkeError, OpModeR, OpModeS, PskBundle,
+    Serializable,
 };
 
 use rand::{rngs::StdRng, CryptoRng, RngCore, SeedableRng};
@@ -155,37 +155,6 @@ impl KdfAlg {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum KexAlg {
-    X25519,
-    X448,
-    DhP256,
-    DhP384,
-    DhP521,
-}
-
-impl KexAlg {
-    fn name(&self) -> &'static str {
-        match self {
-            KexAlg::X25519 => "X25519",
-            KexAlg::X448 => "X448",
-            KexAlg::DhP256 => "P256",
-            KexAlg::DhP384 => "P384",
-            KexAlg::DhP521 => "P521",
-        }
-    }
-
-    fn get_pubkey_len(&self) -> usize {
-        match self {
-            KexAlg::X25519 => 32,
-            KexAlg::X448 => 56,
-            KexAlg::DhP256 => 65,
-            KexAlg::DhP384 => 97,
-            KexAlg::DhP521 => 133,
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum KemAlg {
     X25519HkdfSha256,
     X448HkdfSha512,
@@ -225,16 +194,6 @@ impl KemAlg {
             KemAlg::DhP521HkdfSha512 => 0x12,
             KemAlg::X25519HkdfSha256 => 0x20,
             KemAlg::X448HkdfSha512 => 0x21,
-        }
-    }
-
-    fn kex_alg(&self) -> KexAlg {
-        match self {
-            KemAlg::X25519HkdfSha256 => KexAlg::X25519,
-            KemAlg::X448HkdfSha512 => KexAlg::X448,
-            KemAlg::DhP256HkdfSha256 => KexAlg::DhP256,
-            KemAlg::DhP384HkdfSha384 => KexAlg::DhP384,
-            KemAlg::DhP521HkdfSha512 => KexAlg::DhP521,
         }
     }
 
@@ -359,10 +318,10 @@ impl<'a> AgileOpModeR<'a> {
             AgileOpModeRTy::Auth(pk) => {
                 if pk.kem_alg != self.kem_alg {
                     return Err(AgileHpkeError::AlgMismatch(
-                        (self.kem_alg.name(), "AgileOpModeR::kex_alg"),
+                        (self.kem_alg.name(), "AgileOpModeR::kem_alg"),
                         (
                             pk.kem_alg.name(),
-                            "AgileOpModeR::op_mode_ty::AgilePublicKey::kex_alg",
+                            "AgileOpModeR::op_mode_ty::AgilePublicKey::kem_alg",
                         ),
                     ));
                 }
@@ -370,10 +329,10 @@ impl<'a> AgileOpModeR<'a> {
             AgileOpModeRTy::AuthPsk(pk, _) => {
                 if pk.kem_alg != self.kem_alg {
                     return Err(AgileHpkeError::AlgMismatch(
-                        (self.kem_alg.name(), "AgileOpModeR::kex_alg"),
+                        (self.kem_alg.name(), "AgileOpModeR::kem_alg"),
                         (
                             pk.kem_alg.name(),
-                            "AgileOpModeR::op_mode_ty::AgilePublicKey::kex_alg",
+                            "AgileOpModeR::op_mode_ty::AgilePublicKey::kem_alg",
                         ),
                     ));
                 }
@@ -419,10 +378,10 @@ impl<'a> AgileOpModeS<'a> {
                 keypair.validate()?;
                 if keypair.0.kem_alg != self.kem_alg {
                     return Err(AgileHpkeError::AlgMismatch(
-                        (self.kem_alg.name(), "AgileOpModeS::kex_alg"),
+                        (self.kem_alg.name(), "AgileOpModeS::kem_alg"),
                         (
                             keypair.0.kem_alg.name(),
-                            "AgileOpModeS::op_mode_ty::AgilePrivateKey::kex_alg",
+                            "AgileOpModeS::op_mode_ty::AgilePrivateKey::kem_alg",
                         ),
                     ));
                 }
@@ -431,10 +390,10 @@ impl<'a> AgileOpModeS<'a> {
                 keypair.validate()?;
                 if keypair.0.kem_alg != self.kem_alg {
                     return Err(AgileHpkeError::AlgMismatch(
-                        (self.kem_alg.name(), "AgileOpModeS::kex_alg"),
+                        (self.kem_alg.name(), "AgileOpModeS::kem_alg"),
                         (
                             keypair.0.kem_alg.name(),
-                            "AgileOpModeS::op_mode_ty::AgilePrivateKey::kex_alg",
+                            "AgileOpModeS::op_mode_ty::AgilePrivateKey::kem_alg",
                         ),
                     ));
                 }
@@ -571,14 +530,14 @@ fn agile_setup_sender<R: CryptoRng + RngCore>(
     mode.validate()?;
     if mode.kem_alg != pk_recip.kem_alg {
         return Err(AgileHpkeError::AlgMismatch(
-            (mode.kem_alg.name(), "mode::kex_alg"),
-            (pk_recip.kem_alg.name(), "pk_recip::kex_alg"),
+            (mode.kem_alg.name(), "mode::kem_alg"),
+            (pk_recip.kem_alg.name(), "pk_recip::kem_alg"),
         ));
     }
     if kem_alg != mode.kem_alg {
         return Err(AgileHpkeError::AlgMismatch(
-            (kem_alg.name(), "kem_alg::kex_alg"),
-            (mode.kem_alg.name(), "mode::kex_alg"),
+            (kem_alg.name(), "kem_alg::kem_alg"),
+            (mode.kem_alg.name(), "mode::kem_alg"),
         ));
     }
 
@@ -644,20 +603,20 @@ fn agile_setup_receiver(
     mode.validate()?;
     if mode.kem_alg != recip_keypair.0.kem_alg {
         return Err(AgileHpkeError::AlgMismatch(
-            (mode.kem_alg.name(), "mode::kex_alg"),
-            (recip_keypair.0.kem_alg.name(), "recip_keypair::kex_alg"),
+            (mode.kem_alg.name(), "mode::kem_alg"),
+            (recip_keypair.0.kem_alg.name(), "recip_keypair::kem_alg"),
         ));
     }
     if kem_alg != mode.kem_alg {
         return Err(AgileHpkeError::AlgMismatch(
-            (kem_alg.name(), "kem_alg::kex_alg"),
-            (mode.kem_alg.name(), "mode::kex_alg"),
+            (kem_alg.name(), "kem_alg::kem_alg"),
+            (mode.kem_alg.name(), "mode::kem_alg"),
         ));
     }
     if recip_keypair.0.kem_alg != encapped_key.kem_alg {
         return Err(AgileHpkeError::AlgMismatch(
-            (recip_keypair.0.kem_alg.name(), "recip_keypair::kex_alg"),
-            (encapped_key.kem_alg.name(), "encapped_key::kex_alg"),
+            (recip_keypair.0.kem_alg.name(), "recip_keypair::kem_alg"),
+            (encapped_key.kem_alg.name(), "encapped_key::kem_alg"),
         ));
     }
 

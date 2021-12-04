@@ -1,18 +1,16 @@
-use crate::{
-    kdf::{extract_and_expand, Kdf as KdfTrait},
-    kex::{KeyExchange, MAX_PUBKEY_SIZE},
-    util::kem_suite_id,
-    Deserializable, HpkeError, Serializable,
-};
+use crate::{Deserializable, HpkeError, Serializable};
 
-use digest::FixedOutput;
-use generic_array::GenericArray;
+use generic_array::{ArrayLength, GenericArray};
 use rand_core::{CryptoRng, RngCore};
+use zeroize::Zeroize;
+
+mod dhkem;
+pub use dhkem::*;
 
 #[cfg(feature = "serde_impls")]
 use serde::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
 
-/// Defines a combination of key exchange mechanism and a KDF, which together form a KEM
+/// Represents authenticated encryption functionality
 pub trait Kem: Sized {
     /// The key exchange's public key type. If you want to generate a keypair, see
     /// `Kem::gen_keypair` or `Kem::derive_keypair`
@@ -50,7 +48,9 @@ pub trait Kem: Sized {
     #[cfg(not(feature = "serde_impls"))]
     type EncappedKey: Clone + Serializable + Deserializable;
 
-    type Kdf: KdfTrait;
+    /// The size of a shared secret in this KEM
+    #[doc(hidden)]
+    type NSecret: ArrayLength<u8>;
 
     const KEM_ID: u16;
 
@@ -59,15 +59,12 @@ pub trait Kem: Sized {
     /// Requirements
     /// ============
     /// This keying material SHOULD have as many bits of entropy as the bit length of a secret key,
-    /// i.e., `8 * Self::Kex::PrivateKey::size()`. For X25519 and P-256, this is 256 bits of
+    /// i.e., `8 * Self::PrivateKey::size()`. For X25519 and P-256, this is 256 bits of
     /// entropy.
     fn derive_keypair(ikm: &[u8]) -> (Self::PrivateKey, Self::PublicKey);
 
     /// Generates a random keypair using the given RNG
     fn gen_keypair<R: CryptoRng + RngCore>(csprng: &mut R) -> (Self::PrivateKey, Self::PublicKey);
-
-    #[doc(hidden)]
-    fn sk_to_pk(sk: &Self::PrivateKey) -> Self::PublicKey;
 
     /// Derives a shared secret that the owner of the recipient's pubkey can use to derive the same
     /// shared secret. If `sk_sender_id` is given, the sender's identity will be tied to the shared
@@ -120,342 +117,29 @@ pub trait Kem: Sized {
     }
 }
 
-/// Defines a combination of key exchange mechanism and a KDF, which together form a KEM
-macro_rules! impl_dhkem {
-    ($kem_name:ident, $encapped_key:ident, $dhkex:ty, $dh_pubkey:ty, $dh_privkey:ty, $kdf:ty, $kem_id:literal) => {
-        pub struct $kem_name;
-
-        /// Holds the content of an encapsulated secret. This is what the receiver uses to derive
-        /// the shared secret.
-        // This just wraps a pubkey, because that's all an encapsulated key is in a DH-KEM
-        #[doc(hidden)]
-        #[derive(Clone)]
-        pub struct $encapped_key(<$dhkex as KeyExchange>::PublicKey);
-
-        // EncappedKeys need to be serializable, since they're gonna be sent over the wire. Underlyingly,
-        // they're just DH pubkeys, so we just serialize them the same way
-        impl Serializable for $encapped_key {
-            type OutputSize = <<$dhkex as KeyExchange>::PublicKey as Serializable>::OutputSize;
-
-            // Pass to underlying to_bytes() impl
-            fn to_bytes(&self) -> GenericArray<u8, Self::OutputSize> {
-                self.0.to_bytes()
-            }
-        }
-
-        impl Deserializable for $encapped_key {
-            // Pass to underlying from_bytes() impl
-            fn from_bytes(encoded: &[u8]) -> Result<Self, HpkeError> {
-                let pubkey =
-                    <<$dhkex as KeyExchange>::PublicKey as Deserializable>::from_bytes(encoded)?;
-                Ok($encapped_key(pubkey))
-            }
-        }
-
-        impl KemTrait for $kem_name {
-            #[doc(hidden)]
-            type Kdf = $kdf;
-
-            type PublicKey = $dh_pubkey;
-            type PrivateKey = $dh_privkey;
-            type EncappedKey = $encapped_key;
-            const KEM_ID: u16 = $kem_id;
-
-            /// Deterministically derives a keypair from the given input keying material
-            ///
-            /// Requirements
-            /// ============
-            /// This keying material SHOULD have as many bits of entropy as the bit length of a secret key,
-            /// i.e., `8 * Self::Kex::PrivateKey::size()`. For X25519 and P-256, this is 256 bits of
-            /// entropy.
-            fn derive_keypair(ikm: &[u8]) -> (Self::PrivateKey, Self::PublicKey) {
-                let suite_id = kem_suite_id::<Self>();
-                <$dhkex as KeyExchange>::derive_keypair::<Self::Kdf>(&suite_id, ikm)
-            }
-
-            /// Generates a random keypair using the given RNG
-            fn gen_keypair<R: CryptoRng + RngCore>(
-                csprng: &mut R,
-            ) -> (Self::PrivateKey, Self::PublicKey) {
-                // Make some keying material that's the size of a private key
-                let mut ikm: GenericArray<u8, <Self::PrivateKey as Serializable>::OutputSize> =
-                    GenericArray::default();
-                // Fill it with randomness
-                csprng.fill_bytes(&mut ikm);
-                // Run derive_keypair using the KEM's KDF
-                Self::derive_keypair(&ikm)
-            }
-
-            #[doc(hidden)]
-            fn sk_to_pk(sk: &Self::PrivateKey) -> Self::PublicKey {
-                <$dhkex as KeyExchange>::sk_to_pk(sk)
-            }
-
-            // draft11 §4.1
-            // def Encap(pkR):
-            //   skE, pkE = GenerateKeyPair()
-            //   dh = DH(skE, pkR)
-            //   enc = SerializePublicKey(pkE)
-            //
-            //   pkRm = SerializePublicKey(pkR)
-            //   kem_context = concat(enc, pkRm)
-            //
-            //   shared_secret = ExtractAndExpand(dh, kem_context)
-            //   return shared_secret, enc
-            //
-            // def AuthEncap(pkR, skS):
-            //   skE, pkE = GenerateKeyPair()
-            //   dh = concat(DH(skE, pkR), DH(skS, pkR))
-            //   enc = SerializePublicKey(pkE)
-            //
-            //   pkRm = SerializePublicKey(pkR)
-            //   pkSm = SerializePublicKey(pk(skS))
-            //   kem_context = concat(enc, pkRm, pkSm)
-            //
-            //   shared_secret = ExtractAndExpand(dh, kem_context)
-            //   return shared_secret, enc
-
-            /// Derives a shared secret that the owner of the recipient's pubkey can use to derive
-            /// the same shared secret. If `sk_sender_id` is given, the sender's identity will be
-            /// tied to the shared secret.
-            ///
-            /// Return Value
-            /// ============
-            /// Returns a shared secret and encapped key on success. If an error happened during
-            /// key exchange, returns `Err(HpkeError::EncapError)`.
-            #[doc(hidden)]
-            fn encap_with_eph(
-                pk_recip: &Self::PublicKey,
-                sender_id_keypair: Option<&(Self::PrivateKey, Self::PublicKey)>,
-                sk_eph: Self::PrivateKey,
-            ) -> Result<(SharedSecret<Self>, Self::EncappedKey), HpkeError> {
-                // Put together the binding context used for all KDF operations
-                let suite_id = kem_suite_id::<Self>();
-
-                // Compute the shared secret from the ephemeral inputs
-                let kex_res_eph = <$dhkex as KeyExchange>::kex(&sk_eph, pk_recip)
-                    .map_err(|_| HpkeError::EncapError)?;
-
-                // The encapped key is the ephemeral pubkey
-                let encapped_key = {
-                    let pk_eph = <$dhkex as KeyExchange>::sk_to_pk(&sk_eph);
-                    $encapped_key(pk_eph)
-                };
-
-                // The shared secret is either gonna be kex_res_eph, or that along with another shared secret
-                // that's tied to the sender's identity.
-                let shared_secret = if let Some((sk_sender_id, pk_sender_id)) = sender_id_keypair {
-                    // kem_context = encapped_key || pk_recip || pk_sender_id
-                    // We concat without allocation by making a buffer of the maximum possible size, then
-                    // taking the appropriately sized slice.
-                    let (kem_context_buf, kem_context_size) = concat_with_known_maxlen!(
-                        MAX_PUBKEY_SIZE,
-                        &encapped_key.to_bytes(),
-                        &pk_recip.to_bytes(),
-                        &pk_sender_id.to_bytes()
-                    );
-                    let kem_context = &kem_context_buf[..kem_context_size];
-
-                    // We want to do an authed encap. Do KEX between the sender identity secret key and the
-                    // recipient's pubkey
-                    let kex_res_identity = <$dhkex as KeyExchange>::kex(sk_sender_id, pk_recip)
-                        .map_err(|_| HpkeError::EncapError)?;
-
-                    // concatted_secrets = kex_res_eph || kex_res_identity
-                    // Same no-alloc concat trick as above
-                    let (concatted_secrets_buf, concatted_secret_size) = concat_with_known_maxlen!(
-                        MAX_PUBKEY_SIZE,
-                        &kex_res_eph.to_bytes(),
-                        &kex_res_identity.to_bytes()
-                    );
-                    let concatted_secrets = &concatted_secrets_buf[..concatted_secret_size];
-
-                    // The "authed shared secret" is derived from the KEX of the ephemeral input with the
-                    // recipient pubkey, and the KEX of the identity input with the recipient pubkey. The
-                    // HKDF-Expand call only errors if the output values are 255x the digest size of the hash
-                    // function. Since these values are fixed at compile time, we don't worry about it.
-                    let mut buf = <SharedSecret<Self> as Default>::default();
-                    extract_and_expand::<Self>(concatted_secrets, &suite_id, kem_context, &mut buf)
-                        .expect("shared secret is way too big");
-                    buf
-                } else {
-                    // kem_context = encapped_key || pk_recip
-                    // We concat without allocation by making a buffer of the maximum possible size, then
-                    // taking the appropriately sized slice.
-                    let (kem_context_buf, kem_context_size) = concat_with_known_maxlen!(
-                        MAX_PUBKEY_SIZE,
-                        &encapped_key.to_bytes(),
-                        &pk_recip.to_bytes()
-                    );
-                    let kem_context = &kem_context_buf[..kem_context_size];
-
-                    // The "unauthed shared secret" is derived from just the KEX of the ephemeral input with
-                    // the recipient pubkey. The HKDF-Expand call only errors if the output values are 255x the
-                    // digest size of the hash function. Since these values are fixed at compile time, we don't
-                    // worry about it.
-                    let mut buf = <SharedSecret<Self> as Default>::default();
-                    extract_and_expand::<Self>(
-                        &kex_res_eph.to_bytes(),
-                        &suite_id,
-                        kem_context,
-                        &mut buf,
-                    )
-                    .expect("shared secret is way too big");
-                    buf
-                };
-
-                Ok((shared_secret, encapped_key))
-            }
-
-            // draft11 §4.1
-            // def Decap(enc, skR):
-            //   pkE = DeserializePublicKey(enc)
-            //   dh = DH(skR, pkE)
-            //
-            //   pkRm = SerializePublicKey(pk(skR))
-            //   kem_context = concat(enc, pkRm)
-            //
-            //   shared_secret = ExtractAndExpand(dh, kem_context)
-            //   return shared_secret
-            //
-            // def AuthDecap(enc, skR, pkS):
-            //   pkE = DeserializePublicKey(enc)
-            //   dh = concat(DH(skR, pkE), DH(skR, pkS))
-            //
-            //   pkRm = SerializePublicKey(pk(skR))
-            //   pkSm = SerializePublicKey(pkS)
-            //   kem_context = concat(enc, pkRm, pkSm)
-            //
-            //   shared_secret = ExtractAndExpand(dh, kem_context)
-            //   return shared_secret
-
-            /// Derives a shared secret given the encapsulated key and the recipients secret key.
-            /// If `pk_sender_id` is given, the sender's identity will be tied to the shared
-            /// secret.
-            ///
-            /// Return Value
-            /// ============
-            /// Returns a shared secret on success. If an error happened during key exchange,
-            /// returns `Err(HpkeError::DecapError)`.
-            #[doc(hidden)]
-            fn decap(
-                sk_recip: &Self::PrivateKey,
-                pk_sender_id: Option<&Self::PublicKey>,
-                encapped_key: &Self::EncappedKey,
-            ) -> Result<SharedSecret<Self>, HpkeError> {
-                // Put together the binding context used for all KDF operations
-                let suite_id = kem_suite_id::<Self>();
-
-                // Compute the shared secret from the ephemeral inputs
-                let kex_res_eph = <$dhkex as KeyExchange>::kex(sk_recip, &encapped_key.0)
-                    .map_err(|_| HpkeError::DecapError)?;
-
-                // Compute the sender's pubkey from their privkey
-                let pk_recip = <$dhkex as KeyExchange>::sk_to_pk(sk_recip);
-
-                // The shared secret is either gonna be kex_res_eph, or that along with another
-                // shared secret that's tied to the sender's identity.
-                if let Some(pk_sender_id) = pk_sender_id {
-                    // kem_context = encapped_key || pk_recip || pk_sender_id We concat without
-                    // allocation by making a buffer of the maximum possible size, then taking the
-                    // appropriately sized slice.
-                    let (kem_context_buf, kem_context_size) = concat_with_known_maxlen!(
-                        MAX_PUBKEY_SIZE,
-                        &encapped_key.to_bytes(),
-                        &pk_recip.to_bytes(),
-                        &pk_sender_id.to_bytes()
-                    );
-                    let kem_context = &kem_context_buf[..kem_context_size];
-
-                    // We want to do an authed encap. Do KEX between the sender identity secret key
-                    // and the recipient's pubkey
-                    let kex_res_identity = <$dhkex as KeyExchange>::kex(sk_recip, pk_sender_id)
-                        .map_err(|_| HpkeError::DecapError)?;
-
-                    // concatted_secrets = kex_res_eph || kex_res_identity
-                    // Same no-alloc concat trick as above
-                    let (concatted_secrets_buf, concatted_secret_size) = concat_with_known_maxlen!(
-                        MAX_PUBKEY_SIZE,
-                        &kex_res_eph.to_bytes(),
-                        &kex_res_identity.to_bytes()
-                    );
-                    let concatted_secrets = &concatted_secrets_buf[..concatted_secret_size];
-
-                    // The "authed shared secret" is derived from the KEX of the ephemeral input
-                    // with the recipient pubkey, and the kex of the identity input with the
-                    // recipient pubkey. The HKDF-Expand call only errors if the output values are
-                    // 255x the digest size of the hash function. Since these values are fixed at
-                    // compile time, we don't worry about it.
-                    let mut shared_secret = <SharedSecret<Self> as Default>::default();
-                    extract_and_expand::<Self>(
-                        concatted_secrets,
-                        &suite_id,
-                        kem_context,
-                        &mut shared_secret,
-                    )
-                    .expect("shared secret is way too big");
-                    Ok(shared_secret)
-                } else {
-                    // kem_context = encapped_key || pk_recip || pk_sender_id
-                    // We concat without allocation by making a buffer of the maximum possible size, then
-                    // taking the appropriately sized slice.
-                    let (kem_context_buf, kem_context_size) = concat_with_known_maxlen!(
-                        MAX_PUBKEY_SIZE,
-                        &encapped_key.to_bytes(),
-                        &pk_recip.to_bytes()
-                    );
-                    let kem_context = &kem_context_buf[..kem_context_size];
-
-                    // The "unauthed shared secret" is derived from just the KEX of the ephemeral input
-                    // with the recipient pubkey. The HKDF-Expand call only errors if the output values
-                    // are 255x the digest size of the hash function. Since these values are fixed at
-                    // compile time, we don't worry about it.
-                    let mut shared_secret = <SharedSecret<Self> as Default>::default();
-                    extract_and_expand::<Self>(
-                        &kex_res_eph.to_bytes(),
-                        &suite_id,
-                        kem_context,
-                        &mut shared_secret,
-                    )
-                    .expect("shared secret is way too big");
-                    Ok(shared_secret)
-                }
-            }
-        }
-    };
-}
-
-// Kem is also used as a type parameter everywhere. To avoid confusion, alias it
+// Kem is used as a type parameter everywhere. To avoid confusion, alias it
 use Kem as KemTrait;
 
-#[cfg(feature = "x25519-dalek")]
-/// Represents DHKEM(X25519, HKDF-SHA256)
-impl_dhkem!(
-    X25519HkdfSha256,
-    X25519HkdfSha256EncappedKey,
-    crate::kex::x25519::X25519,
-    crate::kex::x25519::PublicKey,
-    crate::kex::x25519::PrivateKey,
-    crate::kdf::HkdfSha256,
-    0x0020
-);
+/// A convenience type for [u8; NSecret] for any given KEM
+pub struct SharedSecret<Kem: KemTrait>(pub(crate) GenericArray<u8, Kem::NSecret>);
 
-#[cfg(feature = "p256")]
-/// Represents DHKEM(P-256, HKDF-SHA256)
-impl_dhkem!(
-    DhP256HkdfSha256,
-    DhP256HkdfSha256EncappedKey,
-    crate::kex::ecdh_nistp::DhP256,
-    crate::kex::ecdh_nistp::PublicKey,
-    crate::kex::ecdh_nistp::PrivateKey,
-    crate::kdf::HkdfSha256,
-    0x0010
-);
+impl<Kem: KemTrait> Default for SharedSecret<Kem> {
+    fn default() -> SharedSecret<Kem> {
+        SharedSecret(GenericArray::<u8, Kem::NSecret>::default())
+    }
+}
 
-/// A convenience type representing the fixed-size byte array of the same length as a serialized
-/// `KexResult`
-pub(crate) type SharedSecret<Kem> =
-    GenericArray<u8, <<<Kem as KemTrait>::Kdf as KdfTrait>::HashImpl as FixedOutput>::OutputSize>;
+// SharedSecrets should zeroize on drop
+impl<Kem: KemTrait> Zeroize for SharedSecret<Kem> {
+    fn zeroize(&mut self) {
+        self.0.zeroize()
+    }
+}
+impl<Kem: KemTrait> Drop for SharedSecret<Kem> {
+    fn drop(&mut self) {
+        self.zeroize();
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -482,7 +166,7 @@ mod tests {
                     Kem::decap(&sk_recip, None, &encapped_key).unwrap();
 
                 // Ensure that the encapsulated secret is what decap() derives
-                assert_eq!(auth_shared_secret, decapped_auth_shared_secret);
+                assert_eq!(auth_shared_secret.0, decapped_auth_shared_secret.0);
 
                 //
                 // Now do it with the auth, i.e., using the sender's identity keys
@@ -504,7 +188,7 @@ mod tests {
                     Kem::decap(&sk_recip, Some(&pk_sender_id), &encapped_key).unwrap();
 
                 // Ensure that the encapsulated secret is what decap() derives
-                assert_eq!(auth_shared_secret, decapped_auth_shared_secret);
+                assert_eq!(auth_shared_secret.0, decapped_auth_shared_secret.0);
             }
         };
     }

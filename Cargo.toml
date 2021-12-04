@@ -36,6 +36,7 @@ sha2 = { version = "0.9", default-features = false }
 serde = { version = "1.0", default-features = false, optional = true }
 subtle = { version = "2.4", default-features = false }
 zeroize = { version = "1.4", default-features = false, features = ["zeroize_derive"] }
+paste = "1.0"
 
 [dependencies.x25519-dalek]
 version = "1.1"

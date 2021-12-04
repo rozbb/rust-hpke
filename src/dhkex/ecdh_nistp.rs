@@ -1,6 +1,6 @@
 use crate::{
+    dhkex::{DhError, DhKeyExchange},
     kdf::{labeled_extract, Kdf as KdfTrait, LabeledExpand},
-    kex::{KexError, KeyExchange},
     util::{enforce_equal_len, KemSuiteId},
     Deserializable, HpkeError, Serializable,
 };
@@ -13,21 +13,19 @@ use p256::{
     elliptic_curve::{ecdh::diffie_hellman, sec1::UncompressedPointSize, FieldSize},
     NistP256,
 };
-use zeroize::Zeroize;
 
 /// An ECDH-P256 public key. This is never the point at infinity.
 #[derive(Clone)]
 pub struct PublicKey(p256::PublicKey);
 
 // p256::SecretKey is just a newtype for an elliptic_curve::NonZeroScalar as long as
-// feature="arithmetic" is set in elliptic_curve.
-/// An ECDH-P256 private key. This is a scalar in the range `[1,p)` where `p` is the group order
+// feature="arithmetic" is set in elliptic_curve. Also, the underlying type is zeroize-on-drop.
+/// An ECDH-P256 private key. This is a scalar in the range `[1,p)` where `p` is the group order.
 #[derive(Clone)]
 pub struct PrivateKey(p256::SecretKey);
 
-// A bare DH computation result
-#[derive(Zeroize)]
-#[zeroize(drop)]
+// The underlying type is zeroize-on-drop
+/// A bare DH computation result
 pub struct KexResult(p256::ecdh::SharedSecret);
 
 // Everything is serialized and deserialized in uncompressed form
@@ -97,7 +95,7 @@ impl Serializable for KexResult {
 /// Represents ECDH functionality over NIST curve P-256
 pub struct DhP256 {}
 
-impl KeyExchange for DhP256 {
+impl DhKeyExchange for DhP256 {
     #[doc(hidden)]
     type PublicKey = PublicKey;
     #[doc(hidden)]
@@ -116,7 +114,7 @@ impl KeyExchange for DhP256 {
 
     /// Does the DH operation. This function is infallible, thanks to invariants on its inputs.
     #[doc(hidden)]
-    fn kex(sk: &PrivateKey, pk: &PublicKey) -> Result<KexResult, KexError> {
+    fn dh(sk: &PrivateKey, pk: &PublicKey) -> Result<KexResult, DhError> {
         // Do the DH operation
         let dh_res = diffie_hellman(sk.0.to_secret_scalar(), pk.0.as_affine());
 
@@ -182,11 +180,11 @@ impl KeyExchange for DhP256 {
 #[cfg(test)]
 mod tests {
     use crate::{
-        kex::{
+        dhkex::{
             ecdh_nistp::{DhP256, PrivateKey, PublicKey},
-            KeyExchange,
+            DhKeyExchange,
         },
-        test_util::kex_gen_keypair,
+        test_util::dhkex_gen_keypair,
         Deserializable, Serializable,
     };
 
@@ -234,9 +232,9 @@ mod tests {
         .unwrap();
 
         // Deserialize the pubkey and privkey and do a DH operation
-        let sk_recip = <Kex as KeyExchange>::PrivateKey::from_bytes(&sk_recip_bytes).unwrap();
-        let pk_sender = <Kex as KeyExchange>::PublicKey::from_bytes(&pk_sender_bytes).unwrap();
-        let derived_dh = <Kex as KeyExchange>::kex(&sk_recip, &pk_sender).unwrap();
+        let sk_recip = <Kex as DhKeyExchange>::PrivateKey::from_bytes(&sk_recip_bytes).unwrap();
+        let pk_sender = <Kex as DhKeyExchange>::PublicKey::from_bytes(&pk_sender_bytes).unwrap();
+        let derived_dh = <Kex as DhKeyExchange>::dh(&sk_recip, &pk_sender).unwrap();
 
         // Assert that the derived DH result matches the test vector. Recall that the HPKE DH
         // result is just the x-coordinate, so that's all we can compare
@@ -272,14 +270,14 @@ mod tests {
 
         for (sk_hex, pk_hex) in sks.iter().zip(pks.iter()) {
             // Deserialize the hex values
-            let sk = <Kex as KeyExchange>::PrivateKey::from_bytes(&hex::decode(sk_hex).unwrap())
+            let sk = <Kex as DhKeyExchange>::PrivateKey::from_bytes(&hex::decode(sk_hex).unwrap())
                 .unwrap();
-            let pk =
-                <Kex as KeyExchange>::PublicKey::from_bytes(&hex::decode(pk_hex).unwrap()).unwrap();
+            let pk = <Kex as DhKeyExchange>::PublicKey::from_bytes(&hex::decode(pk_hex).unwrap())
+                .unwrap();
 
             // Derive the secret key's corresponding pubkey and check that it matches the given
             // pubkey
-            let derived_pk = <Kex as KeyExchange>::sk_to_pk(&sk);
+            let derived_pk = <Kex as DhKeyExchange>::sk_to_pk(&sk);
             assert_eq!(derived_pk, pk);
         }
     }
@@ -295,9 +293,10 @@ mod tests {
         // not likely to lie on the curve. Instead, we just generate a random point, serialize it,
         // deserialize it, and test whether it's the same using impl Eq for AffinePoint
 
-        let (_, pubkey) = kex_gen_keypair::<Kex, _>(&mut csprng);
+        let (_, pubkey) = dhkex_gen_keypair::<Kex, _>(&mut csprng);
         let pubkey_bytes = pubkey.to_bytes();
-        let rederived_pubkey = <Kex as KeyExchange>::PublicKey::from_bytes(&pubkey_bytes).unwrap();
+        let rederived_pubkey =
+            <Kex as DhKeyExchange>::PublicKey::from_bytes(&pubkey_bytes).unwrap();
 
         // See if the re-serialized bytes are the same as the input
         assert_eq!(pubkey, rederived_pubkey);
@@ -311,12 +310,12 @@ mod tests {
         let mut csprng = StdRng::from_entropy();
 
         // Make a random keypair and serialize it
-        let (sk, pk) = kex_gen_keypair::<Kex, _>(&mut csprng);
+        let (sk, pk) = dhkex_gen_keypair::<Kex, _>(&mut csprng);
         let (sk_bytes, pk_bytes) = (sk.to_bytes(), pk.to_bytes());
 
         // Now deserialize those bytes
-        let new_sk = <Kex as KeyExchange>::PrivateKey::from_bytes(&sk_bytes).unwrap();
-        let new_pk = <Kex as KeyExchange>::PublicKey::from_bytes(&pk_bytes).unwrap();
+        let new_sk = <Kex as DhKeyExchange>::PrivateKey::from_bytes(&sk_bytes).unwrap();
+        let new_pk = <Kex as DhKeyExchange>::PublicKey::from_bytes(&pk_bytes).unwrap();
 
         // See if the deserialized values are the same as the initial ones
         assert!(new_sk == sk, "private key doesn't serialize correctly");

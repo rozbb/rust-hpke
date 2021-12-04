@@ -125,9 +125,8 @@ struct ExporterTestVector {
     export_val: Vec<u8>,
 }
 
-/// Returns a KEX keypair given the secret bytes and pubkey bytes, and ensures that the pubkey does
-/// indeed correspond to that secret key
-fn get_and_validate_keypair<Kem: KemTrait>(
+/// Returns a keypair given the secret bytes and pubkey bytes
+fn deser_keypair<Kem: KemTrait>(
     sk_bytes: &[u8],
     pk_bytes: &[u8],
 ) -> (Kem::PrivateKey, Kem::PublicKey) {
@@ -135,9 +134,6 @@ fn get_and_validate_keypair<Kem: KemTrait>(
     let sk = <Kem as KemTrait>::PrivateKey::from_bytes(sk_bytes).unwrap();
     // Deserialize the pubkey
     let pk = <Kem as KemTrait>::PublicKey::from_bytes(pk_bytes).unwrap();
-
-    // Make sure the derived pubkey matches the given pubkey
-    assert_serializable_eq!(pk, Kem::sk_to_pk(&sk), "derived pubkey doesn't match given");
 
     (sk, pk)
 }
@@ -170,13 +166,13 @@ fn make_op_mode_r<'a, Kem: KemTrait>(
 // This does all the legwork
 fn test_case<A: Aead, Kdf: KdfTrait, Kem: KemTrait>(tv: MainTestVector) {
     // First, deserialize all the relevant keys so we can reconstruct the encapped key
-    let recip_keypair = get_and_validate_keypair::<Kem>(&tv.sk_recip, &tv.pk_recip);
-    let eph_keypair = get_and_validate_keypair::<Kem>(&tv.sk_eph, &tv.pk_eph);
+    let recip_keypair = deser_keypair::<Kem>(&tv.sk_recip, &tv.pk_recip);
+    let eph_keypair = deser_keypair::<Kem>(&tv.sk_eph, &tv.pk_eph);
     let sender_keypair = {
         let pk_sender = &tv.pk_sender.as_ref();
         tv.sk_sender
             .as_ref()
-            .map(|sk| get_and_validate_keypair::<Kem>(sk, pk_sender.unwrap()))
+            .map(|sk| deser_keypair::<Kem>(sk, pk_sender.unwrap()))
     };
 
     // Make sure the keys match what we would've gotten had we used DeriveKeyPair
@@ -207,7 +203,7 @@ fn test_case<A: Aead, Kdf: KdfTrait, Kem: KemTrait>(tv: MainTestVector) {
 
     // Assert that the derived shared secret key is identical to the one provided
     assert_eq!(
-        shared_secret.as_slice(),
+        shared_secret.0.as_slice(),
         tv.shared_secret.as_slice(),
         "shared_secret doesn't match"
     );

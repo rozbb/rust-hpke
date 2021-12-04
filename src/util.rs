@@ -85,7 +85,7 @@ pub(crate) fn write_to_buf<'a>(buf: &'a mut [u8], to_write: &[u8]) -> &'a mut [u
     &mut buf[to_write.len()..]
 }
 
-/// Takes two lengths and returns an `Err(HpkeError::IncorrectInputLength)` iff they don't match
+/// Takes two lengths and returns an `Err(Error::IncorrectInputLength)` iff they don't match
 pub(crate) fn enforce_equal_len(expected_len: usize, given_len: usize) -> Result<(), HpkeError> {
     if given_len != expected_len {
         Err(HpkeError::IncorrectInputLength(expected_len, given_len))

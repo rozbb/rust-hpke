@@ -102,7 +102,7 @@ where
     // Instead of `secret` we derive an HKDF context which we run .expand() on to derive the
     // key-nonce pair.
     let (_, secret_ctx) =
-        labeled_extract::<Kdf>(&shared_secret, &suite_id, b"secret", mode.get_psk_bytes());
+        labeled_extract::<Kdf>(&shared_secret.0, &suite_id, b"secret", mode.get_psk_bytes());
 
     // Empty fixed-size buffers
     let mut key = crate::aead::AeadKey::<A>::default();

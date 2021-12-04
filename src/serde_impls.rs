@@ -3,52 +3,42 @@
 
 use crate::{
     aead::{Aead, AeadTag},
-    kem, kex, Deserializable, Serializable,
+    dhkex, kem, Deserializable, Serializable,
 };
 
 use digest::generic_array::GenericArray;
 use serde::{de::Error, Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
 
-// Implements serde::{Serialize, Deserialize} over a parameterized type t with a given parameter
-// constraint $trait_bound
-macro_rules! impl_serde_withparam {
-    ($t:ident, $trait_bound:path) => {
-        /// Implements `serde::Serialize`
-        impl<P: $trait_bound> SerdeSerialize for $t<P> {
-            #[inline]
-            fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-            where
-                S: serde::Serializer,
-            {
-                // Convert to a GenericArray and serialize that
-                let bytes = self.to_bytes();
-                bytes.serialize(serializer)
-            }
-        }
-
-        /// Implements `serde::Deserialize`
-        impl<'de, P: $trait_bound> SerdeDeserialize<'de> for $t<P> {
-            fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-            where
-                D: serde::Deserializer<'de>,
-            {
-                // Use the GenericArray deserializer to get the appropriate number of bytes
-                let bytes =
-                    GenericArray::<u8, <Self as crate::Serializable>::OutputSize>::deserialize(
-                        deserializer,
-                    )?;
-                // Try to build this object from the given bytes. If it doesn't work, wrap and
-                // return the resulting HpkeError
-                Self::from_bytes(&bytes).map_err(D::Error::custom)
-            }
-        }
-    };
+// Implement Serialize for AeadTag<P: Aead>
+impl<A: Aead> SerdeSerialize for AeadTag<A> {
+    #[inline]
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        // Convert to a GenericArray and serialize that
+        let bytes = self.to_bytes();
+        bytes.serialize(serializer)
+    }
 }
 
-// Implement Serialize/Deserialize for AeadTag<P: Aead>
-impl_serde_withparam!(AeadTag, Aead);
+// Implement Deserialize for AeadTag<P: Aead>
+impl<'de, A: Aead> SerdeDeserialize<'de> for AeadTag<A> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        // Use the GenericArray deserializer to get the appropriate number of bytes
+        let bytes = GenericArray::<u8, <Self as crate::Serializable>::OutputSize>::deserialize(
+            deserializer,
+        )?;
+        // Try to build this object from the given bytes. If it doesn't work, wrap and
+        // return the resulting HpkeError
+        Self::from_bytes(&bytes).map_err(D::Error::custom)
+    }
+}
 
-// Implements serde::{Serialize, Deserialize} over a plain type t. This is almost identical to above.
+// Implements serde::{Serialize, Deserialize} over type t. This is almost identical to above.
 macro_rules! impl_serde_noparam {
     ($t:ty) => {
         /// Implements `serde::Serialize`
@@ -83,19 +73,20 @@ macro_rules! impl_serde_noparam {
     };
 }
 
-// Implement Serialize/Deserialize for all PrivateKey and PublicKey types, as features permit
+// Implement Serialize/Deserialize for all PrivateKey, PublicKey, and EncappedKey types, as
+// features permit
 
 #[cfg(feature = "x25519")]
-impl_serde_noparam!(kex::x25519::PrivateKey);
+impl_serde_noparam!(dhkex::x25519::PrivateKey);
 #[cfg(feature = "x25519")]
-impl_serde_noparam!(kex::x25519::PublicKey);
+impl_serde_noparam!(dhkex::x25519::PublicKey);
 #[cfg(feature = "x25519")]
 impl_serde_noparam!(kem::X25519HkdfSha256EncappedKey);
 
 #[cfg(feature = "p256")]
-impl_serde_noparam!(kex::ecdh_nistp::PrivateKey);
+impl_serde_noparam!(dhkex::ecdh_nistp::PrivateKey);
 #[cfg(feature = "p256")]
-impl_serde_noparam!(kex::ecdh_nistp::PublicKey);
+impl_serde_noparam!(dhkex::ecdh_nistp::PublicKey);
 #[cfg(feature = "p256")]
 impl_serde_noparam!(kem::DhP256HkdfSha256EncappedKey);
 

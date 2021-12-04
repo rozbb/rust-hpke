@@ -17,6 +17,7 @@ use zeroize::Zeroize;
 /// Represents authenticated encryption functionality
 pub trait Aead {
     /// The underlying AEAD implementation
+    #[doc(hidden)]
     type AeadImpl: BaseAeadCore + BaseAeadInPlace + BaseNewAead + Clone;
 
     /// The algorithm identifier for an AEAD implementation
@@ -581,25 +582,51 @@ mod test {
 
                 let (mut sender_ctx, mut receiver_ctx) = gen_ctx_simple_pair::<A, Kdf, Kem>();
 
-                let msg = b"Love it or leave it, you better gain way";
+                let orig_msg = b"Love it or leave it, you better gain way";
                 let aad = b"You better hit bull's eye, the kid don't play";
 
-                // Encrypt with the sender context
-                let mut ciphertext = msg.clone();
-                let tag = sender_ctx
-                    .seal(&mut ciphertext[..], aad)
-                    .expect("seal() failed");
+                // Encrypt in place with the sender context
+                let mut msg = orig_msg.clone();
+                let tag = sender_ctx.seal(&mut msg, aad).expect("seal() failed");
+                // Rename for clarity
+                let mut ciphertext = msg;
 
                 // Make sure seal() isn't a no-op
-                assert!(&ciphertext[..] != &msg[..]);
+                assert_ne!(&ciphertext, orig_msg);
 
                 // Decrypt with the receiver context
                 receiver_ctx
-                    .open(&mut ciphertext[..], aad, &tag)
+                    .open(&mut ciphertext, aad, &tag)
                     .expect("open() failed");
                 // Change name for clarity
                 let decrypted = ciphertext;
-                assert_eq!(&decrypted[..], &msg[..]);
+                assert_eq!(&decrypted, orig_msg);
+
+                // Now try sending an invalid message followed by a valid message. The valid
+                // message should decrypt correctly
+                let mut invalid_ciphertext = [0x13; 10];
+                assert!(receiver_ctx
+                    .open(&mut invalid_ciphertext, aad, &tag)
+                    .is_err());
+
+                // Now make sure a round trip succeeds
+                let mut msg = orig_msg.clone();
+                let tag = sender_ctx
+                    .seal(&mut msg, aad)
+                    .expect("second seal() failed");
+                // Rename for clarity
+                let mut ciphertext = msg;
+
+                // Make sure seal() isn't a no-op
+                assert_ne!(&ciphertext, orig_msg);
+
+                // Decrypt with the receiver context
+                receiver_ctx
+                    .open(&mut ciphertext, aad, &tag)
+                    .expect("second open() failed");
+                // Change name for clarity
+                let decrypted = ciphertext;
+                assert_eq!(&decrypted, orig_msg);
             }
         };
     }

@@ -106,18 +106,16 @@ pub use generic_array;
 mod util;
 
 pub mod aead;
+mod dhkex;
 pub mod kdf;
 pub mod kem;
-mod kex;
-pub mod op_mode;
-pub mod setup;
-pub mod single_shot;
+mod op_mode;
+mod setup;
+mod single_shot;
 
 #[cfg(feature = "serde_impls")]
 mod serde_impls;
 
-#[doc(inline)]
-pub use crate::aead::{AeadCtxR, AeadCtxS};
 #[doc(inline)]
 pub use kem::Kem;
 #[doc(inline)]

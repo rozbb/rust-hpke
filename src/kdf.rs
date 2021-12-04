@@ -1,5 +1,3 @@
-use crate::kem::Kem as KemTrait;
-
 use byteorder::{BigEndian, ByteOrder};
 use digest::{BlockInput, Digest, FixedOutput, Reset, Update};
 use generic_array::GenericArray;
@@ -67,14 +65,14 @@ impl KdfTrait for HkdfSha512 {
 
 /// Uses the given IKM to extract a secret, and then uses that secret, plus the given suite ID and
 /// info string, to expand to the output buffer
-pub(crate) fn extract_and_expand<Kem: KemTrait>(
+pub(crate) fn extract_and_expand<Kdf: KdfTrait>(
     ikm: &[u8],
     suite_id: &[u8],
     info: &[u8],
     out: &mut [u8],
 ) -> Result<(), hkdf::InvalidLength> {
     // Extract using given IKM
-    let (_, hkdf_ctx) = labeled_extract::<Kem::Kdf>(&[], suite_id, b"eae_prk", ikm);
+    let (_, hkdf_ctx) = labeled_extract::<Kdf>(&[], suite_id, b"eae_prk", ikm);
     // Expand using given info string
     hkdf_ctx.labeled_expand(suite_id, b"shared_secret", info, out)
 }
