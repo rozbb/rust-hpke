@@ -72,8 +72,8 @@ pub trait Kem: Sized {
     ///
     /// Return Value
     /// ============
-    /// Returns a shared secret and encapped key on success. If an error happened during key exchange,
-    /// returns `Err(HpkeError::EncapError)`.
+    /// Returns a shared secret and encapped key on success. If an error happened during key
+    /// exchange, returns `Err(HpkeError::EncapError)`.
     #[doc(hidden)]
     fn encap_with_eph(
         pk_recip: &Self::PublicKey,
@@ -95,15 +95,15 @@ pub trait Kem: Sized {
         encapped_key: &Self::EncappedKey,
     ) -> Result<SharedSecret<Self>, HpkeError>;
 
-    /// Derives a shared secret and an ephemeral pubkey that the owner of the reciepint's pubkey can
-    /// use to derive the same shared secret. If `sk_sender_id` is given, the sender's identity will be
-    /// tied to the shared secret.
-    /// All this does is generate an ephemeral keypair and pass to `encap_with_eph`.
+    /// Derives a shared secret and an ephemeral pubkey that the owner of the reciepint's pubkey
+    /// can use to derive the same shared secret. If `sk_sender_id` is given, the sender's identity
+    /// will be tied to the shared secret. All this does is generate an ephemeral keypair and pass
+    /// to `encap_with_eph`.
     ///
     /// Return Value
     /// ============
-    /// Returns a shared secret and encapped key on success. If an error happened during key exchange,
-    /// returns `Err(HpkeError::EncapError)`.
+    /// Returns a shared secret and encapped key on success. If an error happened during key
+    /// exchange, returns `Err(HpkeError::EncapError)`.
     #[doc(hidden)]
     fn encap<R: CryptoRng + RngCore>(
         pk_recip: &Self::PublicKey,
