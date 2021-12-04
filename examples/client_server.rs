@@ -52,10 +52,10 @@ fn client_encrypt_msg(
         hpke::setup_sender::<Aead, Kdf, Kem, _>(&OpModeS::Base, server_pk, INFO_STR, &mut csprng)
             .expect("invalid server pubkey!");
 
-    // On success, seal() will encrypt the plaintext in place
+    // On success, seal_in_place_detached() will encrypt the plaintext in place
     let mut msg_copy = msg.to_vec();
     let tag = sender_ctx
-        .seal(&mut msg_copy, associated_data)
+        .seal_in_place_detached(&mut msg_copy, associated_data)
         .expect("encryption failed!");
 
     // Rename for clarity
@@ -85,10 +85,10 @@ fn server_decrypt_msg(
         hpke::setup_receiver::<Aead, Kdf, Kem>(&OpModeR::Base, &server_sk, &encapped_key, INFO_STR)
             .expect("failed to set up receiver!");
 
-    // On success, open() will decrypt the ciphertext in place
+    // On success, open_in_place_detached() will decrypt the ciphertext in place
     let mut ciphertext_copy = ciphertext.to_vec();
     receiver_ctx
-        .open(&mut ciphertext_copy, associated_data, &tag)
+        .open_in_place_detached(&mut ciphertext_copy, associated_data, &tag)
         .expect("invalid ciphertext!");
 
     // Rename for clarity

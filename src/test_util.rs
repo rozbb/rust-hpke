@@ -134,13 +134,16 @@ pub(crate) fn aead_ctx_eq<A: Aead, Kdf: KdfTrait, Kem: KemTrait>(
         let mut plaintext = msg.clone();
         // Encrypt the plaintext
         let tag = sender
-            .seal(&mut plaintext[..], &aad)
+            .seal_in_place_detached(&mut plaintext[..], &aad)
             .unwrap_or_else(|_| panic!("seal() #{} failed", i));
         // Rename for clarity
         let mut ciphertext = plaintext;
 
         // Now to decrypt on the other side
-        if receiver.open(&mut ciphertext[..], &aad, &tag).is_err() {
+        if receiver
+            .open_in_place_detached(&mut ciphertext[..], &aad, &tag)
+            .is_err()
+        {
             // An error occurred in decryption. These encryption contexts are not identical.
             return false;
         }

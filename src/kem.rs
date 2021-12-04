@@ -120,7 +120,8 @@ pub trait Kem: Sized {
 // Kem is used as a type parameter everywhere. To avoid confusion, alias it
 use Kem as KemTrait;
 
-/// A convenience type for [u8; NSecret] for any given KEM
+/// A convenience type for `[u8; NSecret]` for any given KEM
+#[doc(hidden)]
 pub struct SharedSecret<Kem: KemTrait>(pub(crate) GenericArray<u8, Kem::NSecret>);
 
 impl<Kem: KemTrait> Default for SharedSecret<Kem> {

@@ -3,7 +3,7 @@ use crate::{
     kem::Kem as KemTrait,
     setup::ExporterSecret,
     util::{enforce_equal_len, full_suite_id, FullSuiteId},
-    Deserializable, HpkeError, Serializable,
+    Deserializable, HpkeError, Serializable, Vec,
 };
 
 use core::{default::Default, marker::PhantomData, u8};
@@ -126,6 +126,12 @@ fn mix_nonce<A: Aead>(base_nonce: &AeadNonce<A>, seq: &Seq) -> AeadNonce<A> {
 /// An authenticated encryption tag
 pub struct AeadTag<A: Aead>(GenericArray<u8, <A::AeadImpl as BaseAeadCore>::TagSize>);
 
+impl<A: Aead> Default for AeadTag<A> {
+    fn default() -> AeadTag<A> {
+        AeadTag(GenericArray::<u8, <A::AeadImpl as BaseAeadCore>::TagSize>::default())
+    }
+}
+
 impl<A: Aead> Serializable for AeadTag<A> {
     type OutputSize = <A::AeadImpl as BaseAeadCore>::TagSize;
 
@@ -174,7 +180,7 @@ impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> Clone for AeadCtx<A, Kdf, Kem> {
             exporter_secret: self.exporter_secret.clone(),
             seq: self.seq.clone(),
             src_kem: PhantomData,
-            suite_id: self.suite_id.clone(),
+            suite_id: self.suite_id,
         }
     }
 }
@@ -244,7 +250,7 @@ impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> Clone for AeadCtxR<A, Kdf, Kem> {
 }
 
 impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AeadCtxR<A, Kdf, Kem> {
-    // draft11 §5.2
+    // draft12 §5.2
     // def ContextR.Open(aad, ct):
     //   pt = Open(self.key, self.ComputeNonce(self.seq), aad, ct)
     //   if pt == OpenError:
@@ -261,7 +267,7 @@ impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AeadCtxR<A, Kdf, Kem> {
     /// sequence number overflowed, returns `Err(HpkeError::MessageLimitReached)`. If this happens,
     /// `ciphertext` will be unmodified. If the tag fails to validate, returns
     /// `Err(HpkeError::OpenError)`. If this happens, `ciphertext` is in an undefined state.
-    pub fn open(
+    pub fn open_in_place_detached(
         &mut self,
         ciphertext: &mut [u8],
         aad: &[u8],
@@ -292,6 +298,36 @@ impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AeadCtxR<A, Kdf, Kem> {
 
             Ok(())
         }
+    }
+
+    /// Opens the given ciphertext and returns a plaintext
+    ///
+    /// Return Value
+    /// ============
+    /// Returns `Ok(())` on success. If this context has been used for so many encryptions that the
+    /// sequence number overflowed, returns `Err(HpkeError::MessageLimitReached)`. If the tag fails
+    /// to validate, returns `Err(HpkeError::OpenError)`.
+    pub fn open(&mut self, ciphertext: &[u8], aad: &[u8]) -> Result<Vec<u8>, HpkeError> {
+        // Make sure the auth'd ciphertext is long enough to contain a tag. If it isn't, it's
+        // certainly not valid.
+        let tag_len = AeadTag::<A>::size();
+        let msg_len = ciphertext
+            .len()
+            .checked_sub(tag_len)
+            .ok_or(HpkeError::OpenError)?;
+
+        // Now deconstruct the auth'd ciphertext
+        let (ciphertext, tag_slice) = ciphertext.split_at(msg_len);
+        let mut buf = ciphertext.to_vec();
+        let tag = {
+            let mut t = <AeadTag<A> as Default>::default();
+            t.0.copy_from_slice(tag_slice);
+            t
+        };
+
+        // Decrypt and return the decrypted buffer
+        self.open_in_place_detached(&mut buf, aad, &tag)?;
+        Ok(buf)
     }
 
     /// Fills a given buffer with secret bytes derived from this encryption context. This value
@@ -328,7 +364,7 @@ impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> Clone for AeadCtxS<A, Kdf, Kem> {
 }
 
 impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AeadCtxS<A, Kdf, Kem> {
-    // draft11 §5.2
+    // draft12 §5.2
     // def ContextS.Seal(aad, pt):
     //   ct = Seal(self.key, self.ComputeNonce(self.seq), aad, pt)
     //   self.IncrementSeq()
@@ -343,7 +379,11 @@ impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AeadCtxS<A, Kdf, Kem> {
     /// the sequence number overflowed, returns `Err(HpkeError::MessageLimitReached)`. If this
     /// happens, `plaintext` will be unmodified. If an error happened during encryption, returns
     /// `Err(HpkeError::SealError)`. If this happens, the contents of `plaintext` is undefined.
-    pub fn seal(&mut self, plaintext: &mut [u8], aad: &[u8]) -> Result<AeadTag<A>, HpkeError> {
+    pub fn seal_in_place_detached(
+        &mut self,
+        plaintext: &mut [u8],
+        aad: &[u8],
+    ) -> Result<AeadTag<A>, HpkeError> {
         if self.0.overflowed {
             // If the sequence counter overflowed, we've been used for far too long. Shut down.
             Err(HpkeError::MessageLimitReached)
@@ -365,6 +405,29 @@ impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AeadCtxS<A, Kdf, Kem> {
             // Return the tag
             Ok(AeadTag(tag))
         }
+    }
+
+    /// Seals the given plaintext and returns the ciphertext
+    ///
+    /// Return Value
+    /// ============
+    /// Returns `Ok(tag)` on success.  If this context has been used for so many encryptions that
+    /// the sequence number overflowed, returns `Err(HpkeError::MessageLimitReached)`. If an error
+    /// happened during encryption, returns `Err(HpkeError::SealError)`.
+    pub fn seal(&mut self, plaintext: &[u8], aad: &[u8]) -> Result<Vec<u8>, HpkeError> {
+        let msg_len = plaintext.len();
+        let tag_len = AeadTag::<A>::size();
+
+        // Make a buffer that can hold a ciphertext + tag. Copy in the plaintext
+        let mut buf = vec![0u8; msg_len + tag_len];
+        buf[..msg_len].copy_from_slice(plaintext);
+
+        // Seal with a detached tag
+        let tag = self.seal_in_place_detached(&mut buf[..plaintext.len()], aad)?;
+        // Then append the tag to the end of the buffer. The buffer is now the auth'd ciphertext
+        buf[msg_len..msg_len + tag_len].copy_from_slice(&tag.0);
+
+        Ok(buf)
     }
 
     /// Fills a given buffer with secret bytes derived from this encryption context. This value
@@ -390,13 +453,10 @@ pub use crate::aead::{aes_gcm::*, chacha20_poly1305::*, export_only::*};
 
 #[cfg(test)]
 mod test {
-    use super::{Aead, AeadTag, AesGcm128, AesGcm256, ChaCha20Poly1305, ExportOnlyAead, Seq};
+    use super::{AeadTag, AesGcm128, AesGcm256, ChaCha20Poly1305, ExportOnlyAead, Seq};
     use crate::{
         kdf::HkdfSha256, test_util::gen_ctx_simple_pair, Deserializable, HpkeError, Serializable,
     };
-
-    use aead::AeadCore as BaseAeadCore;
-    use generic_array::GenericArray;
 
     /// Tests that AeadKey::from_bytes fails on inputs of incorrect length
     macro_rules! test_invalid_nonce {
@@ -439,10 +499,8 @@ mod test {
                     .unwrap();
 
                 // Modify the context by encrypting something
-                let mut plaintext = *b"back hand";
-                sender_ctx
-                    .seal(&mut plaintext[..], b"")
-                    .expect("seal() failed");
+                let plaintext = b"back hand";
+                sender_ctx.seal(plaintext, b"").expect("seal() failed");
 
                 // Get a second export secret
                 let mut secret2 = [0u8; 16];
@@ -468,8 +526,8 @@ mod test {
 
                 // Set up a context and try encrypting
                 let (mut sender_ctx, _) = gen_ctx_simple_pair::<A, Kdf, Kem>();
-                let mut plaintext = *b"back hand";
-                let _ = sender_ctx.seal(&mut plaintext[..], b"");
+                let mut plaintext = b"back hand";
+                let _ = sender_ctx.seal(plaintext, b"");
             }
 
             #[should_panic]
@@ -479,15 +537,11 @@ mod test {
                 type Kdf = HkdfSha256;
                 type A = ExportOnlyAead;
 
-                // Set up a context and try encrypting
+                // Set up a context and try decrypting an invalid ciphertext
                 let (_, mut receiver_ctx) = gen_ctx_simple_pair::<A, Kdf, Kem>();
-                let mut ciphertext = *b"back hand";
+                let invalid_ciphertext = vec![0u8; 60];
                 let aad = b"with my prayers";
-                // The contents of the tag doesn't matter. This will panic before the take is read
-                type TagSize = <<A as Aead>::AeadImpl as BaseAeadCore>::TagSize;
-                let tag = AeadTag(GenericArray::<u8, TagSize>::default());
-
-                let _ = receiver_ctx.open(&mut ciphertext[..], aad, &tag);
+                let _ = receiver_ctx.open(&invalid_ciphertext, aad);
             }
         };
     }
@@ -518,34 +572,25 @@ mod test {
                 // overflow
 
                 let msg = b"draxx them sklounst";
-                let aad = b"with my prayers";
+                let aad = b"you have to have the kebapi";
 
                 // Do one round trip and ensure it works
                 {
-                    let mut plaintext = *msg;
                     // Encrypt the plaintext
-                    let tag = sender_ctx
-                        .seal(&mut plaintext[..], aad)
-                        .expect("seal() failed");
-                    // Rename for clarity
-                    let mut ciphertext = plaintext;
+                    let ciphertext = sender_ctx.seal(msg, aad).expect("seal() failed");
 
                     // Now to decrypt on the other side
-                    receiver_ctx
-                        .open(&mut ciphertext[..], aad, &tag)
-                        .expect("open() failed");
-                    // Rename for clarity
-                    let roundtrip_plaintext = ciphertext;
+                    let roundtrip_plaintext =
+                        receiver_ctx.open(&ciphertext, aad).expect("open() failed");
 
                     // Make sure the output message was the same as the input message
-                    assert_eq!(msg, &roundtrip_plaintext);
+                    assert_eq!(msg, roundtrip_plaintext.as_slice());
                 }
 
                 // Try another round trip and ensure that we've overflowed
                 {
-                    let mut plaintext = *msg;
                     // Try to encrypt the plaintext
-                    match sender_ctx.seal(&mut plaintext[..], aad) {
+                    match sender_ctx.seal(msg, aad) {
                         Err(HpkeError::MessageLimitReached) => {
                             // Good, this should have overflowed
                         }
@@ -555,11 +600,9 @@ mod test {
 
                     // Now try to decrypt something. This isn't a valid ciphertext or tag, but the
                     // overflow should fail before the tag check fails.
-                    let mut placeholder_ciphertext = [0u8; 32];
-                    let placeholder_tag = AeadTag::from_bytes(&[0; 16]).unwrap();
+                    let placeholder_ciphertext = [0u8; 32];
 
-                    match receiver_ctx.open(&mut placeholder_ciphertext[..], aad, &placeholder_tag)
-                    {
+                    match receiver_ctx.open(&placeholder_ciphertext, aad) {
                         Err(HpkeError::MessageLimitReached) => {
                             // Good, this should have overflowed
                         }
@@ -582,51 +625,32 @@ mod test {
 
                 let (mut sender_ctx, mut receiver_ctx) = gen_ctx_simple_pair::<A, Kdf, Kem>();
 
-                let orig_msg = b"Love it or leave it, you better gain way";
+                let msg = b"Love it or leave it, you better gain way";
                 let aad = b"You better hit bull's eye, the kid don't play";
 
                 // Encrypt in place with the sender context
-                let mut msg = orig_msg.clone();
-                let tag = sender_ctx.seal(&mut msg, aad).expect("seal() failed");
-                // Rename for clarity
-                let mut ciphertext = msg;
+                let ciphertext = sender_ctx.seal(msg, aad).expect("seal() failed");
 
                 // Make sure seal() isn't a no-op
-                assert_ne!(&ciphertext, orig_msg);
+                assert_ne!(&ciphertext, msg);
 
                 // Decrypt with the receiver context
-                receiver_ctx
-                    .open(&mut ciphertext, aad, &tag)
-                    .expect("open() failed");
-                // Change name for clarity
-                let decrypted = ciphertext;
-                assert_eq!(&decrypted, orig_msg);
+                let decrypted = receiver_ctx.open(&ciphertext, aad).expect("open() failed");
+                assert_eq!(&decrypted, msg);
 
                 // Now try sending an invalid message followed by a valid message. The valid
                 // message should decrypt correctly
-                let mut invalid_ciphertext = [0x13; 10];
-                assert!(receiver_ctx
-                    .open(&mut invalid_ciphertext, aad, &tag)
-                    .is_err());
+                let invalid_ciphertext = [0x00; 32];
+                assert!(receiver_ctx.open(&invalid_ciphertext, aad).is_err());
 
                 // Now make sure a round trip succeeds
-                let mut msg = orig_msg.clone();
-                let tag = sender_ctx
-                    .seal(&mut msg, aad)
-                    .expect("second seal() failed");
-                // Rename for clarity
-                let mut ciphertext = msg;
-
-                // Make sure seal() isn't a no-op
-                assert_ne!(&ciphertext, orig_msg);
+                let ciphertext = sender_ctx.seal(msg, aad).expect("second seal() failed");
 
                 // Decrypt with the receiver context
-                receiver_ctx
-                    .open(&mut ciphertext, aad, &tag)
+                let decrypted = receiver_ctx
+                    .open(&ciphertext, aad)
                     .expect("second open() failed");
-                // Change name for clarity
-                let decrypted = ciphertext;
-                assert_eq!(&decrypted, orig_msg);
+                assert_eq!(&decrypted, msg);
             }
         };
     }

@@ -232,37 +232,19 @@ fn test_case<A: Aead, Kdf: KdfTrait, Kem: KemTrait>(tv: MainTestVector) {
     // Go through all the plaintext-ciphertext pairs of this test vector and assert the
     // ciphertext decrypts to the corresponding plaintext
     for enc_packet in tv.encryptions {
-        let aad = enc_packet.aad;
-
-        // The test vector's ciphertext is of the form ciphertext || tag. Break it up into two
-        // pieces so we can call open() on it.
-        let (mut ciphertext, tag) = {
-            let mut ciphertext_and_tag = enc_packet.ciphertext;
-            let total_len = ciphertext_and_tag.len();
-
-            let tag_size = AeadTag::<A>::size();
-            let (ciphertext_bytes, tag_bytes) =
-                ciphertext_and_tag.split_at_mut(total_len - tag_size);
-
-            (
-                ciphertext_bytes.to_vec(),
-                AeadTag::from_bytes(tag_bytes).unwrap(),
-            )
-        };
-
-        // Open the ciphertext in place and assert that this succeeds
-        aead_ctx
-            .open(&mut ciphertext, &aad, &tag)
-            .expect("open failed");
-        // Rename for clarity
-        let plaintext = ciphertext;
-
-        // Assert the plaintext equals the expected plaintext
-        assert_eq!(
+        // Descructure the vector
+        let EncryptionTestVector {
+            aad,
+            ciphertext,
             plaintext,
-            enc_packet.plaintext.as_slice(),
-            "plaintexts don't match"
-        );
+            ..
+        } = enc_packet;
+
+        // Open the ciphertext and assert that it succeeds
+        let decrypted = aead_ctx.open(&ciphertext, &aad).expect("open failed");
+
+        // Assert the decrypted payload equals the expected plaintext
+        assert_eq!(decrypted, plaintext, "plaintexts don't match");
     }
 
     // Now check that AeadCtx::export returns the expected values

@@ -4,7 +4,7 @@ use crate::{
     kem::Kem as KemTrait,
     op_mode::{OpModeR, OpModeS},
     setup::{setup_receiver, setup_sender},
-    HpkeError,
+    HpkeError, Vec,
 };
 
 use rand_core::{CryptoRng, RngCore};
@@ -15,16 +15,16 @@ use rand_core::{CryptoRng, RngCore};
 //   ct = ctx.Seal(aad, pt)
 //   return enc, ct
 
-/// Does a `setup_sender` and `AeadCtx::seal` in one shot. That is, it does a key encapsulation to
-/// the specified recipient and encrypts the provided plaintext in place. See `setup::setup_sender`
-/// and `AeadCtx::seal` for more detail.
+/// Does a `setup_sender` and `AeadCtxS::seal_in_place_detached` in one shot. That is, it does a
+/// key encapsulation to the specified recipient and encrypts the provided plaintext in place. See
+/// `setup::setup_sender` and `AeadCtxS::seal_in_place_detached` for more detail.
 ///
 /// Return Value
 /// ============
 /// Returns `Ok((encapped_key, auth_tag))` on success. If an error happened during key
 /// encapsulation, returns `Err(HpkeError::EncapError)`. If an error happened during encryption,
 /// returns `Err(HpkeError::SealError)`. In this case, the contents of `plaintext` is undefined.
-pub fn single_shot_seal<A, Kdf, Kem, R>(
+pub fn single_shot_seal_in_place_detached<A, Kdf, Kem, R>(
     mode: &OpModeS<Kem>,
     pk_recip: &Kem::PublicKey,
     info: &[u8],
@@ -42,9 +42,41 @@ where
     let (encapped_key, mut aead_ctx) =
         setup_sender::<A, Kdf, Kem, R>(mode, pk_recip, info, csprng)?;
     // Encrypt
-    let tag = aead_ctx.seal(plaintext, aad)?;
+    let tag = aead_ctx.seal_in_place_detached(plaintext, aad)?;
 
     Ok((encapped_key, tag))
+}
+
+/// Does a `setup_sender` and `AeadCtxS::seal` in one shot. That is, it does a key encapsulation to
+/// the specified recipient and encrypts the provided plaintext. See `setup::setup_sender` and
+/// `AeadCtxS::seal` for more detail}
+///
+/// Return Value
+/// ============
+/// Returns `Ok((encapped_key, ciphertext))` on success. If an error happened during key
+/// encapsulation, returns `Err(HpkeError::EncapError)`. If an error happened during encryption,
+/// returns `Err(HpkeError::SealError)`.
+pub fn single_shot_seal<A, Kdf, Kem, R>(
+    mode: &OpModeS<Kem>,
+    pk_recip: &Kem::PublicKey,
+    info: &[u8],
+    plaintext: &[u8],
+    aad: &[u8],
+    csprng: &mut R,
+) -> Result<(Kem::EncappedKey, Vec<u8>), HpkeError>
+where
+    A: Aead,
+    Kdf: KdfTrait,
+    Kem: KemTrait,
+    R: CryptoRng + RngCore,
+{
+    // Encap a key
+    let (encapped_key, mut aead_ctx) =
+        setup_sender::<A, Kdf, Kem, R>(mode, pk_recip, info, csprng)?;
+    // Encrypt
+    let ciphertext = aead_ctx.seal(plaintext, aad)?;
+
+    Ok((encapped_key, ciphertext))
 }
 
 // draft11 §6.1
@@ -52,16 +84,16 @@ where
 //   ctx = SetupAuthPSKR(enc, skR, info, psk, psk_id, pkS)
 //   return ctx.Open(aad, ct)
 
-/// Does a `setup_receiver` and `AeadCtx::open` in one shot. That is, it does a key decapsulation
-/// for the specified recipient and decrypts the provided ciphertext in-place. See
-/// `setup::setup_reciever` and `AeadCtx::open` for more detail.
+/// Does a `setup_receiver` and `AeadCtxR::open_in_place_detached` in one shot. That is, it does a
+/// key decapsulation for the specified recipient and decrypts the provided ciphertext in place.
+/// See `setup::setup_reciever` and `AeadCtxR::open_in_place_detached` for more detail.
 ///
 /// Return Value
 /// ============
 /// Returns `Ok()` on success. If an error happened during key decapsulation, returns
 /// `Err(HpkeError::DecapError)`. If an error happened during decryption, returns
 /// `Err(HpkeError::OpenError)`. In this case, the contents of `ciphertext` is undefined.
-pub fn single_shot_open<A, Kdf, Kem>(
+pub fn single_shot_open_in_place_detached<A, Kdf, Kem>(
     mode: &OpModeR<Kem>,
     sk_recip: &Kem::PrivateKey,
     encapped_key: &Kem::EncappedKey,
@@ -78,7 +110,35 @@ where
     // Decap the key
     let mut aead_ctx = setup_receiver::<A, Kdf, Kem>(mode, sk_recip, encapped_key, info)?;
     // Decrypt
-    aead_ctx.open(ciphertext, aad, tag)
+    aead_ctx.open_in_place_detached(ciphertext, aad, tag)
+}
+
+/// Does a `setup_receiver` and `AeadCtxR::open` in one shot. That is, it does a key decapsulation
+/// for the specified recipient and decrypts the provided ciphertext. See `setup::setup_reciever`
+/// and `AeadCtxR::open` for more detail.
+///
+/// Return Value
+/// ============
+/// Returns `Ok(plaintext)` on success. If an error happened during key decapsulation, returns
+/// `Err(HpkeError::DecapError)`. If an error happened during decryption, returns
+/// `Err(HpkeError::OpenError)`.
+pub fn single_shot_open<A, Kdf, Kem>(
+    mode: &OpModeR<Kem>,
+    sk_recip: &Kem::PrivateKey,
+    encapped_key: &Kem::EncappedKey,
+    info: &[u8],
+    ciphertext: &[u8],
+    aad: &[u8],
+) -> Result<Vec<u8>, HpkeError>
+where
+    A: Aead,
+    Kdf: KdfTrait,
+    Kem: KemTrait,
+{
+    // Decap the key
+    let mut aead_ctx = setup_receiver::<A, Kdf, Kem>(mode, sk_recip, encapped_key, info)?;
+    // Decrypt
+    aead_ctx.open(ciphertext, aad)
 }
 
 #[cfg(test)]
@@ -132,12 +192,11 @@ mod test {
                 let receiver_mode = OpModeR::<Kem>::AuthPsk(pk_sender_id, psk_bundle);
 
                 // Encrypt with the first context
-                let mut ciphertext = msg.clone();
-                let (encapped_key, tag) = single_shot_seal::<A, Kdf, Kem, _>(
+                let (encapped_key, ciphertext) = single_shot_seal::<A, Kdf, Kem, _>(
                     &sender_mode,
                     &pk_recip,
-                    &info[..],
-                    &mut ciphertext[..],
+                    info,
+                    msg,
                     aad,
                     &mut csprng,
                 )
@@ -147,19 +206,16 @@ mod test {
                 assert!(&ciphertext[..] != &msg[..]);
 
                 // Decrypt with the second context
-                single_shot_open::<A, Kdf, Kem>(
+                let decrypted = single_shot_open::<A, Kdf, Kem>(
                     &receiver_mode,
                     &sk_recip,
                     &encapped_key,
                     info,
-                    &mut ciphertext[..],
+                    &ciphertext,
                     aad,
-                    &tag,
                 )
                 .expect("single_shot_open() failed");
-                // Change name for clarity
-                let decrypted = ciphertext;
-                assert_eq!(&decrypted[..], &msg[..]);
+                assert_eq!(&decrypted, &msg);
             }
         };
     }

@@ -23,16 +23,22 @@ use hpke::{
 use rand::{rngs::StdRng, CryptoRng, RngCore, SeedableRng};
 
 trait AgileAeadCtxS {
-    fn seal(&mut self, plaintext: &mut [u8], aad: &[u8]) -> Result<AgileAeadTag, HpkeError>;
+    fn seal_in_place_detached(
+        &mut self,
+        plaintext: &mut [u8],
+        aad: &[u8],
+    ) -> Result<AgileAeadTag, AgileHpkeError>;
+    fn seal(&mut self, plaintext: &[u8], aad: &[u8]) -> Result<Vec<u8>, AgileHpkeError>;
 }
 
 trait AgileAeadCtxR {
-    fn open(
+    fn open_in_place_detached(
         &mut self,
         ciphertext: &mut [u8],
         aad: &[u8],
         tag_bytes: &[u8],
     ) -> Result<(), AgileHpkeError>;
+    fn open(&mut self, ciphertext: &[u8], aad: &[u8]) -> Result<Vec<u8>, AgileHpkeError>;
 }
 
 type AgileAeadTag = Vec<u8>;
@@ -57,20 +63,33 @@ impl From<HpkeError> for AgileHpkeError {
 }
 
 impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AgileAeadCtxS for AeadCtxS<A, Kdf, Kem> {
-    fn seal(&mut self, plaintext: &mut [u8], aad: &[u8]) -> Result<Vec<u8>, HpkeError> {
-        self.seal(plaintext, aad).map(|tag| tag.to_bytes().to_vec())
+    fn seal_in_place_detached(
+        &mut self,
+        plaintext: &mut [u8],
+        aad: &[u8],
+    ) -> Result<Vec<u8>, AgileHpkeError> {
+        self.seal_in_place_detached(plaintext, aad)
+            .map(|tag| tag.to_bytes().to_vec())
+            .map_err(Into::into)
+    }
+    fn seal(&mut self, plaintext: &[u8], aad: &[u8]) -> Result<Vec<u8>, AgileHpkeError> {
+        self.seal(plaintext, aad).map_err(Into::into)
     }
 }
 
 impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AgileAeadCtxR for AeadCtxR<A, Kdf, Kem> {
-    fn open(
+    fn open_in_place_detached(
         &mut self,
         ciphertext: &mut [u8],
         aad: &[u8],
         tag_bytes: &[u8],
     ) -> Result<(), AgileHpkeError> {
         let tag = AeadTag::<A>::from_bytes(tag_bytes)?;
-        self.open(ciphertext, aad, &tag).map_err(|e| e.into())
+        self.open_in_place_detached(ciphertext, aad, &tag)
+            .map_err(Into::into)
+    }
+    fn open(&mut self, ciphertext: &[u8], aad: &[u8]) -> Result<Vec<u8>, AgileHpkeError> {
+        self.open(ciphertext, aad).map_err(Into::into)
     }
 }
 
@@ -721,10 +740,8 @@ fn main() {
                 // Test an encryption-decryption round trip
                 let msg = b"paper boy paper boy";
                 let aad = b"all about that paper, boy";
-                let mut plaintext = *msg;
-                let tag = aead_ctx1.seal(&mut plaintext, aad).unwrap();
-                let mut ciphertext = plaintext;
-                aead_ctx2.open(&mut ciphertext, aad, &tag).unwrap();
+                let ciphertext = aead_ctx1.seal(msg, aad).unwrap();
+                aead_ctx2.open(&ciphertext, aad).unwrap();
                 let roundtrip_plaintext = ciphertext;
 
                 // Assert that the derived plaintext equals the original message

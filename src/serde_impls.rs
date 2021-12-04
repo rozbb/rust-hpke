@@ -144,7 +144,9 @@ mod test {
                 let (encapped_key, mut aead_ctx) =
                     setup_sender::<A, Kdf, Kem, _>(&sender_mode, &pk_recip, &info[..], &mut csprng)
                         .unwrap();
-                let aead_tag = aead_ctx.seal(&mut plaintext, b"").unwrap();
+                let aead_tag = aead_ctx
+                    .seal_in_place_detached(&mut plaintext, b"")
+                    .unwrap();
 
                 // Now see if serde behaves properly on everything that can be serialized
                 assert_serde_roundtrip(&sk_recip);

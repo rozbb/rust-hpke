@@ -36,16 +36,14 @@
 //!     hpke::setup_sender::<Aead, Kdf, Kem, _>(&OpModeS::Base, &bob_pk, info_str, &mut csprng)
 //!         .expect("invalid server pubkey!");
 //!
-//! // Alice encrypts a message to Bob. msg gets encrypted in place, and aad is authenticated
-//! // associated data that is not encrypted.
-//! let mut msg = *b"fronthand or backhand?";
+//! // Alice encrypts a message to Bob. `aad` is authenticated associated data that is not
+//! // encrypted.
+//! let msg = b"fronthand or backhand?";
 //! let aad = b"a gentleman's game";
-//! let auth_tag = encryption_context
-//!     .seal(&mut msg, aad)
-//!     .expect("encryption failed!");
-//! // The msg was encrypted in-place. So rename it for clarity
-//! let ciphertext = msg;
-//! # let mut ciphertext = ciphertext; // Make it mutable so Bob can decrypt in place
+//! // To seal without allocating:
+//! //     let auth_tag = encryption_context.seal_in_place_detached(&mut msg, aad)?;
+//! // To seal with allocating:
+//! let ciphertext = encryption_context.seal(msg, aad).expect("encryption failed!");
 //!
 //! // ~~~
 //! // Alice sends the encapsulated key, message ciphertext, AAD, and auth tag to Bob over the
@@ -61,9 +59,10 @@
 //!         &encapsulated_key,
 //!         info_str,
 //!     ).expect("failed to set up receiver!");
-//! decryption_context.open(&mut ciphertext, aad, &auth_tag).expect("invalid ciphertext!");
-//! // The ciphertext was decrypted in-place. So rename it for clarity
-//! let plaintext = ciphertext;
+//! // To open without allocating:
+//! //     decryption_context.open_in_place_detached(&mut ciphertext, aad, &auth_tag)
+//! // To open with allocating:
+//! let plaintext = decryption_context.open(&ciphertext, aad).expect("invalid ciphertext!");
 //!
 //! assert_eq!(&plaintext, b"fronthand or backhand?");
 //! # }
@@ -77,10 +76,16 @@
 #[macro_use]
 extern crate std;
 
+#[cfg(feature = "std")]
+pub(crate) use std::vec::Vec;
+
 #[cfg(not(feature = "std"))]
 #[allow(unused_imports)]
 #[macro_use]
 extern crate alloc;
+
+#[cfg(not(feature = "std"))]
+pub(crate) use alloc::vec::Vec;
 
 //-------- Testing stuff --------//
 
@@ -123,7 +128,10 @@ pub use op_mode::{OpModeR, OpModeS, PskBundle};
 #[doc(inline)]
 pub use setup::{setup_receiver, setup_sender};
 #[doc(inline)]
-pub use single_shot::{single_shot_open, single_shot_seal};
+pub use single_shot::{
+    single_shot_open, single_shot_open_in_place_detached, single_shot_seal,
+    single_shot_seal_in_place_detached,
+};
 
 //-------- Top-level types --------//
 
