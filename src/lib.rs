@@ -104,8 +104,10 @@ mod test_util;
 
 //-------- Modules and exports--------//
 
-// Re-export this version of generic_array, since that's what's used everywhere in this crate
+// Re-export our versions of generic_array and rand_core, since their traits and types are exposed
+// in this crate
 pub use generic_array;
+pub use rand_core;
 
 #[macro_use]
 mod util;
