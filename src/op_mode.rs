@@ -2,6 +2,12 @@ use crate::kem::Kem as KemTrait;
 
 /// Contains preshared key bytes and an identifier. This is intended to go inside an `OpModeR` or
 /// `OpModeS` struct.
+///
+/// Requirements
+/// ============
+/// `psk` MUST contain at least 32 bytes of entropy. Further, `psk.len()` SHOULD be at least as
+/// long as an extracted key from the KDF you use with `setup_sender`/`setup_receiver`, i.e., at
+/// least `Kdf::extracted_key_size()`.
 #[derive(Clone, Copy)]
 pub struct PskBundle<'a> {
     /// The preshared key

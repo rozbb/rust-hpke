@@ -1,5 +1,5 @@
 use crate::{
-    aead::{Aead, AeadTag, AesGcm128, AesGcm256, ChaCha20Poly1305, ExportOnlyAead},
+    aead::{Aead, AesGcm128, AesGcm256, ChaCha20Poly1305, ExportOnlyAead},
     kdf::{HkdfSha256, HkdfSha384, HkdfSha512, Kdf as KdfTrait},
     kem::{DhP256HkdfSha256, Kem as KemTrait, X25519HkdfSha256},
     op_mode::{OpModeR, PskBundle},

@@ -526,7 +526,7 @@ mod test {
 
                 // Set up a context and try encrypting
                 let (mut sender_ctx, _) = gen_ctx_simple_pair::<A, Kdf, Kem>();
-                let mut plaintext = b"back hand";
+                let plaintext = b"back hand";
                 let _ = sender_ctx.seal(plaintext, b"");
             }
 

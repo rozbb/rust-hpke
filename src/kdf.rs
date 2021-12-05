@@ -1,6 +1,6 @@
 use byteorder::{BigEndian, ByteOrder};
 use digest::{BlockInput, Digest, FixedOutput, Reset, Update};
-use generic_array::GenericArray;
+use generic_array::{typenum::Unsigned, GenericArray};
 use sha2::{Sha256, Sha384, Sha512};
 
 const VERSION_LABEL: &[u8] = b"HPKE-v1";
@@ -18,6 +18,11 @@ pub trait Kdf {
 
     /// The algorithm identifier for a KDF implementation
     const KDF_ID: u16;
+
+    /// Returns the size (in bytes) of the output of this KDF's Extract() function
+    fn extracted_key_size() -> usize {
+        <Self::HashImpl as FixedOutput>::OutputSize::to_usize()
+    }
 }
 
 // We use Kdf as a type parameter, so this is to avoid ambiguity.
