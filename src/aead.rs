@@ -445,9 +445,9 @@ impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AeadCtxS<A, Kdf, Kem> {
 }
 
 // Export all the AEAD implementations
-pub mod aes_gcm;
-pub mod chacha20_poly1305;
-pub mod export_only;
+mod aes_gcm;
+mod chacha20_poly1305;
+mod export_only;
 #[doc(inline)]
 pub use crate::aead::{aes_gcm::*, chacha20_poly1305::*, export_only::*};
 

@@ -52,6 +52,7 @@ pub trait Kem: Sized {
     #[doc(hidden)]
     type NSecret: ArrayLength<u8>;
 
+    /// The algorithm identifier for a KEM implementation
     const KEM_ID: u16;
 
     /// Deterministically derives a keypair from the given input keying material
