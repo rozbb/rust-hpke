@@ -49,7 +49,7 @@ where
 
 /// Does a `setup_sender` and `AeadCtxS::seal` in one shot. That is, it does a key encapsulation to
 /// the specified recipient and encrypts the provided plaintext. See `setup::setup_sender` and
-/// `AeadCtxS::seal` for more detail}
+/// `AeadCtxS::seal` for more detail.
 ///
 /// Return Value
 /// ============
