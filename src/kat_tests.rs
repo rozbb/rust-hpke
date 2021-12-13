@@ -197,9 +197,10 @@ fn test_case<A: Aead, Kdf: KdfTrait, Kem: KemTrait>(tv: MainTestVector) {
 
     // Now derive the encapped key with the deterministic encap function, using all the inputs
     // above
-    let (shared_secret, encapped_key) =
-        Kem::encap_with_eph(&pk_recip, sender_keypair.as_ref(), sk_eph.clone())
-            .expect("encap failed");
+    let (shared_secret, encapped_key) = {
+        let sender_keypair_ref = sender_keypair.as_ref().map(|&(ref sk, ref pk)| (sk, pk));
+        Kem::encap_with_eph(&pk_recip, sender_keypair_ref, sk_eph.clone()).expect("encap failed")
+    };
 
     // Assert that the derived shared secret key is identical to the one provided
     assert_eq!(

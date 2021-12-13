@@ -154,7 +154,7 @@ macro_rules! impl_dhkem {
             #[doc(hidden)]
             fn encap_with_eph(
                 pk_recip: &Self::PublicKey,
-                sender_id_keypair: Option<&(Self::PrivateKey, Self::PublicKey)>,
+                sender_id_keypair: Option<(&Self::PrivateKey, &Self::PublicKey)>,
                 sk_eph: Self::PrivateKey,
             ) -> Result<(SharedSecret<Self>, Self::EncappedKey), HpkeError> {
                 // Put together the binding context used for all KDF operations
