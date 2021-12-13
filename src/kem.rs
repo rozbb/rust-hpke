@@ -123,7 +123,7 @@ use Kem as KemTrait;
 
 /// A convenience type for `[u8; NSecret]` for any given KEM
 #[doc(hidden)]
-pub struct SharedSecret<Kem: KemTrait>(pub(crate) GenericArray<u8, Kem::NSecret>);
+pub struct SharedSecret<Kem: KemTrait>(pub GenericArray<u8, Kem::NSecret>);
 
 impl<Kem: KemTrait> Default for SharedSecret<Kem> {
     fn default() -> SharedSecret<Kem> {
