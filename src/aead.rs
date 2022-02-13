@@ -411,9 +411,9 @@ impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AeadCtxS<A, Kdf, Kem> {
     ///
     /// Return Value
     /// ============
-    /// Returns `Ok(tag)` on success.  If this context has been used for so many encryptions that
-    /// the sequence number overflowed, returns `Err(HpkeError::MessageLimitReached)`. If an error
-    /// happened during encryption, returns `Err(HpkeError::SealError)`.
+    /// Returns `Ok(ciphertext)` on success.  If this context has been used for so many encryptions
+    /// that the sequence number overflowed, returns `Err(HpkeError::MessageLimitReached)`. If an
+    /// error happened during encryption, returns `Err(HpkeError::SealError)`.
     pub fn seal(&mut self, plaintext: &[u8], aad: &[u8]) -> Result<Vec<u8>, HpkeError> {
         let msg_len = plaintext.len();
         let tag_len = AeadTag::<A>::size();
