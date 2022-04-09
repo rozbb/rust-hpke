@@ -70,7 +70,8 @@ impl KdfTrait for HkdfSha512 {
 
 /// Uses the given IKM to extract a secret, and then uses that secret, plus the given suite ID and
 /// info string, to expand to the output buffer
-pub(crate) fn extract_and_expand<Kdf: KdfTrait>(
+#[doc(hidden)]
+pub fn extract_and_expand<Kdf: KdfTrait>(
     ikm: &[u8],
     suite_id: &[u8],
     info: &[u8],
@@ -88,7 +89,8 @@ pub(crate) fn extract_and_expand<Kdf: KdfTrait>(
 //   return Extract(salt, labeled_ikm)
 
 /// Returns the HKDF context derived from `(salt=salt, ikm="HPKE-05 "||suite_id||label||ikm)`
-pub(crate) fn labeled_extract<Kdf: KdfTrait>(
+#[doc(hidden)]
+pub fn labeled_extract<Kdf: KdfTrait>(
     salt: &[u8],
     suite_id: &[u8],
     label: &[u8],
