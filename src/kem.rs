@@ -65,7 +65,15 @@ pub trait Kem: Sized {
     fn derive_keypair(ikm: &[u8]) -> (Self::PrivateKey, Self::PublicKey);
 
     /// Generates a random keypair using the given RNG
-    fn gen_keypair<R: CryptoRng + RngCore>(csprng: &mut R) -> (Self::PrivateKey, Self::PublicKey);
+    fn gen_keypair<R: CryptoRng + RngCore>(csprng: &mut R) -> (Self::PrivateKey, Self::PublicKey) {
+        // Make some keying material that's the size of a private key
+        let mut ikm: GenericArray<u8, <Self::PrivateKey as Serializable>::OutputSize> =
+            GenericArray::default();
+        // Fill it with randomness
+        csprng.fill_bytes(&mut ikm);
+        // Run derive_keypair using the KEM's KDF
+        Self::derive_keypair(&ikm)
+    }
 
     /// Derives a shared secret that the owner of the recipient's pubkey can use to derive the same
     /// shared secret. If `sk_sender_id` is given, the sender's identity will be tied to the shared

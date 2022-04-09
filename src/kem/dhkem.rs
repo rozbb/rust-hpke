@@ -9,7 +9,6 @@ use crate::{
 use digest::FixedOutput;
 use generic_array::GenericArray;
 use paste::paste;
-use rand_core::{CryptoRng, RngCore};
 
 /// Defines DHKEM(G, K) given a Diffie-Hellman group G and KDF K
 macro_rules! impl_dhkem {
@@ -107,19 +106,6 @@ macro_rules! impl_dhkem {
             fn derive_keypair(ikm: &[u8]) -> (Self::PrivateKey, Self::PublicKey) {
                 let suite_id = kem_suite_id::<Self>();
                 <$dhkex as DhKeyExchange>::derive_keypair::<$kdf>(&suite_id, ikm)
-            }
-
-            /// Generates a random keypair using the given RNG
-            fn gen_keypair<R: CryptoRng + RngCore>(
-                csprng: &mut R,
-            ) -> (Self::PrivateKey, Self::PublicKey) {
-                // Make some keying material that's the size of a private key
-                let mut ikm: GenericArray<u8, <Self::PrivateKey as Serializable>::OutputSize> =
-                    GenericArray::default();
-                // Fill it with randomness
-                csprng.fill_bytes(&mut ikm);
-                // Run derive_keypair using the KEM's KDF
-                Self::derive_keypair(&ikm)
             }
 
             // draft12 §4.1
