@@ -61,10 +61,10 @@ pub enum OpModeS<'a, Kem: KemTrait> {
 // Helpers functions for setup_sender and testing
 impl<'a, Kem: KemTrait> OpModeS<'a, Kem> {
     /// Returns the sender's identity pubkey if it's specified
-    pub(crate) fn get_sender_id_keypair(&self) -> Option<&(Kem::PrivateKey, Kem::PublicKey)> {
+    pub(crate) fn get_sender_id_keypair(&self) -> Option<(&Kem::PrivateKey, &Kem::PublicKey)> {
         match self {
-            OpModeS::Auth(keypair) => Some(keypair),
-            OpModeS::AuthPsk(keypair, _) => Some(keypair),
+            OpModeS::Auth(keypair) => Some((&keypair.0, &keypair.1)),
+            OpModeS::AuthPsk(keypair, _) => Some((&keypair.0, &keypair.1)),
             _ => None,
         }
     }
