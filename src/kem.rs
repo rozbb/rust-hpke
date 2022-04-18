@@ -39,12 +39,16 @@ pub trait Kem: Sized {
     #[cfg(not(feature = "serde_impls"))]
     type PrivateKey: Clone + Serializable + Deserializable;
 
+    /// The encapsulated key for this KEM. This is used by the recipient to derive the shared
+    /// secret.
     #[cfg(feature = "serde_impls")]
     type EncappedKey: Clone
         + Serializable
         + Deserializable
         + SerdeSerialize
         + for<'a> SerdeDeserialize<'a>;
+    /// The encapsulated key for this KEM. This is used by the recipient to derive the shared
+    /// secret.
     #[cfg(not(feature = "serde_impls"))]
     type EncappedKey: Clone + Serializable + Deserializable;
 
@@ -75,21 +79,6 @@ pub trait Kem: Sized {
         Self::derive_keypair(&ikm)
     }
 
-    /// Derives a shared secret that the owner of the recipient's pubkey can use to derive the same
-    /// shared secret. If `sk_sender_id` is given, the sender's identity will be tied to the shared
-    /// secret.
-    ///
-    /// Return Value
-    /// ============
-    /// Returns a shared secret and encapped key on success. If an error happened during key
-    /// exchange, returns `Err(HpkeError::EncapError)`.
-    #[doc(hidden)]
-    fn encap_with_eph(
-        pk_recip: &Self::PublicKey,
-        sender_id_keypair: Option<(&Self::PrivateKey, &Self::PublicKey)>,
-        sk_eph: Self::PrivateKey,
-    ) -> Result<(SharedSecret<Self>, Self::EncappedKey), HpkeError>;
-
     /// Derives a shared secret given the encapsulated key and the recipients secret key. If
     /// `pk_sender_id` is given, the sender's identity will be tied to the shared secret.
     ///
@@ -118,12 +107,7 @@ pub trait Kem: Sized {
         pk_recip: &Self::PublicKey,
         sender_id_keypair: Option<(&Self::PrivateKey, &Self::PublicKey)>,
         csprng: &mut R,
-    ) -> Result<(SharedSecret<Self>, Self::EncappedKey), HpkeError> {
-        // Generate a new ephemeral keypair
-        let (sk_eph, _) = Self::gen_keypair(csprng);
-        // Now pass to encap_with_eph
-        Self::encap_with_eph(pk_recip, sender_id_keypair, sk_eph)
-    }
+    ) -> Result<(SharedSecret<Self>, Self::EncappedKey), HpkeError>;
 }
 
 // Kem is used as a type parameter everywhere. To avoid confusion, alias it

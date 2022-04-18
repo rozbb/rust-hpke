@@ -225,7 +225,7 @@ mod test {
         test_single_shot_correctness_x25519,
         ChaCha20Poly1305,
         HkdfSha256,
-        crate::kem::X25519HkdfSha256
+        crate::kem::x25519_hkdfsha256::X25519HkdfSha256
     );
 
     #[cfg(feature = "p256")]
@@ -233,6 +233,6 @@ mod test {
         test_single_shot_correctness_p256,
         ChaCha20Poly1305,
         HkdfSha256,
-        crate::kem::DhP256HkdfSha256
+        crate::kem::dhp256_hkdfsha256::DhP256HkdfSha256
     );
 }
