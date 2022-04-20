@@ -9,7 +9,7 @@ pub(crate) type KemSuiteId = [u8; 5];
 /// KDF ID, and `ZZ` is the AEAD ID
 pub(crate) type FullSuiteId = [u8; 10];
 
-// draft11 §5.1
+// RFC 9180 §5.1
 // suite_id = concat(
 //   "HPKE",
 //   I2OSP(kem_id, 2),
@@ -35,7 +35,7 @@ where
     suite_id
 }
 
-// draft11 §4.1
+// RFC 9180 §4.1
 // suite_id = concat("KEM", I2OSP(kem_id, 2))
 
 /// Constructs the `suite_id` used as binding context in all functions in `kem`

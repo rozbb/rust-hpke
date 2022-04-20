@@ -3,8 +3,8 @@ use crate::{kdf::Kdf as KdfTrait, util::KemSuiteId, Deserializable, Serializable
 #[cfg(feature = "serde_impls")]
 use serde::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
 
-// This is currently the maximum value of all of Npk, Ndh, and Nenc. It's achieved by P-521 in
-// draft11 §7.1
+// This is the maximum value of all of Npk, Ndh, and Nenc. It's achieved by P-521 in RFC 9180 §7.1
+// Table 2.
 pub(crate) const MAX_PUBKEY_SIZE: usize = 133;
 
 #[doc(hidden)]

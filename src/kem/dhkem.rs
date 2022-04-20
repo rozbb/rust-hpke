@@ -29,9 +29,15 @@ macro_rules! impl_dhkem {
             type PublicKey = <$dhkex as DhKeyExchange>::PublicKey;
             type PrivateKey = <$dhkex as DhKeyExchange>::PrivateKey;
 
-            /// Holds the content of an encapsulated secret. This is what the receiver uses to derive
-            /// the shared secret. This just wraps a pubkey, because that's all an encapsulated key is
-            /// in a DH-KEM
+            // RFC 9180 §4.1
+            // The function parameters pkR and pkS are deserialized public keys, and enc is a
+            // serialized public key. Since encapsulated keys are Diffie-Hellman public keys in
+            // this KEM algorithm, we use SerializePublicKey() and DeserializePublicKey() to
+            // encode and decode them, respectively. Npk equals Nenc.
+
+            /// Holds the content of an encapsulated secret. This is what the receiver uses to
+            /// derive the shared secret. This just wraps a pubkey, because that's all an
+            /// encapsulated key is in a DHKEM.
             #[doc(hidden)]
             #[derive(Clone)]
             pub struct EncappedKey(pub(crate) <$dhkex as DhKeyExchange>::PublicKey);
@@ -60,7 +66,7 @@ macro_rules! impl_dhkem {
             #[doc = $doc_str]
             pub struct $kem_name;
 
-            // draft12 §4.1
+            // RFC 9180 §4.1
             // def Encap(pkR):
             //   skE, pkE = GenerateKeyPair()
             //   dh = DH(skE, pkR)
@@ -179,22 +185,15 @@ macro_rules! impl_dhkem {
             }
 
             impl KemTrait for $kem_name {
-                // draft12 §4.1
-                // For the variants of DHKEM defined in this document, the size "Nsecret" of the KEM
-                // shared secret is equal to the output length of the hash function underlying the KDF
+                // RFC 9180 §4.1
+                // For the variants of DHKEM defined in this document, the size Nsecret of the
+                // KEM shared secret is equal to the output length of the hash function underlying
+                // the KDF.
 
                 /// The size of the shared secret at the end of the key exchange process
                 #[doc(hidden)]
                 type NSecret = <<$kdf as KdfTrait>::HashImpl as OutputSizeUser>::OutputSize;
 
-                // draft12 §4.1
-                // The function parameters "pkR" and "pkS" are deserialized public keys, and
-                // "enc" is a serialized public key.  Since encapsulated keys are Diffie-Hellman public
-                // keys in this KEM algorithm, we use "SerializePublicKey()" and
-                // "DeserializePublicKey()" to encode and decode them, respectively.  "Npk" equals
-                // "Nenc". "GenerateKeyPair()" produces a key pair for the Diffie-Hellman group in use.
-                // Section 7.1.3 contains the "DeriveKeyPair()" function specification for DHKEMs
-                // defined in this document.
                 type PublicKey = PublicKey;
                 type PrivateKey = PrivateKey;
                 type EncappedKey = EncappedKey;
@@ -225,7 +224,7 @@ macro_rules! impl_dhkem {
                     encap_with_eph(pk_recip, sender_id_keypair, sk_eph)
                 }
 
-                // draft11 §4.1
+                // RFC 9180 §4.1
                 // def Decap(enc, skR):
                 //   pkE = DeserializePublicKey(enc)
                 //   dh = DH(skR, pkE)

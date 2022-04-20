@@ -81,11 +81,10 @@ impl<A: Aead> Drop for AeadKey<A> {
 #[zeroize(drop)]
 struct Seq(u64);
 
-// draft11 §5.2
+// RFC 9180 §5.2
 // def Context<ROLE>.IncrementSeq():
 //   if self.seq >= (1 << (8*Nn)) - 1:
 //     raise MessageLimitReachedError
-//   self.seq += 1
 //   self.seq += 1
 
 /// Increments the sequence counter. Returns `None` on overflow.
@@ -94,7 +93,7 @@ fn increment_seq(seq: &Seq) -> Option<Seq> {
     seq.0.checked_add(1).map(Seq)
 }
 
-// draft11 §5.2
+// RFC 9180 §5.2
 // def Context<ROLE>.ComputeNonce(seq):
 //   seq_bytes = I2OSP(seq, Nn)
 //   return xor(self.base_nonce, seq_bytes)
@@ -203,7 +202,7 @@ impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AeadCtx<A, Kdf, Kem> {
         }
     }
 
-    // draft11 §5.3
+    // RFC 9180 §5.3
     // def Context.Export(exporter_context, L):
     //   return LabeledExpand(self.exporter_secret, "sec",
     //                        exporter_context, L)
@@ -249,7 +248,7 @@ impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> Clone for AeadCtxR<A, Kdf, Kem> {
 }
 
 impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AeadCtxR<A, Kdf, Kem> {
-    // draft12 §5.2
+    // RFC 9180 §5.2
     // def ContextR.Open(aad, ct):
     //   pt = Open(self.key, self.ComputeNonce(self.seq), aad, ct)
     //   if pt == OpenError:
@@ -363,7 +362,7 @@ impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> Clone for AeadCtxS<A, Kdf, Kem> {
 }
 
 impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AeadCtxS<A, Kdf, Kem> {
-    // draft12 §5.2
+    // RFC 9180 §5.2
     // def ContextS.Seal(aad, pt):
     //   ct = Seal(self.key, self.ComputeNonce(self.seq), aad, pt)
     //   self.IncrementSeq()

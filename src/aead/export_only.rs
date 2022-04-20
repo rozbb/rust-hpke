@@ -55,6 +55,6 @@ pub struct ExportOnlyAead;
 impl Aead for ExportOnlyAead {
     type AeadImpl = EmptyAeadImpl;
 
-    // draft11 §7.3: Export-only
+    // RFC 9180 §7.3: Export-only
     const AEAD_ID: u16 = 0xFFFF;
 }

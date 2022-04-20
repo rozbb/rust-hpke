@@ -33,7 +33,7 @@ impl<K: KdfTrait> Drop for ExporterSecret<K> {
     }
 }
 
-// draft11 §5.1
+// RFC 9180 §5.1
 // def KeySchedule<ROLE>(mode, shared_secret, info, psk, psk_id):
 //   VerifyPSKInputs(mode, psk, psk_id)
 //
@@ -131,7 +131,7 @@ where
     AeadCtx::new(&key, base_nonce, exporter_secret)
 }
 
-// draft11 §5.1.4:
+// RFC 9180 §5.1.4:
 // def SetupAuthPSKS(pkR, info, psk, psk_id, skS):
 //   shared_secret, enc = AuthEncap(pkR, skS)
 //   return enc, KeyScheduleS(mode_auth_psk, shared_secret, info,
@@ -166,7 +166,7 @@ where
     Ok((encapped_key, enc_ctx.into()))
 }
 
-// draft11 §5.1.4
+// RFC 9180 §5.1.4
 // def SetupAuthPSKR(enc, skR, info, psk, psk_id, pkS):
 //   shared_secret = AuthDecap(enc, skR, pkS)
 //   return KeyScheduleR(mode_auth_psk, shared_secret, info,

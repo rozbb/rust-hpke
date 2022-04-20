@@ -2,7 +2,7 @@
 //! **WARNING:** This code has not been audited. Use at your own discretion.
 //!
 //! This is a pure Rust implementation of the
-//! [HPKE](https://datatracker.ietf.org/doc/draft-irtf-cfrg-hpke/) hybrid encryption scheme. The
+//! [HPKE](https://datatracker.ietf.org/doc/rfc9180/) hybrid encryption scheme (RFC 9180). The
 //! purpose of hybrid encryption is to use allow someone to send secure messages to an entity whose
 //! public key they know. Here's an example of Alice and Bob, where Alice knows Bob's public key:
 //!

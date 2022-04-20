@@ -6,7 +6,7 @@ use sha2::{Sha256, Sha384, Sha512};
 
 const VERSION_LABEL: &[u8] = b"HPKE-v1";
 
-// This is currently the maximum value of Nh. It is achieved by HKDF-SHA512 in draft11 §7.2.
+// This is the maximum value of Nh. It is achieved by HKDF-SHA512 in RFC 9180 §7.2.
 pub(crate) const MAX_DIGEST_SIZE: usize = 64;
 
 // Pretty much all the KDF functionality is covered by the hkdf crate
@@ -39,7 +39,7 @@ impl KdfTrait for HkdfSha256 {
     #[doc(hidden)]
     type HashImpl = Sha256;
 
-    // draft11 §7.2: HKDF-SHA256
+    // RFC 9180 §7.2: HKDF-SHA256
     const KDF_ID: u16 = 0x0001;
 }
 
@@ -50,7 +50,7 @@ impl KdfTrait for HkdfSha384 {
     #[doc(hidden)]
     type HashImpl = Sha384;
 
-    // draft11 §7.2: HKDF-SHA384
+    // RFC 9180 §7.2: HKDF-SHA384
     const KDF_ID: u16 = 0x0002;
 }
 
@@ -61,11 +61,11 @@ impl KdfTrait for HkdfSha512 {
     #[doc(hidden)]
     type HashImpl = Sha512;
 
-    // draft11 §7.2: HKDF-SHA512
+    // RFC 9180 §7.2: HKDF-SHA512
     const KDF_ID: u16 = 0x0003;
 }
 
-// draft11 §4.1
+// RFC 9180 §4.1
 // def ExtractAndExpand(dh, kem_context):
 //   eae_prk = LabeledExtract("", "eae_prk", dh)
 //   shared_secret = LabeledExpand(eae_prk, "shared_secret",
@@ -87,7 +87,7 @@ pub fn extract_and_expand<Kdf: KdfTrait>(
     hkdf_ctx.labeled_expand(suite_id, b"shared_secret", info, out)
 }
 
-// draft11 §4.0
+// RFC 9180 §4
 // def LabeledExtract(salt, label, ikm):
 //   labeled_ikm = concat("HPKE-v1", suite_id, label, ikm)
 //   return Extract(salt, labeled_ikm)
@@ -110,7 +110,9 @@ pub fn labeled_extract<Kdf: KdfTrait>(
 }
 
 // This trait only exists so I can implement it for hkdf::Hkdf
-pub(crate) trait LabeledExpand {
+/// Describes the `labeled_expand` key derivation function
+#[doc(hidden)]
+trait LabeledExpand {
     fn labeled_expand(
         &self,
         suite_id: &[u8],
@@ -124,7 +126,7 @@ impl<D> LabeledExpand for hkdf::Hkdf<D, SimpleHmac<D>>
 where
     D: Clone + OutputSizeUser + Digest + BlockSizeUser,
 {
-    // draft11 §4.0
+    // RFC 9180 §4
     // def LabeledExpand(prk, label, info, L):
     //   labeled_info = concat(I2OSP(L, 2), "HPKE-v1", suite_id,
     //                         label, info)

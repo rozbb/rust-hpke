@@ -6,13 +6,10 @@ use crate::{
 };
 
 use generic_array::{
-    typenum::{self, Unsigned, U65},
+    typenum::{Unsigned, U32, U65},
     GenericArray,
 };
-use p256::{
-    elliptic_curve::{ecdh::diffie_hellman, sec1::ToEncodedPoint, FieldSize},
-    NistP256,
-};
+use p256::elliptic_curve::{ecdh::diffie_hellman, sec1::ToEncodedPoint};
 
 /// An ECDH-P256 public key. This is never the point at infinity.
 #[derive(Clone)]
@@ -30,8 +27,7 @@ pub struct KexResult(p256::ecdh::SharedSecret);
 
 // Everything is serialized and deserialized in uncompressed form
 impl Serializable for PublicKey {
-    // A fancy way of saying "65 bytes"
-    // draft11 §7.1: Npk of DHKEM(P-256, HKDF-SHA256) is 65
+    // RFC 9180 §7.1: Npk of DHKEM(P-256, HKDF-SHA256) is 65
     type OutputSize = U65;
 
     fn to_bytes(&self) -> GenericArray<u8, Self::OutputSize> {
@@ -59,9 +55,8 @@ impl Deserializable for PublicKey {
 }
 
 impl Serializable for PrivateKey {
-    // A fancy way of saying "32 bytes"
-    // draft11 §7.1: Nsk of DHKEM(P-256, HKDF-SHA256) is 32
-    type OutputSize = FieldSize<NistP256>;
+    // RFC 9180 §7.1: Nsk of DHKEM(P-256, HKDF-SHA256) is 32
+    type OutputSize = U32;
 
     fn to_bytes(&self) -> GenericArray<u8, Self::OutputSize> {
         // SecretKeys already know how to convert to bytes
@@ -85,11 +80,14 @@ impl Deserializable for PrivateKey {
 
 // DH results are serialized in the same way as public keys
 impl Serializable for KexResult {
-    // draft11 §4.1: Nsecret of DHKEM(P-256, HKDF-SHA256) is 32
-    type OutputSize = typenum::U32;
+    // RFC 9180 §4.1
+    // For P-256, P-384, and P-521, the size Ndh of the Diffie-Hellman shared secret is equal to
+    // 32, 48, and 66, respectively, corresponding to the x-coordinate of the resulting elliptic
+    // curve point.
+    type OutputSize = U32;
 
-    // draft11 §4.1: Representation of the KEX result is the serialization of the x-coordinate
     fn to_bytes(&self) -> GenericArray<u8, Self::OutputSize> {
+        // ecdh::SharedSecret::as_bytes returns the serialized x-coordinate
         *self.0.as_bytes()
     }
 }
@@ -120,8 +118,10 @@ impl DhKeyExchange for DhP256 {
         // Do the DH operation
         let dh_res = diffie_hellman(sk.0.to_nonzero_scalar(), pk.0.as_affine());
 
-        // draft 11 §7.1.4: We MUST ensure that dh_res is not the point at infinity. This is
-        // already true though, since:
+        // RFC 9180 §7.1.4: Senders and recipients MUST ensure that dh_res is not the point at
+        // infinity
+        //
+        // This is already true, since:
         // 1. pk is not the point at infinity (due to the invariant we keep on PublicKeys)
         // 2. sk is not 0 mod p (due to the invariant we keep on PrivateKeys)
         // 3. Exponentiating a non-identity element of a prime-order group by something less than
@@ -130,7 +130,7 @@ impl DhKeyExchange for DhP256 {
         Ok(KexResult(dh_res))
     }
 
-    // draft11 §7.1.3:
+    // RFC 9180 §7.1.3:
     // def DeriveKeyPair(ikm):
     //   dkp_prk = LabeledExtract("", "dkp_prk", ikm)
     //   sk = 0
@@ -212,7 +212,7 @@ mod tests {
         }
     }
 
-    // Test vector comes from §8.1 of RFC5903
+    // Test vector comes from RFC 5903 §8.1
     // https://tools.ietf.org/html/rfc5903
     /// Tests the ECDH op against a known answer
     #[test]
@@ -246,7 +246,7 @@ mod tests {
         );
     }
 
-    // Test vector comes from §8.1 of RFC5903
+    // Test vector comes from RFC 5903 §8.1
     // https://tools.ietf.org/html/rfc5903
     /// Tests the `sk_to_pk` function against known answers
     #[test]

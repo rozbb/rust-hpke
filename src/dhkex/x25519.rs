@@ -28,7 +28,7 @@ pub struct KexResult(x25519_dalek::SharedSecret);
 
 // Oh I love an excuse to break out type-level integers
 impl Serializable for PublicKey {
-    // draft11 §7.1: Npk of DHKEM(X25519, HKDF-SHA256) is 32
+    // RFC 9180 §7.1 Table 2: Npk of DHKEM(X25519, HKDF-SHA256) is 32
     type OutputSize = typenum::U32;
 
     // Dalek lets us convert pubkeys to [u8; 32]
@@ -52,7 +52,7 @@ impl Deserializable for PublicKey {
 }
 
 impl Serializable for PrivateKey {
-    // draft11 §7.1: Nsk of DHKEM(X25519, HKDF-SHA256) is 32
+    // RFC 9180 §7.1 Table 2: Nsk of DHKEM(X25519, HKDF-SHA256) is 32
     type OutputSize = typenum::U32;
 
     // Dalek lets us convert scalars to [u8; 32]
@@ -84,11 +84,10 @@ impl Deserializable for PrivateKey {
 }
 
 impl Serializable for KexResult {
-    // draft11 §4.1: Nsecret of DHKEM(X25519, HKDF-SHA256) is 32
+    // RFC 9180 §4.1: For X25519 and X448, the size Ndh is equal to 32 and 56, respectively
     type OutputSize = typenum::U32;
 
-    // draft11 §4.1: Representation of the KEX result is the serialization of the x-coordinate.
-    // This is how X25519 represents things anyway, so we don't have to do anything special.
+    // curve25519's point representation is our DH result. We don't have to do anything special.
     fn to_bytes(&self) -> GenericArray<u8, typenum::U32> {
         // Dalek lets us convert shared secrets to to [u8; 32]
         GenericArray::clone_from_slice(self.0.as_bytes())
@@ -127,7 +126,7 @@ impl DhKeyExchange for X25519 {
         }
     }
 
-    // draft11 §7.1.3
+    // RFC 9180 §7.1.3
     // def DeriveKeyPair(ikm):
     //   dkp_prk = LabeledExtract("", "dkp_prk", ikm)
     //   sk = LabeledExpand(dkp_prk, "sk", "", Nsk)

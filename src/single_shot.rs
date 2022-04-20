@@ -9,7 +9,7 @@ use crate::{
 
 use rand_core::{CryptoRng, RngCore};
 
-// draft11 §6.1
+// RFC 9180 §6.1
 // def SealAuthPSK(pkR, info, aad, pt, psk, psk_id, skS):
 //   enc, ctx = SetupAuthPSKS(pkR, info, psk, psk_id, skS)
 //   ct = ctx.Seal(aad, pt)
@@ -79,7 +79,7 @@ where
     Ok((encapped_key, ciphertext))
 }
 
-// draft11 §6.1
+// RFC 9180 §6.1
 // def OpenAuthPSK(enc, skR, info, aad, ct, psk, psk_id, pkS):
 //   ctx = SetupAuthPSKR(enc, skR, info, psk, psk_id, pkS)
 //   return ctx.Open(aad, ct)
