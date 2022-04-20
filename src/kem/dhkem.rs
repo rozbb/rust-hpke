@@ -21,7 +21,7 @@ macro_rules! impl_dhkem {
                 Deserializable, HpkeError, Serializable,
             };
 
-            use digest::FixedOutput;
+            use digest::OutputSizeUser;
             use generic_array::GenericArray;
             use rand_core::{CryptoRng, RngCore};
 
@@ -185,7 +185,7 @@ macro_rules! impl_dhkem {
 
                 /// The size of the shared secret at the end of the key exchange process
                 #[doc(hidden)]
-                type NSecret = <<$kdf as KdfTrait>::HashImpl as FixedOutput>::OutputSize;
+                type NSecret = <<$kdf as KdfTrait>::HashImpl as OutputSizeUser>::OutputSize;
 
                 // draft12 §4.1
                 // The function parameters "pkR" and "pkS" are deserialized public keys, and

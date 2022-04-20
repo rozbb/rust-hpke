@@ -1,5 +1,5 @@
 use crate::{
-    kdf::{Kdf as KdfTrait, LabeledExpand},
+    kdf::{Kdf as KdfTrait, LabeledExpand, SimpleHkdf},
     kem::Kem as KemTrait,
     setup::ExporterSecret,
     util::{enforce_equal_len, full_suite_id, FullSuiteId},
@@ -11,7 +11,6 @@ use core::{default::Default, marker::PhantomData, u8};
 use aead::{AeadCore as BaseAeadCore, AeadInPlace as BaseAeadInPlace, NewAead as BaseNewAead};
 use byteorder::{BigEndian, ByteOrder};
 use generic_array::GenericArray;
-use hkdf::Hkdf;
 use zeroize::Zeroize;
 
 /// Represents authenticated encryption functionality
@@ -221,7 +220,7 @@ impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AeadCtx<A, Kdf, Kem> {
         // Use our exporter secret as the PRK for an HKDF-Expand op. The only time this fails is
         // when the length of the PRK is not the the underlying hash function's digest size. But
         // that's guaranteed by the type system, so we can unwrap().
-        let hkdf_ctx = Hkdf::<Kdf::HashImpl>::from_prk(self.exporter_secret.0.as_slice()).unwrap();
+        let hkdf_ctx = SimpleHkdf::<Kdf>::from_prk(self.exporter_secret.0.as_slice()).unwrap();
 
         // This call either succeeds or returns hkdf::InvalidLength (iff the buffer length is more
         // than 255x the digest size of the underlying hash function)

@@ -1,26 +1,22 @@
 use crate::{
     aead::{Aead, AeadCtx, AeadCtxR, AeadCtxS},
-    kdf::{labeled_extract, Kdf as KdfTrait, LabeledExpand, MAX_DIGEST_SIZE},
+    kdf::{labeled_extract, DigestArray, Kdf as KdfTrait, LabeledExpand, MAX_DIGEST_SIZE},
     kem::{Kem as KemTrait, SharedSecret},
     op_mode::{OpMode, OpModeR, OpModeS},
     util::full_suite_id,
     HpkeError,
 };
 
-use digest::Digest;
-use generic_array::GenericArray;
 use rand_core::{CryptoRng, RngCore};
 use zeroize::Zeroize;
 
 /// Secret generated in `derive_enc_ctx` and stored in `AeadCtx`
-pub(crate) struct ExporterSecret<K: KdfTrait>(
-    pub(crate) GenericArray<u8, <K::HashImpl as Digest>::OutputSize>,
-);
+pub(crate) struct ExporterSecret<K: KdfTrait>(pub(crate) DigestArray<K>);
 
 // We use this to get an empty buffer we can read secret bytes into
 impl<K: KdfTrait> Default for ExporterSecret<K> {
     fn default() -> ExporterSecret<K> {
-        ExporterSecret(GenericArray::<u8, <K::HashImpl as Digest>::OutputSize>::default())
+        ExporterSecret(DigestArray::<K>::default())
     }
 }
 

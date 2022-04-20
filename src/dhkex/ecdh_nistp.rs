@@ -6,11 +6,11 @@ use crate::{
 };
 
 use generic_array::{
-    typenum::{self, Unsigned},
+    typenum::{self, Unsigned, U65},
     GenericArray,
 };
 use p256::{
-    elliptic_curve::{ecdh::diffie_hellman, sec1::UncompressedPointSize, FieldSize},
+    elliptic_curve::{ecdh::diffie_hellman, sec1::ToEncodedPoint, FieldSize},
     NistP256,
 };
 
@@ -18,8 +18,8 @@ use p256::{
 #[derive(Clone)]
 pub struct PublicKey(p256::PublicKey);
 
-// p256::SecretKey is just a newtype for an elliptic_curve::NonZeroScalar as long as
-// feature="arithmetic" is set in elliptic_curve. Also, the underlying type is zeroize-on-drop.
+// This is only ever constructed via its Deserializable::from_bytes, which checks for the 0 value.
+// Also, the underlying type is zeroize-on-drop.
 /// An ECDH-P256 private key. This is a scalar in the range `[1,p)` where `p` is the group order.
 #[derive(Clone)]
 pub struct PrivateKey(p256::SecretKey);
@@ -32,11 +32,12 @@ pub struct KexResult(p256::ecdh::SharedSecret);
 impl Serializable for PublicKey {
     // A fancy way of saying "65 bytes"
     // draft11 §7.1: Npk of DHKEM(P-256, HKDF-SHA256) is 65
-    type OutputSize = UncompressedPointSize<NistP256>;
+    type OutputSize = U65;
 
     fn to_bytes(&self) -> GenericArray<u8, Self::OutputSize> {
         // Get the uncompressed pubkey encoding
-        let encoded = p256::EncodedPoint::encode(self.0, false);
+        let encoded = self.0.as_affine().to_encoded_point(false);
+        // Serialize it
         GenericArray::clone_from_slice(encoded.as_bytes())
     }
 }
@@ -49,7 +50,8 @@ impl Deserializable for PublicKey {
         enforce_equal_len(Self::OutputSize::to_usize(), encoded.len())?;
 
         // Now just deserialize. The non-identity invariant is preserved because
-        // PublicKey::from_sec1_bytes will error if it receives the point at infinity.
+        // PublicKey::from_sec1_bytes() will error if it receives the point at infinity. This is
+        // because its submethod, PublicKey::from_encoded_point(), does this check explicitly.
         let parsed =
             p256::PublicKey::from_sec1_bytes(encoded).map_err(|_| HpkeError::ValidationError)?;
         Ok(PublicKey(parsed))
@@ -63,7 +65,7 @@ impl Serializable for PrivateKey {
 
     fn to_bytes(&self) -> GenericArray<u8, Self::OutputSize> {
         // SecretKeys already know how to convert to bytes
-        self.0.to_bytes()
+        self.0.to_be_bytes()
     }
 }
 
@@ -72,10 +74,10 @@ impl Deserializable for PrivateKey {
         // Check the length
         enforce_equal_len(Self::OutputSize::to_usize(), encoded.len())?;
 
-        // Recall PrivateKeys aren't allowed to be 0 mod the curve order. Since p256::SecretKeys
-        // are actually NonZeroScalars whenever feature="arithmetic", this invariant is checked for
-        // us in NonZeroScalar::new()
-        let sk = p256::SecretKey::from_bytes(encoded).map_err(|_| HpkeError::ValidationError)?;
+        // Invariant: PrivateKey is in [1,p). This is preserved here.
+        // SecretKey::from_be_bytes() directly checks that the value isn't zero. And its submethod,
+        // ScalarCore::from_be_bytes() checks that the value doesn't exceed the modulus.
+        let sk = p256::SecretKey::from_be_bytes(encoded).map_err(|_| HpkeError::ValidationError)?;
 
         Ok(PrivateKey(sk))
     }
@@ -116,7 +118,7 @@ impl DhKeyExchange for DhP256 {
     #[doc(hidden)]
     fn dh(sk: &PrivateKey, pk: &PublicKey) -> Result<KexResult, DhError> {
         // Do the DH operation
-        let dh_res = diffie_hellman(sk.0.to_secret_scalar(), pk.0.as_affine());
+        let dh_res = diffie_hellman(sk.0.to_nonzero_scalar(), pk.0.as_affine());
 
         // draft 11 §7.1.4: We MUST ensure that dh_res is not the point at infinity. This is
         // already true though, since:
@@ -163,9 +165,9 @@ impl DhKeyExchange for DhP256 {
                 .labeled_expand(suite_id, b"candidate", &[counter], &mut buf)
                 .unwrap();
 
-            // Try to convert to a nonzero scalar. If the conversion succeeded, return the keypair
-            if let Ok(s) = p256::SecretKey::from_bytes(buf) {
-                let sk = PrivateKey(s);
+            // Try to convert to a valid secret key. If the conversion succeeded, return the
+            // keypair. Recall the invariant of PrivateKey: it is a value in the range [1,p).
+            if let Ok(sk) = PrivateKey::from_bytes(&buf) {
                 let pk = Self::sk_to_pk(&sk);
                 return (sk, pk);
             }

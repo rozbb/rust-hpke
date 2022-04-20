@@ -1,6 +1,7 @@
 use byteorder::{BigEndian, ByteOrder};
-use digest::{BlockInput, Digest, FixedOutput, Reset, Update};
-use generic_array::{typenum::Unsigned, GenericArray};
+use digest::{core_api::BlockSizeUser, Digest, OutputSizeUser};
+use generic_array::GenericArray;
+use hmac::SimpleHmac;
 use sha2::{Sha256, Sha384, Sha512};
 
 const VERSION_LABEL: &[u8] = b"HPKE-v1";
@@ -14,19 +15,22 @@ pub(crate) const MAX_DIGEST_SIZE: usize = 64;
 pub trait Kdf {
     /// The underlying hash function
     #[doc(hidden)]
-    type HashImpl: Digest + Update + BlockInput + FixedOutput + Reset + Default + Clone;
+    type HashImpl: Clone + Digest + OutputSizeUser + BlockSizeUser;
 
     /// The algorithm identifier for a KDF implementation
     const KDF_ID: u16;
-
-    /// Returns the size (in bytes) of the output of this KDF's Extract() function
-    fn extracted_key_size() -> usize {
-        <Self::HashImpl as FixedOutput>::OutputSize::to_usize()
-    }
 }
 
 // We use Kdf as a type parameter, so this is to avoid ambiguity.
 use Kdf as KdfTrait;
+
+// Convenience types for the functions below
+pub(crate) type DigestArray<Kdf> =
+    GenericArray<u8, <<Kdf as KdfTrait>::HashImpl as OutputSizeUser>::OutputSize>;
+pub(crate) type SimpleHkdf<Kdf> =
+    hkdf::Hkdf<<Kdf as KdfTrait>::HashImpl, SimpleHmac<<Kdf as KdfTrait>::HashImpl>>;
+type SimpleHkdfExtract<Kdf> =
+    hkdf::HkdfExtract<<Kdf as KdfTrait>::HashImpl, SimpleHmac<<Kdf as KdfTrait>::HashImpl>>;
 
 /// The implementation of HKDF-SHA256
 pub struct HkdfSha256 {}
@@ -88,19 +92,16 @@ pub fn extract_and_expand<Kdf: KdfTrait>(
 //   labeled_ikm = concat("HPKE-v1", suite_id, label, ikm)
 //   return Extract(salt, labeled_ikm)
 
-/// Returns the HKDF context derived from `(salt=salt, ikm="HPKE-05 "||suite_id||label||ikm)`
+/// Returns the HKDF context derived from `(salt=salt, ikm="HPKE-v1"||suite_id||label||ikm)`
 #[doc(hidden)]
 pub fn labeled_extract<Kdf: KdfTrait>(
     salt: &[u8],
     suite_id: &[u8],
     label: &[u8],
     ikm: &[u8],
-) -> (
-    GenericArray<u8, <<Kdf as KdfTrait>::HashImpl as FixedOutput>::OutputSize>,
-    hkdf::Hkdf<Kdf::HashImpl>,
-) {
+) -> (DigestArray<Kdf>, SimpleHkdf<Kdf>) {
     // Call HKDF-Extract with the IKM being the concatenation of all of the above
-    let mut extract_ctx = hkdf::HkdfExtract::<Kdf::HashImpl>::new(Some(salt));
+    let mut extract_ctx = SimpleHkdfExtract::<Kdf>::new(Some(salt));
     extract_ctx.input_ikm(VERSION_LABEL);
     extract_ctx.input_ikm(suite_id);
     extract_ctx.input_ikm(label);
@@ -119,8 +120,9 @@ pub(crate) trait LabeledExpand {
     ) -> Result<(), hkdf::InvalidLength>;
 }
 
-impl<D: Update + BlockInput + FixedOutput + Reset + Default + Clone> LabeledExpand
-    for hkdf::Hkdf<D>
+impl<D> LabeledExpand for hkdf::Hkdf<D, SimpleHmac<D>>
+where
+    D: Clone + OutputSizeUser + Digest + BlockSizeUser,
 {
     // draft11 §4.0
     // def LabeledExpand(prk, label, info, L):
