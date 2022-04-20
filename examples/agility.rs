@@ -741,8 +741,7 @@ fn main() {
                 let msg = b"paper boy paper boy";
                 let aad = b"all about that paper, boy";
                 let ciphertext = aead_ctx1.seal(msg, aad).unwrap();
-                aead_ctx2.open(&ciphertext, aad).unwrap();
-                let roundtrip_plaintext = ciphertext;
+                let roundtrip_plaintext = aead_ctx2.open(&ciphertext, aad).unwrap();
 
                 // Assert that the derived plaintext equals the original message
                 assert_eq!(&roundtrip_plaintext, msg);
