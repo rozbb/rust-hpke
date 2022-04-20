@@ -110,8 +110,11 @@ where
         setup_sender::<Aead, Kdf, Kem, _>(&OpModeS::Base, &pk_recip, b"bench seal", &mut csprng)
             .unwrap();
 
-    // Bench seal() on a MSG_LEN-byte plaintext and AAD_LEN-byte AAD
-    let bench_name = format!("seal[msglen={},aadlen={}]", MSG_LEN, AAD_LEN);
+    // Bench seal_in_place_detached() on a MSG_LEN-byte plaintext and AAD_LEN-byte AAD
+    let bench_name = format!(
+        "seal_in_place_detached[msglen={},aadlen={}]",
+        MSG_LEN, AAD_LEN
+    );
     group.bench_function(bench_name, |b| {
         // Pick random inputs
         let mut plaintext = [0u8; MSG_LEN];
@@ -119,13 +122,20 @@ where
         csprng.fill_bytes(&mut plaintext);
         csprng.fill_bytes(&mut aad);
 
-        b.iter(|| encryption_ctx.seal(&mut plaintext, &aad).unwrap())
+        b.iter(|| {
+            encryption_ctx
+                .seal_in_place_detached(&mut plaintext, &aad)
+                .unwrap()
+        })
     });
 
-    // Bench open() on MSG_LEN-bytes ciphertexts with AAD_LEN-byte AADs. This is more complicated
-    // than the other benchmarks because we need to first construct and store a ton of ciphertexts
-    // that we can open() in sequence.
-    let bench_name = format!("open[msglen={},aadlen={}]", MSG_LEN, AAD_LEN);
+    // Bench open_in_place_detached() on MSG_LEN-bytes ciphertexts with AAD_LEN-byte AADs. This is
+    // more complicated than the other benchmarks because we need to first construct and store a
+    // ton of ciphertexts that we can open in sequence.
+    let bench_name = format!(
+        "open_in_place_detached[msglen={},aadlen={}]",
+        MSG_LEN, AAD_LEN
+    );
     group.bench_function(bench_name, |b| {
         b.iter_custom(|iters| {
             // Make a decryption context and however many (ciphertexts, aad, tag) tuples the
@@ -137,7 +147,11 @@ where
             let start = Instant::now();
             for (mut ciphertext, aad, tag) in ciphertext_aad_tags.into_iter() {
                 // black_box makes sure the compiler doesn't optimize away this computation
-                black_box(decryption_ctx.open(&mut ciphertext, &aad, &tag).unwrap());
+                black_box(
+                    decryption_ctx
+                        .open_in_place_detached(&mut ciphertext, &aad, &tag)
+                        .unwrap(),
+                );
             }
             start.elapsed()
         });
@@ -175,7 +189,9 @@ where
         csprng.fill_bytes(&mut aad);
 
         // Seal the random plaintext and AAD
-        let tag = encryption_ctx.seal(&mut plaintext, &aad).unwrap();
+        let tag = encryption_ctx
+            .seal_in_place_detached(&mut plaintext, &aad)
+            .unwrap();
         // Rename for clarity. Encryption happened in-place
         let ciphertext = plaintext;
 
