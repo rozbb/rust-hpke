@@ -112,7 +112,7 @@ pub fn labeled_extract<Kdf: KdfTrait>(
 // This trait only exists so I can implement it for hkdf::Hkdf
 /// Describes the `labeled_expand` key derivation function
 #[doc(hidden)]
-trait LabeledExpand {
+pub trait LabeledExpand {
     fn labeled_expand(
         &self,
         suite_id: &[u8],
