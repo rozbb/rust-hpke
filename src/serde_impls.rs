@@ -81,14 +81,14 @@ impl_serde_noparam!(dhkex::x25519::PrivateKey);
 #[cfg(feature = "x25519")]
 impl_serde_noparam!(dhkex::x25519::PublicKey);
 #[cfg(feature = "x25519")]
-impl_serde_noparam!(kem::X25519HkdfSha256EncappedKey);
+impl_serde_noparam!(kem::x25519_hkdfsha256::EncappedKey);
 
 #[cfg(feature = "p256")]
 impl_serde_noparam!(dhkex::ecdh_nistp::PrivateKey);
 #[cfg(feature = "p256")]
 impl_serde_noparam!(dhkex::ecdh_nistp::PublicKey);
 #[cfg(feature = "p256")]
-impl_serde_noparam!(kem::DhP256HkdfSha256EncappedKey);
+impl_serde_noparam!(kem::dhp256_hkdfsha256::EncappedKey);
 
 #[cfg(test)]
 mod test {

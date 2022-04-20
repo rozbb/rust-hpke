@@ -1,10 +1,10 @@
 use crate::{
     aead::{Aead, AesGcm128, AesGcm256, ChaCha20Poly1305, ExportOnlyAead},
     kdf::{HkdfSha256, HkdfSha384, HkdfSha512, Kdf as KdfTrait},
-    kem::{DhP256HkdfSha256, Kem as KemTrait, X25519HkdfSha256},
+    kem::{self, DhP256HkdfSha256, Kem as KemTrait, SharedSecret, X25519HkdfSha256},
     op_mode::{OpModeR, PskBundle},
     setup::setup_receiver,
-    Deserializable, Serializable,
+    Deserializable, HpkeError, Serializable,
 };
 
 extern crate std;
@@ -13,6 +13,49 @@ use std::{fs::File, string::String, vec::Vec};
 use hex;
 use serde::{de::Error as SError, Deserialize, Deserializer};
 use serde_json;
+
+// For known-answer tests we need to be able to encap with fixed randomness. This allows that.
+trait TestableKem: KemTrait {
+    /// The ephemeral key used in encapsulation. This is the same thing as a private key in the
+    /// case of DHKEM, but this is not always true
+    type EphemeralKey: Deserializable;
+
+    // Encap with fixed randomness
+    #[doc(hidden)]
+    fn encap_with_eph(
+        pk_recip: &Self::PublicKey,
+        sender_id_keypair: Option<(&Self::PrivateKey, &Self::PublicKey)>,
+        sk_eph: Self::EphemeralKey,
+    ) -> Result<(SharedSecret<Self>, Self::EncappedKey), HpkeError>;
+}
+
+// Now implement TestableKem for all the KEMs in the KAT
+impl TestableKem for X25519HkdfSha256 {
+    // In DHKEM, ephemeral keys and private keys are both scalars
+    type EphemeralKey = <X25519HkdfSha256 as KemTrait>::PrivateKey;
+
+    // Call the x25519 deterministic encap function we defined in dhkem.rs
+    fn encap_with_eph(
+        pk_recip: &Self::PublicKey,
+        sender_id_keypair: Option<(&Self::PrivateKey, &Self::PublicKey)>,
+        sk_eph: Self::EphemeralKey,
+    ) -> Result<(SharedSecret<Self>, Self::EncappedKey), HpkeError> {
+        kem::x25519_hkdfsha256::encap_with_eph(pk_recip, sender_id_keypair, sk_eph)
+    }
+}
+impl TestableKem for DhP256HkdfSha256 {
+    // In DHKEM, ephemeral keys and private keys are both scalars
+    type EphemeralKey = <DhP256HkdfSha256 as KemTrait>::PrivateKey;
+
+    // Call the p256 deterministic encap function we defined in dhkem.rs
+    fn encap_with_eph(
+        pk_recip: &Self::PublicKey,
+        sender_id_keypair: Option<(&Self::PrivateKey, &Self::PublicKey)>,
+        sk_eph: Self::EphemeralKey,
+    ) -> Result<(SharedSecret<Self>, Self::EncappedKey), HpkeError> {
+        kem::dhp256_hkdfsha256::encap_with_eph(pk_recip, sender_id_keypair, sk_eph)
+    }
+}
 
 /// Asserts that the given serializable values are equal
 macro_rules! assert_serializable_eq {
@@ -59,7 +102,7 @@ struct MainTestVector {
     #[serde(default, rename = "ikmS", deserialize_with = "bytes_from_hex_opt")]
     ikm_sender: Option<Vec<u8>>,
     #[serde(rename = "ikmE", deserialize_with = "bytes_from_hex")]
-    ikm_eph: Vec<u8>,
+    _ikm_eph: Vec<u8>,
 
     // Private keys
     #[serde(rename = "skRm", deserialize_with = "bytes_from_hex")]
@@ -81,7 +124,7 @@ struct MainTestVector {
     #[serde(default, rename = "pkSm", deserialize_with = "bytes_from_hex_opt")]
     pk_sender: Option<Vec<u8>>,
     #[serde(rename = "pkEm", deserialize_with = "bytes_from_hex")]
-    pk_eph: Vec<u8>,
+    _pk_eph: Vec<u8>,
 
     // Key schedule inputs and computations
     #[serde(rename = "enc", deserialize_with = "bytes_from_hex")]
@@ -164,10 +207,10 @@ fn make_op_mode_r<'a, Kem: KemTrait>(
 }
 
 // This does all the legwork
-fn test_case<A: Aead, Kdf: KdfTrait, Kem: KemTrait>(tv: MainTestVector) {
+fn test_case<A: Aead, Kdf: KdfTrait, Kem: TestableKem>(tv: MainTestVector) {
     // First, deserialize all the relevant keys so we can reconstruct the encapped key
     let recip_keypair = deser_keypair::<Kem>(&tv.sk_recip, &tv.pk_recip);
-    let eph_keypair = deser_keypair::<Kem>(&tv.sk_eph, &tv.pk_eph);
+    let sk_eph = <Kem as TestableKem>::EphemeralKey::from_bytes(&tv.sk_eph).unwrap();
     let sender_keypair = {
         let pk_sender = &tv.pk_sender.as_ref();
         tv.sk_sender
@@ -181,11 +224,6 @@ fn test_case<A: Aead, Kdf: KdfTrait, Kem: KemTrait>(tv: MainTestVector) {
         assert_serializable_eq!(recip_keypair.0, derived_kp.0, "sk recip doesn't match");
         assert_serializable_eq!(recip_keypair.1, derived_kp.1, "pk recip doesn't match");
     }
-    {
-        let derived_kp = Kem::derive_keypair(&tv.ikm_eph);
-        assert_serializable_eq!(eph_keypair.0, derived_kp.0, "sk eph doesn't match");
-        assert_serializable_eq!(eph_keypair.1, derived_kp.1, "pk eph doesn't match");
-    }
     if let Some(sks) = sender_keypair.as_ref() {
         let derived_kp = Kem::derive_keypair(&tv.ikm_sender.unwrap());
         assert_serializable_eq!(sks.0, derived_kp.0, "sk sender doesn't match");
@@ -193,13 +231,13 @@ fn test_case<A: Aead, Kdf: KdfTrait, Kem: KemTrait>(tv: MainTestVector) {
     }
 
     let (sk_recip, pk_recip) = recip_keypair;
-    let (sk_eph, _) = eph_keypair;
 
     // Now derive the encapped key with the deterministic encap function, using all the inputs
     // above
-    let (shared_secret, encapped_key) =
-        Kem::encap_with_eph(&pk_recip, sender_keypair.as_ref(), sk_eph.clone())
-            .expect("encap failed");
+    let (shared_secret, encapped_key) = {
+        let sender_keypair_ref = sender_keypair.as_ref().map(|&(ref sk, ref pk)| (sk, pk));
+        Kem::encap_with_eph(&pk_recip, sender_keypair_ref, sk_eph).expect("encap failed")
+    };
 
     // Assert that the derived shared secret key is identical to the one provided
     assert_eq!(

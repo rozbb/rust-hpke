@@ -39,12 +39,16 @@ pub trait Kem: Sized {
     #[cfg(not(feature = "serde_impls"))]
     type PrivateKey: Clone + Serializable + Deserializable;
 
+    /// The encapsulated key for this KEM. This is used by the recipient to derive the shared
+    /// secret.
     #[cfg(feature = "serde_impls")]
     type EncappedKey: Clone
         + Serializable
         + Deserializable
         + SerdeSerialize
         + for<'a> SerdeDeserialize<'a>;
+    /// The encapsulated key for this KEM. This is used by the recipient to derive the shared
+    /// secret.
     #[cfg(not(feature = "serde_impls"))]
     type EncappedKey: Clone + Serializable + Deserializable;
 
@@ -65,22 +69,15 @@ pub trait Kem: Sized {
     fn derive_keypair(ikm: &[u8]) -> (Self::PrivateKey, Self::PublicKey);
 
     /// Generates a random keypair using the given RNG
-    fn gen_keypair<R: CryptoRng + RngCore>(csprng: &mut R) -> (Self::PrivateKey, Self::PublicKey);
-
-    /// Derives a shared secret that the owner of the recipient's pubkey can use to derive the same
-    /// shared secret. If `sk_sender_id` is given, the sender's identity will be tied to the shared
-    /// secret.
-    ///
-    /// Return Value
-    /// ============
-    /// Returns a shared secret and encapped key on success. If an error happened during key
-    /// exchange, returns `Err(HpkeError::EncapError)`.
-    #[doc(hidden)]
-    fn encap_with_eph(
-        pk_recip: &Self::PublicKey,
-        sender_id_keypair: Option<&(Self::PrivateKey, Self::PublicKey)>,
-        sk_eph: Self::PrivateKey,
-    ) -> Result<(SharedSecret<Self>, Self::EncappedKey), HpkeError>;
+    fn gen_keypair<R: CryptoRng + RngCore>(csprng: &mut R) -> (Self::PrivateKey, Self::PublicKey) {
+        // Make some keying material that's the size of a private key
+        let mut ikm: GenericArray<u8, <Self::PrivateKey as Serializable>::OutputSize> =
+            GenericArray::default();
+        // Fill it with randomness
+        csprng.fill_bytes(&mut ikm);
+        // Run derive_keypair using the KEM's KDF
+        Self::derive_keypair(&ikm)
+    }
 
     /// Derives a shared secret given the encapsulated key and the recipients secret key. If
     /// `pk_sender_id` is given, the sender's identity will be tied to the shared secret.
@@ -108,14 +105,9 @@ pub trait Kem: Sized {
     #[doc(hidden)]
     fn encap<R: CryptoRng + RngCore>(
         pk_recip: &Self::PublicKey,
-        sender_id_keypair: Option<&(Self::PrivateKey, Self::PublicKey)>,
+        sender_id_keypair: Option<(&Self::PrivateKey, &Self::PublicKey)>,
         csprng: &mut R,
-    ) -> Result<(SharedSecret<Self>, Self::EncappedKey), HpkeError> {
-        // Generate a new ephemeral keypair
-        let (sk_eph, _) = Self::gen_keypair(csprng);
-        // Now pass to encap_with_eph
-        Self::encap_with_eph(pk_recip, sender_id_keypair, sk_eph)
-    }
+    ) -> Result<(SharedSecret<Self>, Self::EncappedKey), HpkeError>;
 }
 
 // Kem is used as a type parameter everywhere. To avoid confusion, alias it
@@ -123,7 +115,7 @@ use Kem as KemTrait;
 
 /// A convenience type for `[u8; NSecret]` for any given KEM
 #[doc(hidden)]
-pub struct SharedSecret<Kem: KemTrait>(pub(crate) GenericArray<u8, Kem::NSecret>);
+pub struct SharedSecret<Kem: KemTrait>(pub GenericArray<u8, Kem::NSecret>);
 
 impl<Kem: KemTrait> Default for SharedSecret<Kem> {
     fn default() -> SharedSecret<Kem> {
@@ -180,7 +172,7 @@ mod tests {
                 // Encapsulate a random shared secret
                 let (auth_shared_secret, encapped_key) = Kem::encap(
                     &pk_recip,
-                    Some(&(sk_sender_id, pk_sender_id.clone())),
+                    Some((&sk_sender_id, &pk_sender_id.clone())),
                     &mut csprng,
                 )
                 .unwrap();
