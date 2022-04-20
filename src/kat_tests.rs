@@ -1,7 +1,7 @@
 use crate::{
     aead::{Aead, AesGcm128, AesGcm256, ChaCha20Poly1305, ExportOnlyAead},
     kdf::{HkdfSha256, HkdfSha384, HkdfSha512, Kdf as KdfTrait},
-    kem::{DhP256HkdfSha256, Kem as KemTrait, SharedSecret, X25519HkdfSha256},
+    kem::{self, DhP256HkdfSha256, Kem as KemTrait, SharedSecret, X25519HkdfSha256},
     op_mode::{OpModeR, PskBundle},
     setup::setup_receiver,
     Deserializable, HpkeError, Serializable,
@@ -40,7 +40,7 @@ impl TestableKem for X25519HkdfSha256 {
         sender_id_keypair: Option<(&Self::PrivateKey, &Self::PublicKey)>,
         sk_eph: Self::EphemeralKey,
     ) -> Result<(SharedSecret<Self>, Self::EncappedKey), HpkeError> {
-        crate::kem::x25519_hkdfsha256::encap_with_eph(pk_recip, sender_id_keypair, sk_eph)
+        kem::x25519_hkdfsha256::encap_with_eph(pk_recip, sender_id_keypair, sk_eph)
     }
 }
 impl TestableKem for DhP256HkdfSha256 {
@@ -53,7 +53,7 @@ impl TestableKem for DhP256HkdfSha256 {
         sender_id_keypair: Option<(&Self::PrivateKey, &Self::PublicKey)>,
         sk_eph: Self::EphemeralKey,
     ) -> Result<(SharedSecret<Self>, Self::EncappedKey), HpkeError> {
-        crate::kem::dhp256_hkdfsha256::encap_with_eph(pk_recip, sender_id_keypair, sk_eph)
+        kem::dhp256_hkdfsha256::encap_with_eph(pk_recip, sender_id_keypair, sk_eph)
     }
 }
 

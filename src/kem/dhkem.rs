@@ -1,35 +1,8 @@
-use paste::paste;
-
 /// Defines DHKEM(G, K) given a Diffie-Hellman group G and KDF K
 macro_rules! impl_dhkem {
-    // Top-level case. Creates the ident for the encapped key type and calls to the base case
     (
         $mod_name:ident,
         $kem_name:ident,
-        $dhkex:ty,
-        $kdf:ty,
-        $kem_id:literal,
-        $doc_str:expr
-    ) => {
-        paste! {
-            impl_dhkem!(
-                $mod_name,
-                $kem_name,
-                [<$kem_name EncappedKey>],
-                $dhkex,
-                $kdf,
-                $kem_id,
-                $doc_str
-            );
-        }
-    };
-
-    // Base case. Implements the given KEM with the given KDF type, encapped key type, DHKEX types,
-    // etc.
-    (
-        $mod_name:ident,
-        $kem_name:ident,
-        $encapped_key:ident,
         $dhkex:ty,
         $kdf:ty,
         $kem_id:literal,
@@ -55,18 +28,17 @@ macro_rules! impl_dhkem {
             // Define convenience types
             type PublicKey = <$dhkex as DhKeyExchange>::PublicKey;
             type PrivateKey = <$dhkex as DhKeyExchange>::PrivateKey;
-            type EncappedKey = $encapped_key;
 
             /// Holds the content of an encapsulated secret. This is what the receiver uses to derive
             /// the shared secret. This just wraps a pubkey, because that's all an encapsulated key is
             /// in a DH-KEM
             #[doc(hidden)]
             #[derive(Clone)]
-            pub struct $encapped_key(pub(crate) <$dhkex as DhKeyExchange>::PublicKey);
+            pub struct EncappedKey(pub(crate) <$dhkex as DhKeyExchange>::PublicKey);
 
             // EncappedKeys need to be serializable, since they're gonna be sent over the wire.
             // Underlyingly, they're just DH pubkeys, so we just serialize them the same way
-            impl Serializable for $encapped_key {
+            impl Serializable for EncappedKey {
                 type OutputSize = <<$dhkex as DhKeyExchange>::PublicKey as Serializable>::OutputSize;
 
                 // Pass to underlying to_bytes() impl
@@ -75,12 +47,12 @@ macro_rules! impl_dhkem {
                 }
             }
 
-            impl Deserializable for $encapped_key {
+            impl Deserializable for EncappedKey {
                 // Pass to underlying from_bytes() impl
                 fn from_bytes(encoded: &[u8]) -> Result<Self, HpkeError> {
                     let pubkey =
                         <<$dhkex as DhKeyExchange>::PublicKey as Deserializable>::from_bytes(encoded)?;
-                    Ok($encapped_key(pubkey))
+                    Ok(EncappedKey(pubkey))
                 }
             }
 
@@ -137,7 +109,7 @@ macro_rules! impl_dhkem {
                 // The encapped key is the ephemeral pubkey
                 let encapped_key = {
                     let pk_eph = <$dhkex as DhKeyExchange>::sk_to_pk(&sk_eph);
-                    $encapped_key(pk_eph)
+                    EncappedKey(pk_eph)
                 };
 
                 // The shared secret is either gonna be kex_res_eph, or that along with another
@@ -223,9 +195,9 @@ macro_rules! impl_dhkem {
                 // "Nenc". "GenerateKeyPair()" produces a key pair for the Diffie-Hellman group in use.
                 // Section 7.1.3 contains the "DeriveKeyPair()" function specification for DHKEMs
                 // defined in this document.
-                type PublicKey = <$dhkex as DhKeyExchange>::PublicKey;
-                type PrivateKey = <$dhkex as DhKeyExchange>::PrivateKey;
-                type EncappedKey = $encapped_key;
+                type PublicKey = PublicKey;
+                type PrivateKey = PrivateKey;
+                type EncappedKey = EncappedKey;
 
                 const KEM_ID: u16 = $kem_id;
 
