@@ -5,17 +5,24 @@ rust-hpke
 [![CI](https://github.com/rozbb/rust-hpke/workflows/CI/badge.svg)](https://github.com/rozbb/rust-hpke/actions)
 [![Coverage](https://codecov.io/gh/rozbb/rust-hpke/branch/master/graph/badge.svg)](https://codecov.io/gh/rozbb/rust-hpke)
 
-This is an **work-in-progress** implementation of the [HPKE](https://datatracker.ietf.org/doc/draft-irtf-cfrg-hpke/) hybrid encryption standard.
+This is an implementation of the [HPKE](https://www.rfc-editor.org/rfc/rfc9180.html) hybrid encryption standard (RFC 9180).
 
 Warning
 -------
 
-This code has not been audited in any sense of the word. Use at your own discretion.
+This crate has not been formally audited. Cloudflare [did a security](https://blog.cloudflare.com/using-hpke-to-encrypt-request-payloads/) review of version 0.8, though:
+
+    The HPKE implementation we decided on comes with the caveat of not yet being
+    formally audited, so we performed our own internal security review. We
+    analyzed the cryptography primitives being used and the corresponding
+    libraries. Between the composition of said primitives and secure programming
+    practices like correctly zeroing memory and safe usage of random number
+    generators, we found no security issues.
 
 What it implements
 ------------------
 
-This implementation complies with the [HPKE draft](https://github.com/cfrg/draft-irtf-cfrg-hpke) up to and including commit [5f503c5](https://github.com/cfrg/draft-irtf-cfrg-hpke/tree/5f503c564da00b0687b3de75f1dfbdfc4079ad31).
+This implementation complies with the [HPKE standard](https://www.rfc-editor.org/rfc/rfc9180.html) (RFC 9180).
 
 Here are all the primitives listed in the spec. The primitives with checked boxes are the ones that are implemented.
 
