@@ -1,3 +1,5 @@
+//! Traits and structs for key derivation functions
+
 use byteorder::{BigEndian, ByteOrder};
 use digest::{core_api::BlockSizeUser, Digest, OutputSizeUser};
 use generic_array::GenericArray;

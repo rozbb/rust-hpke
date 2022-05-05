@@ -1,3 +1,5 @@
+//! Traits and structs for key encapsulation mechanisms
+
 use crate::{Deserializable, HpkeError, Serializable};
 
 use generic_array::{ArrayLength, GenericArray};

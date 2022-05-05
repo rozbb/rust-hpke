@@ -1,3 +1,5 @@
+//! Traits and structs for authenticated encryption schemes
+
 use crate::{
     kdf::{Kdf as KdfTrait, LabeledExpand, SimpleHkdf},
     kem::Kem as KemTrait,
