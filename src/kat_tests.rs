@@ -205,9 +205,7 @@ fn make_op_mode_r<'a, Kem: KemTrait>(
 }
 
 // This does all the legwork
-fn test_case<A: Aead, Kdf: KdfTrait, Kem: TestableKem>(
-    tv: MainTestVector,
-) -> Result<(), HpkeError> {
+fn test_case<A: Aead, Kdf: KdfTrait, Kem: TestableKem>(tv: MainTestVector) {
     // First, deserialize all the relevant keys so we can reconstruct the encapped key
     let recip_keypair = deser_keypair::<Kem>(&tv.sk_recip, &tv.pk_recip);
     let sk_eph = <Kem as TestableKem>::EphemeralKey::from_bytes(&tv.sk_eph).unwrap();
@@ -220,12 +218,12 @@ fn test_case<A: Aead, Kdf: KdfTrait, Kem: TestableKem>(
 
     // Make sure the keys match what we would've gotten had we used DeriveKeyPair
     {
-        let derived_kp = Kem::derive_keypair(&tv.ikm_recip)?;
+        let derived_kp = Kem::derive_keypair(&tv.ikm_recip).unwrap();
         assert_serializable_eq!(recip_keypair.0, derived_kp.0, "sk recip doesn't match");
         assert_serializable_eq!(recip_keypair.1, derived_kp.1, "pk recip doesn't match");
     }
     if let Some(sks) = sender_keypair.as_ref() {
-        let derived_kp = Kem::derive_keypair(&tv.ikm_sender.unwrap())?;
+        let derived_kp = Kem::derive_keypair(&tv.ikm_sender.unwrap()).unwrap();
         assert_serializable_eq!(sks.0, derived_kp.0, "sk sender doesn't match");
         assert_serializable_eq!(sks.1, derived_kp.1, "pk sender doesn't match");
     }
@@ -293,8 +291,6 @@ fn test_case<A: Aead, Kdf: KdfTrait, Kem: TestableKem>(
             .unwrap();
         assert_eq!(exported_val, export.export_val, "export values don't match");
     }
-
-    Ok(())
 }
 
 // This macro takes in all the supported AEADs, KDFs, and KEMs, and dispatches the given test
@@ -336,7 +332,7 @@ macro_rules! dispatch_testcase {
             );
 
             let tv = $tv.clone();
-            test_case::<$aead_ty, $kdf_ty, $kem_ty>(tv).unwrap();
+            test_case::<$aead_ty, $kdf_ty, $kem_ty>(tv);
 
             // This is so that code that comes after a dispatch_testcase! invocation will know that
             // the test vector matched no known ciphersuites

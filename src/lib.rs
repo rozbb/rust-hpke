@@ -23,7 +23,7 @@
 //!
 //! let mut csprng = StdRng::from_entropy();
 //! # let (bob_sk, bob_pk) = Kem::gen_keypair(&mut csprng)
-//!     .unwrap(); // manage this error to avoid panic
+//!     .expect("Key generation failed!");
 //!
 //! // This is a description string for the session. Both Alice and Bob need to know this value.
 //! // It's not secret.

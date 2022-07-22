@@ -60,6 +60,7 @@ impl Serializable for PrivateKey {
         GenericArray::clone_from_slice(&self.0.to_bytes())
     }
 }
+
 impl Deserializable for PrivateKey {
     // Dalek lets us convert [u8; 32] to scalars. Assuming the input length is correct, this
     // conversion is infallible, so no ValidationErrors are raised.

@@ -152,9 +152,8 @@ macro_rules! impl_dhkem {
                     // 255x the digest size of the hash function. Since these values are fixed at
                     // compile time, we don't worry about it.
                     let mut buf = <SharedSecret<$kem_name> as Default>::default();
-                    extract_and_expand::<$kdf>(concatted_secrets, &suite_id, kem_context, &mut buf.0)
-                        .expect("shared secret is way too big");
-                    buf
+                    extract_and_expand::<$kdf>(concatted_secrets, &suite_id, kem_context, &mut buf.0).map_err(|_| HpkeError::KdfOutputTooLong)?;
+                    Ok(buf)
                 } else {
                     // kem_context = encapped_key || pk_recip
                     // We concat without allocation by making a buffer of the maximum possible
@@ -176,10 +175,9 @@ macro_rules! impl_dhkem {
                         &suite_id,
                         kem_context,
                         &mut buf.0,
-                    )
-                    .expect("shared secret is way too big");
-                    buf
-                };
+                    ).map_err(|_| HpkeError::KdfOutputTooLong)?;
+                    Ok(buf)
+                }?;
 
                 Ok((shared_secret, encapped_key))
             }
@@ -310,7 +308,7 @@ macro_rules! impl_dhkem {
                             kem_context,
                             &mut shared_secret.0,
                         )
-                        .expect("shared secret is way too big");
+                        .map_err(|_| HpkeError::KdfOutputTooLong)?;
                         Ok(shared_secret)
                     } else {
                         // kem_context = encapped_key || pk_recip || pk_sender_id
@@ -334,7 +332,7 @@ macro_rules! impl_dhkem {
                             kem_context,
                             &mut shared_secret.0,
                         )
-                        .expect("shared secret is way too big");
+                        .map_err(|_| HpkeError::KdfOutputTooLong)?;
                         Ok(shared_secret)
                     }
                 }

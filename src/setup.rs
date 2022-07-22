@@ -57,7 +57,7 @@ fn derive_enc_ctx<A, Kdf, Kem, O>(
     mode: &O,
     shared_secret: SharedSecret<Kem>,
     info: &[u8],
-) -> AeadCtx<A, Kdf, Kem>
+) -> Result<AeadCtx<A, Kdf, Kem>, HpkeError>
 where
     A: Aead,
     Kdf: KdfTrait,
@@ -110,7 +110,7 @@ where
     // don't worry about it.
     secret_ctx
         .labeled_expand(&suite_id, b"key", sched_context, key.0.as_mut_slice())
-        .expect("aead key len is way too big");
+        .map_err(|_| HpkeError::KdfOutputTooLong)?;
     secret_ctx
         .labeled_expand(
             &suite_id,
@@ -118,7 +118,7 @@ where
             sched_context,
             base_nonce.0.as_mut_slice(),
         )
-        .expect("nonce len is way too big");
+        .map_err(|_| HpkeError::KdfOutputTooLong)?;
     secret_ctx
         .labeled_expand(
             &suite_id,
@@ -126,9 +126,9 @@ where
             sched_context,
             exporter_secret.0.as_mut_slice(),
         )
-        .expect("exporter secret len is way too big");
+        .map_err(|_| HpkeError::KdfOutputTooLong)?;
 
-    AeadCtx::new(&key, base_nonce, exporter_secret)
+    Ok(AeadCtx::new(&key, base_nonce, exporter_secret))
 }
 
 // RFC 9180 §5.1.4:
@@ -161,7 +161,7 @@ where
     // Do the encapsulation
     let (shared_secret, encapped_key) = Kem::encap(pk_recip, sender_id_keypair, csprng)?;
     // Use everything to derive an encryption context
-    let enc_ctx = derive_enc_ctx::<_, _, Kem, _>(mode, shared_secret, info);
+    let enc_ctx = derive_enc_ctx::<_, _, Kem, _>(mode, shared_secret, info)?;
 
     Ok((encapped_key, enc_ctx.into()))
 }
@@ -196,7 +196,7 @@ where
     let shared_secret = Kem::decap(sk_recip, pk_sender_id, encapped_key)?;
 
     // Use everything to derive an encryption context
-    let enc_ctx = derive_enc_ctx::<_, _, Kem, _>(mode, shared_secret, info);
+    let enc_ctx = derive_enc_ctx::<_, _, Kem, _>(mode, shared_secret, info)?;
     Ok(enc_ctx.into())
 }
 
