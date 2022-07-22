@@ -150,7 +150,10 @@ impl DhKeyExchange for DhP256 {
     /// ID. The keying material SHOULD have as many bits of entropy as the bit length of a secret
     /// key, i.e., 256.
     #[doc(hidden)]
-    fn derive_keypair<Kdf: KdfTrait>(suite_id: &KemSuiteId, ikm: &[u8]) -> (PrivateKey, PublicKey) {
+    fn derive_keypair<Kdf: KdfTrait>(
+        suite_id: &KemSuiteId,
+        ikm: &[u8],
+    ) -> Result<(PrivateKey, PublicKey), HpkeError> {
         // Write the label into a byte buffer and extract from the IKM
         let (_, hkdf_ctx) = labeled_extract::<Kdf>(&[], suite_id, b"dkp_prk", ikm);
 
@@ -163,19 +166,19 @@ impl DhKeyExchange for DhP256 {
             // This unwrap is fine. It only triggers if buf is way too big. It's only 32 bytes.
             hkdf_ctx
                 .labeled_expand(suite_id, b"candidate", &[counter], &mut buf)
-                .unwrap();
+                .map_err(|_| HpkeError::KdfOutputTooLong)?;
 
             // Try to convert to a valid secret key. If the conversion succeeded, return the
             // keypair. Recall the invariant of PrivateKey: it is a value in the range [1,p).
             if let Ok(sk) = PrivateKey::from_bytes(&buf) {
                 let pk = Self::sk_to_pk(&sk);
-                return (sk, pk);
+                return Ok((sk, pk));
             }
         }
 
         // The code should never ever get here. The likelihood that we get 256 bad samples
         // in a row for p256 is 2^-8192.
-        panic!("DeriveKeyPair failed all attempts");
+        Err(HpkeError::DerivationLimitReached)
     }
 }
 
@@ -295,7 +298,7 @@ mod tests {
         // not likely to lie on the curve. Instead, we just generate a random point, serialize it,
         // deserialize it, and test whether it's the same using impl Eq for AffinePoint
 
-        let (_, pubkey) = dhkex_gen_keypair::<Kex, _>(&mut csprng);
+        let (_, pubkey) = dhkex_gen_keypair::<Kex, _>(&mut csprng).unwrap();
         let pubkey_bytes = pubkey.to_bytes();
         let rederived_pubkey =
             <Kex as DhKeyExchange>::PublicKey::from_bytes(&pubkey_bytes).unwrap();
@@ -312,7 +315,7 @@ mod tests {
         let mut csprng = StdRng::from_entropy();
 
         // Make a random keypair and serialize it
-        let (sk, pk) = dhkex_gen_keypair::<Kex, _>(&mut csprng);
+        let (sk, pk) = dhkex_gen_keypair::<Kex, _>(&mut csprng).unwrap();
         let (sk_bytes, pk_bytes) = (sk.to_bytes(), pk.to_bytes());
 
         // Now deserialize those bytes

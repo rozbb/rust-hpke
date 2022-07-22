@@ -10,9 +10,7 @@ use crate::{
 extern crate std;
 use std::{fs::File, string::String, vec::Vec};
 
-use hex;
 use serde::{de::Error as SError, Deserialize, Deserializer};
-use serde_json;
 
 // For known-answer tests we need to be able to encap with fixed randomness. This allows that.
 trait TestableKem: KemTrait {
@@ -82,7 +80,7 @@ fn bytes_from_hex_opt<'de, D>(deserializer: D) -> Result<Option<Vec<u8>>, D::Err
 where
     D: Deserializer<'de>,
 {
-    bytes_from_hex(deserializer).map(|v| Some(v))
+    bytes_from_hex(deserializer).map(Some)
 }
 
 // Each individual test case looks like this
@@ -207,7 +205,9 @@ fn make_op_mode_r<'a, Kem: KemTrait>(
 }
 
 // This does all the legwork
-fn test_case<A: Aead, Kdf: KdfTrait, Kem: TestableKem>(tv: MainTestVector) {
+fn test_case<A: Aead, Kdf: KdfTrait, Kem: TestableKem>(
+    tv: MainTestVector,
+) -> Result<(), HpkeError> {
     // First, deserialize all the relevant keys so we can reconstruct the encapped key
     let recip_keypair = deser_keypair::<Kem>(&tv.sk_recip, &tv.pk_recip);
     let sk_eph = <Kem as TestableKem>::EphemeralKey::from_bytes(&tv.sk_eph).unwrap();
@@ -220,12 +220,12 @@ fn test_case<A: Aead, Kdf: KdfTrait, Kem: TestableKem>(tv: MainTestVector) {
 
     // Make sure the keys match what we would've gotten had we used DeriveKeyPair
     {
-        let derived_kp = Kem::derive_keypair(&tv.ikm_recip);
+        let derived_kp = Kem::derive_keypair(&tv.ikm_recip)?;
         assert_serializable_eq!(recip_keypair.0, derived_kp.0, "sk recip doesn't match");
         assert_serializable_eq!(recip_keypair.1, derived_kp.1, "pk recip doesn't match");
     }
     if let Some(sks) = sender_keypair.as_ref() {
-        let derived_kp = Kem::derive_keypair(&tv.ikm_sender.unwrap());
+        let derived_kp = Kem::derive_keypair(&tv.ikm_sender.unwrap())?;
         assert_serializable_eq!(sks.0, derived_kp.0, "sk sender doesn't match");
         assert_serializable_eq!(sks.1, derived_kp.1, "pk sender doesn't match");
     }
@@ -261,8 +261,8 @@ fn test_case<A: Aead, Kdf: KdfTrait, Kem: TestableKem>(tv: MainTestVector) {
     let mode = make_op_mode_r(
         tv.mode,
         sender_keypair.map(|(_, pk)| pk),
-        tv.psk.as_ref().map(Vec::as_slice),
-        tv.psk_id.as_ref().map(Vec::as_slice),
+        tv.psk.as_deref(),
+        tv.psk_id.as_deref(),
     );
     let mut aead_ctx = setup_receiver::<A, Kdf, Kem>(&mode, &sk_recip, &encapped_key, &tv.info)
         .expect("setup_receiver failed");
@@ -293,6 +293,8 @@ fn test_case<A: Aead, Kdf: KdfTrait, Kem: TestableKem>(tv: MainTestVector) {
             .unwrap();
         assert_eq!(exported_val, export.export_val, "export values don't match");
     }
+
+    Ok(())
 }
 
 // This macro takes in all the supported AEADs, KDFs, and KEMs, and dispatches the given test
@@ -334,7 +336,7 @@ macro_rules! dispatch_testcase {
             );
 
             let tv = $tv.clone();
-            test_case::<$aead_ty, $kdf_ty, $kem_ty>(tv);
+            test_case::<$aead_ty, $kdf_ty, $kem_ty>(tv).unwrap();
 
             // This is so that code that comes after a dispatch_testcase! invocation will know that
             // the test vector matched no known ciphersuites

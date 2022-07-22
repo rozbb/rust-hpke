@@ -179,8 +179,8 @@ mod test {
                 };
 
                 // Generate the sender's and receiver's long-term keypairs
-                let (sk_sender_id, pk_sender_id) = Kem::gen_keypair(&mut csprng);
-                let (sk_recip, pk_recip) = Kem::gen_keypair(&mut csprng);
+                let (sk_sender_id, pk_sender_id) = Kem::gen_keypair(&mut csprng).unwrap();
+                let (sk_recip, pk_recip) = Kem::gen_keypair(&mut csprng).unwrap();
 
                 // Construct the sender's encryption context, and get an encapped key
                 let sender_mode = OpModeS::<Kem>::AuthPsk(

@@ -31,7 +31,7 @@ where
     group.bench_function("gen_keypair", |b| b.iter(|| Kem::gen_keypair(&mut csprng)));
 
     // Make a recipient keypair to encrypt to
-    let (sk_recip, pk_recip) = Kem::gen_keypair(&mut csprng);
+    let (sk_recip, pk_recip) = Kem::gen_keypair(&mut csprng).unwrap();
 
     // Make a PSK bundle for OpModePsk and OpModeAuthPsk
     let mut psk = [0u8; PSK_LEN];
@@ -44,7 +44,7 @@ where
     };
 
     // Make a sender keypair for OpModeAuth and OpModeAuthPsk
-    let (sk_sender, pk_sender) = Kem::gen_keypair(&mut csprng);
+    let (sk_sender, pk_sender) = Kem::gen_keypair(&mut csprng).unwrap();
 
     // Construct all the opmodes we'll use in setup_sender and setup_receiver
     let opmodes = ["base", "auth", "psk", "authpsk"];
@@ -52,7 +52,7 @@ where
         OpModeS::Base,
         OpModeS::Auth((sk_sender.clone(), pk_sender.clone())),
         OpModeS::Psk(psk_bundle),
-        OpModeS::AuthPsk((sk_sender, pk_sender.clone()), psk_bundle),
+        OpModeS::AuthPsk((sk_sender, pk_sender), psk_bundle),
     ];
     let opmodes_r = vec![
         OpModeR::Base,
@@ -79,14 +79,9 @@ where
     // Collect the encapsulated keys from each setup_sender under each opmode. We will pass these
     // to setup_receiver in a moment
     let encapped_keys = opmodes_s.iter().map(|opmode_s| {
-        setup_sender::<Aead, Kdf, Kem, _>(
-            &opmode_s,
-            &pk_recip,
-            b"bench setup receiver",
-            &mut csprng,
-        )
-        .unwrap()
-        .0
+        setup_sender::<Aead, Kdf, Kem, _>(opmode_s, &pk_recip, b"bench setup receiver", &mut csprng)
+            .unwrap()
+            .0
     });
 
     // Bench setup_receiver for each opmode
@@ -174,7 +169,7 @@ where
     let mut csprng = StdRng::from_entropy();
 
     // Make up the recipient's keypair and setup an encryption context
-    let (sk_recip, pk_recip) = Kem::gen_keypair(&mut csprng);
+    let (sk_recip, pk_recip) = Kem::gen_keypair(&mut csprng).unwrap();
     let (encapped_key, mut encryption_ctx) =
         setup_sender::<Aead, Kdf, Kem, _>(&OpModeS::Base, &pk_recip, b"bench seal", &mut csprng)
             .unwrap();

@@ -136,19 +136,22 @@ impl DhKeyExchange for X25519 {
     /// ID. The keying material SHOULD have as many bits of entropy as the bit length of a secret
     /// key, i.e., 256.
     #[doc(hidden)]
-    fn derive_keypair<Kdf: KdfTrait>(suite_id: &KemSuiteId, ikm: &[u8]) -> (PrivateKey, PublicKey) {
+    fn derive_keypair<Kdf: KdfTrait>(
+        suite_id: &KemSuiteId,
+        ikm: &[u8],
+    ) -> Result<(PrivateKey, PublicKey), HpkeError> {
         // Write the label into a byte buffer and extract from the IKM
         let (_, hkdf_ctx) = labeled_extract::<Kdf>(&[], suite_id, b"dkp_prk", ikm);
         // The buffer we hold the candidate scalar bytes in. This is the size of a private key.
         let mut buf = [0u8; 32];
         hkdf_ctx
             .labeled_expand(suite_id, b"sk", &[], &mut buf)
-            .unwrap();
+            .map_err(|_| HpkeError::KdfOutputTooLong)?;
 
         let sk = x25519_dalek::StaticSecret::from(buf);
         let pk = x25519_dalek::PublicKey::from(&sk);
 
-        (PrivateKey(sk), PublicKey(pk))
+        Ok((PrivateKey(sk), PublicKey(pk)))
     }
 }
 
@@ -215,7 +218,7 @@ mod tests {
         let mut csprng = StdRng::from_entropy();
 
         // Make a random keypair and serialize it
-        let (sk, pk) = dhkex_gen_keypair::<Kex, _>(&mut csprng);
+        let (sk, pk) = dhkex_gen_keypair::<Kex, _>(&mut csprng).unwrap();
         let (sk_bytes, pk_bytes) = (sk.to_bytes(), pk.to_bytes());
 
         // Now deserialize those bytes

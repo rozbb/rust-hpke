@@ -290,7 +290,7 @@ macro_rules! do_gen_keypair {
         let kem_alg = $kem_alg;
         let csprng = $csprng;
 
-        let (sk, pk) = Kem::gen_keypair(csprng);
+        let (sk, pk) = Kem::gen_keypair(csprng)?;
         let sk = AgilePrivateKey {
             kem_alg,
             privkey_bytes: sk.to_bytes().to_vec(),
@@ -304,10 +304,13 @@ macro_rules! do_gen_keypair {
     }};
 }
 
-fn agile_gen_keypair<R: CryptoRng + RngCore>(kem_alg: KemAlg, csprng: &mut R) -> AgileKeypair {
+fn agile_gen_keypair<R: CryptoRng + RngCore>(
+    kem_alg: KemAlg,
+    csprng: &mut R,
+) -> Result<AgileKeypair, HpkeError> {
     match kem_alg {
-        KemAlg::X25519HkdfSha256 => do_gen_keypair!(X25519HkdfSha256, kem_alg, csprng),
-        KemAlg::DhP256HkdfSha256 => do_gen_keypair!(DhP256HkdfSha256, kem_alg, csprng),
+        KemAlg::X25519HkdfSha256 => Ok(do_gen_keypair!(X25519HkdfSha256, kem_alg, csprng)),
+        KemAlg::DhP256HkdfSha256 => Ok(do_gen_keypair!(DhP256HkdfSha256, kem_alg, csprng)),
         _ => unimplemented!(),
     }
 }
@@ -688,7 +691,7 @@ fn main() {
                 let info = b"we're gonna agile him in his clavicle";
 
                 // Make a random sender keypair and PSK bundle
-                let sender_keypair = agile_gen_keypair(kem_alg, &mut csprng);
+                let sender_keypair = agile_gen_keypair(kem_alg, &mut csprng).unwrap();
                 let mut psk_bytes = vec![0u8; kdf_alg.get_digest_len()];
                 let psk_id = b"preshared key attempt #5, take 2. action";
                 let psk_bundle = {
@@ -713,7 +716,7 @@ fn main() {
                 };
 
                 // Set up the sender's encryption context
-                let recip_keypair = agile_gen_keypair(kem_alg, &mut csprng);
+                let recip_keypair = agile_gen_keypair(kem_alg, &mut csprng).unwrap();
                 let (encapped_key, mut aead_ctx1) = agile_setup_sender(
                     aead_alg,
                     kdf_alg,

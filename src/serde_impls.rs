@@ -137,10 +137,10 @@ mod test {
 
                 // Do a whole bunch of stuff to generate a valid session. All we care about is that
                 // this gives us a pubkey, secret key, and encapped key to test serde on
-                let (sk_recip, pk_recip) = Kem::gen_keypair(&mut csprng);
+                let (sk_recip, pk_recip) = Kem::gen_keypair(&mut csprng).unwrap();
                 let (psk, psk_id) = (gen_rand_buf(), gen_rand_buf());
                 let (sender_mode, _) =
-                    new_op_mode_pair::<Kdf, Kem>(OpModeKind::Base, &psk, &psk_id);
+                    new_op_mode_pair::<Kdf, Kem>(OpModeKind::Base, &psk, &psk_id).unwrap();
                 let (encapped_key, mut aead_ctx) =
                     setup_sender::<A, Kdf, Kem, _>(&sender_mode, &pk_recip, &info[..], &mut csprng)
                         .unwrap();

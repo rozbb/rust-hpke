@@ -207,7 +207,7 @@ macro_rules! impl_dhkem {
                 /// This keying material SHOULD have as many bits of entropy as the bit length of a
                 /// secret key, i.e., `8 * Self::PrivateKey::size()`. For X25519 and P-256, this is
                 /// 256 bits of entropy.
-                fn derive_keypair(ikm: &[u8]) -> (Self::PrivateKey, Self::PublicKey) {
+                fn derive_keypair(ikm: &[u8]) -> Result<(Self::PrivateKey, Self::PublicKey), HpkeError> {
                     let suite_id = kem_suite_id::<Self>();
                     <$dhkex as DhKeyExchange>::derive_keypair::<$kdf>(&suite_id, ikm)
                 }
@@ -219,7 +219,7 @@ macro_rules! impl_dhkem {
                     csprng: &mut R,
                 ) -> Result<(SharedSecret<Self>, Self::EncappedKey), HpkeError> {
                     // Generate a new ephemeral key
-                    let (sk_eph, _) = Self::gen_keypair(csprng);
+                    let (sk_eph, _) = Self::gen_keypair(csprng)?;
                     // Now pass to encap_with_eph()
                     encap_with_eph(pk_recip, sender_id_keypair, sk_eph)
                 }

@@ -141,7 +141,9 @@ where
         out: &mut [u8],
     ) -> Result<(), hkdf::InvalidLength> {
         // We need to write the length as a u16, so that's the de-facto upper bound on length
-        assert!(out.len() <= u16::MAX as usize);
+        if out.len() > u16::MAX as usize {
+            return Err(hkdf::InvalidLength);
+        }
 
         // Encode the output length in the info string
         let mut len_buf = [0u8; 2];

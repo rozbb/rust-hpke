@@ -1,4 +1,4 @@
-use crate::{kdf::Kdf as KdfTrait, util::KemSuiteId, Deserializable, Serializable};
+use crate::{kdf::Kdf as KdfTrait, util::KemSuiteId, Deserializable, HpkeError, Serializable};
 
 #[cfg(feature = "serde_impls")]
 use serde::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
@@ -64,7 +64,7 @@ pub trait DhKeyExchange {
     fn derive_keypair<Kdf: KdfTrait>(
         suite_id: &KemSuiteId,
         ikm: &[u8],
-    ) -> (Self::PrivateKey, Self::PublicKey);
+    ) -> Result<(Self::PrivateKey, Self::PublicKey), HpkeError>;
 }
 
 #[cfg(feature = "p256")]

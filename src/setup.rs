@@ -223,7 +223,7 @@ mod test {
                 let info = b"why would you think in a million years that that would actually work";
 
                 // Generate the receiver's long-term keypair
-                let (sk_recip, pk_recip) = Kem::gen_keypair(&mut csprng);
+                let (sk_recip, pk_recip) = Kem::gen_keypair(&mut csprng).unwrap();
 
                 // Try a full setup for all the op modes
                 for op_mode_kind in &[
@@ -235,7 +235,7 @@ mod test {
                     // Generate a mutually agreeing op mode pair
                     let (psk, psk_id) = (gen_rand_buf(), gen_rand_buf());
                     let (sender_mode, receiver_mode) =
-                        new_op_mode_pair::<Kdf, Kem>(*op_mode_kind, &psk, &psk_id);
+                        new_op_mode_pair::<Kdf, Kem>(*op_mode_kind, &psk, &psk_id).unwrap();
 
                     // Construct the sender's encryption context, and get an encapped key
                     let (encapped_key, mut aead_ctx1) = setup_sender::<A, Kdf, Kem, _>(
@@ -276,12 +276,12 @@ mod test {
                 let info = b"why would you think in a million years that that would actually work";
 
                 // Generate the receiver's long-term keypair
-                let (sk_recip, pk_recip) = Kem::gen_keypair(&mut csprng);
+                let (sk_recip, pk_recip) = Kem::gen_keypair(&mut csprng).unwrap();
 
                 // Generate a mutually agreeing op mode pair
                 let (psk, psk_id) = (gen_rand_buf(), gen_rand_buf());
                 let (sender_mode, receiver_mode) =
-                    new_op_mode_pair::<Kdf, Kem>(OpModeKind::Base, &psk, &psk_id);
+                    new_op_mode_pair::<Kdf, Kem>(OpModeKind::Base, &psk, &psk_id).unwrap();
 
                 // Construct the sender's encryption context normally
                 let (encapped_key, sender_ctx) =
@@ -302,7 +302,7 @@ mod test {
 
                 // Now make a receiver with the wrong secret key and ensure it doesn't match the
                 // sender
-                let (bad_sk, _) = Kem::gen_keypair(&mut csprng);
+                let (bad_sk, _) = Kem::gen_keypair(&mut csprng).unwrap();
                 let mut aead_ctx2 =
                     setup_receiver::<_, _, Kem>(&receiver_mode, &bad_sk, &encapped_key, &info[..])
                         .unwrap();

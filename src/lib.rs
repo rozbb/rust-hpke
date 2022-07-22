@@ -22,7 +22,8 @@
 //! type Kdf = HkdfSha384;
 //!
 //! let mut csprng = StdRng::from_entropy();
-//! # let (bob_sk, bob_pk) = Kem::gen_keypair(&mut csprng);
+//! # let (bob_sk, bob_pk) = Kem::gen_keypair(&mut csprng)
+//!     .unwrap(); // manage this error to avoid panic
 //!
 //! // This is a description string for the session. Both Alice and Bob need to know this value.
 //! // It's not secret.
@@ -142,8 +143,10 @@ use generic_array::{typenum::marker_traits::Unsigned, ArrayLength, GenericArray}
 /// Describes things that can go wrong in the HPKE protocol
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum HpkeError {
-    /// The allowed number of message encryptions has been reached
+    /// the allowed number of message encryptions has been reached
     MessageLimitReached,
+    /// the allowed number of key derivation attempts has been reached
+    DerivationLimitReached,
     /// An error occurred while opening a ciphertext
     OpenError,
     /// An error occured while sealing a plaintext
@@ -165,6 +168,7 @@ impl core::fmt::Display for HpkeError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
             HpkeError::MessageLimitReached => write!(f, "Message limit reached"),
+            HpkeError::DerivationLimitReached => write!(f, "Key derivation limit reached"),
             HpkeError::OpenError => write!(f, "Failed to open ciphertext"),
             HpkeError::SealError => write!(f, "Failed to seal plaintext"),
             HpkeError::KdfOutputTooLong => write!(f, "Too many bytes requested from KDF"),

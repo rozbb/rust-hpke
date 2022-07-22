@@ -19,7 +19,7 @@ use hpke::{
     aead::{AeadTag, ChaCha20Poly1305},
     kdf::HkdfSha384,
     kem::X25519HkdfSha256,
-    Deserializable, Kem as KemTrait, OpModeR, OpModeS, Serializable,
+    Deserializable, HpkeError, Kem as KemTrait, OpModeR, OpModeS, Serializable,
 };
 
 use rand::{rngs::StdRng, SeedableRng};
@@ -32,7 +32,8 @@ type Aead = ChaCha20Poly1305;
 type Kdf = HkdfSha384;
 
 // Initializes the server with a fresh keypair
-fn server_init() -> (<Kem as KemTrait>::PrivateKey, <Kem as KemTrait>::PublicKey) {
+fn server_init() -> Result<(<Kem as KemTrait>::PrivateKey, <Kem as KemTrait>::PublicKey), HpkeError>
+{
     let mut csprng = StdRng::from_entropy();
     Kem::gen_keypair(&mut csprng)
 }
@@ -92,6 +93,7 @@ fn server_decrypt_msg(
         .expect("invalid ciphertext!");
 
     // Rename for clarity
+    #[allow(clippy::let_and_return)]
     let plaintext = ciphertext_copy;
 
     plaintext
@@ -99,7 +101,7 @@ fn server_decrypt_msg(
 
 fn main() {
     // Set up the server
-    let (server_privkey, server_pubkey) = server_init();
+    let (server_privkey, server_pubkey) = server_init().unwrap();
 
     // The message to be encrypted
     let msg = b"Kat Branchman";

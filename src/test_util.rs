@@ -5,7 +5,7 @@ use crate::{
     kem::Kem as KemTrait,
     op_mode::{OpModeR, OpModeS, PskBundle},
     setup::ExporterSecret,
-    Serializable,
+    HpkeError, Serializable,
 };
 
 use generic_array::GenericArray;
@@ -22,7 +22,7 @@ pub(crate) fn gen_rand_buf() -> [u8; 32] {
 /// Generates a keypair without the need of a KEM
 pub(crate) fn dhkex_gen_keypair<Kex: DhKeyExchange, R: CryptoRng + RngCore>(
     csprng: &mut R,
-) -> (Kex::PrivateKey, Kex::PublicKey) {
+) -> Result<(Kex::PrivateKey, Kex::PublicKey), HpkeError> {
     // Make some keying material that's the size of a private key
     let mut ikm: GenericArray<u8, <Kex::PrivateKey as Serializable>::OutputSize> =
         GenericArray::default();
@@ -77,31 +77,31 @@ pub(crate) fn new_op_mode_pair<'a, Kdf: KdfTrait, Kem: KemTrait>(
     kind: OpModeKind,
     psk: &'a [u8],
     psk_id: &'a [u8],
-) -> (OpModeS<'a, Kem>, OpModeR<'a, Kem>) {
+) -> Result<(OpModeS<'a, Kem>, OpModeR<'a, Kem>), HpkeError> {
     let mut csprng = StdRng::from_entropy();
-    let (sk_sender, pk_sender) = Kem::gen_keypair(&mut csprng);
+    let (sk_sender, pk_sender) = Kem::gen_keypair(&mut csprng)?;
     let psk_bundle = PskBundle { psk, psk_id };
 
     match kind {
         OpModeKind::Base => {
             let sender_mode = OpModeS::Base;
             let receiver_mode = OpModeR::Base;
-            (sender_mode, receiver_mode)
+            Ok((sender_mode, receiver_mode))
         }
         OpModeKind::Psk => {
             let sender_mode = OpModeS::Psk(psk_bundle);
             let receiver_mode = OpModeR::Psk(psk_bundle);
-            (sender_mode, receiver_mode)
+            Ok((sender_mode, receiver_mode))
         }
         OpModeKind::Auth => {
             let sender_mode = OpModeS::Auth((sk_sender, pk_sender.clone()));
             let receiver_mode = OpModeR::Auth(pk_sender);
-            (sender_mode, receiver_mode)
+            Ok((sender_mode, receiver_mode))
         }
         OpModeKind::AuthPsk => {
             let sender_mode = OpModeS::AuthPsk((sk_sender, pk_sender.clone()), psk_bundle);
             let receiver_mode = OpModeR::AuthPsk(pk_sender, psk_bundle);
-            (sender_mode, receiver_mode)
+            Ok((sender_mode, receiver_mode))
         }
     }
 }

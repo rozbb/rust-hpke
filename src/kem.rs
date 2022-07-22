@@ -68,10 +68,12 @@ pub trait Kem: Sized {
     /// This keying material SHOULD have as many bits of entropy as the bit length of a secret key,
     /// i.e., `8 * Self::PrivateKey::size()`. For X25519 and P-256, this is 256 bits of
     /// entropy.
-    fn derive_keypair(ikm: &[u8]) -> (Self::PrivateKey, Self::PublicKey);
+    fn derive_keypair(ikm: &[u8]) -> Result<(Self::PrivateKey, Self::PublicKey), HpkeError>;
 
     /// Generates a random keypair using the given RNG
-    fn gen_keypair<R: CryptoRng + RngCore>(csprng: &mut R) -> (Self::PrivateKey, Self::PublicKey) {
+    fn gen_keypair<R: CryptoRng + RngCore>(
+        csprng: &mut R,
+    ) -> Result<(Self::PrivateKey, Self::PublicKey), HpkeError> {
         // Make some keying material that's the size of a private key
         let mut ikm: GenericArray<u8, <Self::PrivateKey as Serializable>::OutputSize> =
             GenericArray::default();
@@ -151,7 +153,7 @@ mod tests {
                 type Kem = $kem_ty;
 
                 let mut csprng = StdRng::from_entropy();
-                let (sk_recip, pk_recip) = Kem::gen_keypair(&mut csprng);
+                let (sk_recip, pk_recip) = Kem::gen_keypair(&mut csprng).unwrap();
 
                 // Encapsulate a random shared secret
                 let (auth_shared_secret, encapped_key) =
@@ -169,7 +171,7 @@ mod tests {
                 //
 
                 // Make a sender identity keypair
-                let (sk_sender_id, pk_sender_id) = Kem::gen_keypair(&mut csprng);
+                let (sk_sender_id, pk_sender_id) = Kem::gen_keypair(&mut csprng).unwrap();
 
                 // Encapsulate a random shared secret
                 let (auth_shared_secret, encapped_key) = Kem::encap(
@@ -199,7 +201,7 @@ mod tests {
                 // Encapsulate a random shared secret
                 let encapped_key = {
                     let mut csprng = StdRng::from_entropy();
-                    let (_, pk_recip) = Kem::gen_keypair(&mut csprng);
+                    let (_, pk_recip) = Kem::gen_keypair(&mut csprng).unwrap();
                     Kem::encap(&pk_recip, None, &mut csprng).unwrap().1
                 };
                 // Serialize it
