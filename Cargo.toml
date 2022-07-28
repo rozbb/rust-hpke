@@ -18,8 +18,7 @@ default = ["p256", "x25519"]
 x25519 = ["x25519-dalek"]
 # Include serde Serialize/Deserialize impls for all relevant types
 serde_impls = ["serde", "generic-array/serde"]
-# The std feature has no function outside of doing KAT tests. There is no need to use this in
-# production.
+# std includes an implementation of `std::error::Error` for `HpkeError`
 std = []
 
 [dependencies]
