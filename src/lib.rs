@@ -7,6 +7,7 @@
 //! public key they know. Here's an example of Alice and Bob, where Alice knows Bob's public key:
 //!
 //! ```
+//! # #[cfg(any(feature = "alloc", feature = "std"))] {
 //! # #[cfg(feature = "x25519")]
 //! # {
 //! # use rand::{rngs::StdRng, SeedableRng};
@@ -66,8 +67,12 @@
 //!
 //! assert_eq!(&plaintext, b"fronthand or backhand?");
 //! # }
+//! # }
 //! ```
 
+// The doc_cfg feature is only available in nightly. It lets us mark items in documentation as
+// dependent on specific features.
+#![cfg_attr(docsrs, feature(doc_cfg))]
 //-------- no_std stuff --------//
 #![no_std]
 
@@ -79,12 +84,12 @@ extern crate std;
 #[cfg(feature = "std")]
 pub(crate) use std::vec::Vec;
 
-#[cfg(not(feature = "std"))]
+#[cfg(all(feature = "alloc", not(feature = "std")))]
 #[allow(unused_imports)]
 #[macro_use]
 extern crate alloc;
 
-#[cfg(not(feature = "std"))]
+#[cfg(all(feature = "alloc", not(feature = "std")))]
 pub(crate) use alloc::vec::Vec;
 
 //-------- Testing stuff --------//
@@ -130,10 +135,11 @@ pub use op_mode::{OpModeR, OpModeS, PskBundle};
 #[doc(inline)]
 pub use setup::{setup_receiver, setup_sender};
 #[doc(inline)]
-pub use single_shot::{
-    single_shot_open, single_shot_open_in_place_detached, single_shot_seal,
-    single_shot_seal_in_place_detached,
-};
+pub use single_shot::{single_shot_open_in_place_detached, single_shot_seal_in_place_detached};
+
+#[doc(inline)]
+#[cfg(any(feature = "alloc", feature = "std"))]
+pub use single_shot::{single_shot_open, single_shot_seal};
 
 //-------- Top-level types --------//
 

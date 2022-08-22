@@ -14,10 +14,12 @@ categories = ["cryptography", "no-std"]
 [features]
 # "p256" enables the use of ECDH-NIST-P256 as a KEM
 # "x25519" enables the use of the X25519 as a KEM
-default = ["p256", "x25519"]
+default = ["alloc", "p256", "x25519"]
 x25519 = ["x25519-dalek"]
 # Include serde Serialize/Deserialize impls for all relevant types
 serde_impls = ["serde", "generic-array/serde"]
+# Include allocating methods like open() and seal()
+alloc = []
 # The std feature has no function outside of doing KAT tests. There is no need to use this in
 # production.
 std = []
@@ -60,9 +62,10 @@ required-features = ["x25519"]
 name = "agility"
 required-features = ["p256", "x25519"]
 
-# Tell docs.rs to build docs with `--all-features`
+# Tell docs.rs to build docs with `--all-features` and `--cfg docsrs` (for nightly docs features)
 [package.metadata.docs.rs]
 all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
 
 # Criteron benches
 [[bench]]

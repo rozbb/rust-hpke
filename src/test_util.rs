@@ -115,29 +115,30 @@ pub(crate) fn aead_ctx_eq<A: Aead, Kdf: KdfTrait, Kem: KemTrait>(
     let mut csprng = StdRng::from_entropy();
 
     // Some random input data
-    let msg = {
-        let len = csprng.gen::<u8>();
-        let mut buf = vec![0u8; len as usize];
+    let msg_len = csprng.gen::<u8>() as usize;
+    let msg_buf = {
+        let mut buf = [0u8; 255];
         csprng.fill_bytes(&mut buf);
         buf
     };
-    let aad = {
-        let len = csprng.gen::<u8>();
-        let mut buf = vec![0u8; len as usize];
+    let aad_len = csprng.gen::<u8>() as usize;
+    let aad_buf = {
+        let mut buf = [0u8; 255];
         csprng.fill_bytes(&mut buf);
         buf
     };
+    let aad = &aad_buf[..aad_len];
 
     // Do 1000 iterations of encryption-decryption. The underlying sequence number increments
     // each time.
     for i in 0..1000 {
-        let mut plaintext = msg.clone();
+        let plaintext = &mut msg_buf.clone()[..msg_len];
         // Encrypt the plaintext
         let tag = sender
             .seal_in_place_detached(&mut plaintext[..], &aad)
             .unwrap_or_else(|_| panic!("seal() #{} failed", i));
         // Rename for clarity
-        let mut ciphertext = plaintext;
+        let ciphertext = plaintext;
 
         // Now to decrypt on the other side
         if receiver
@@ -152,7 +153,7 @@ pub(crate) fn aead_ctx_eq<A: Aead, Kdf: KdfTrait, Kem: KemTrait>(
 
         // Make sure the output message was the same as the input message. If it doesn't match,
         // early return
-        if msg != roundtrip_plaintext {
+        if &msg_buf[..msg_len] != roundtrip_plaintext {
             return false;
         }
     }
