@@ -10,7 +10,7 @@ use crate::{
 
 use core::{default::Default, marker::PhantomData, u8};
 
-use aead::{AeadCore as BaseAeadCore, AeadInPlace as BaseAeadInPlace, NewAead as BaseNewAead};
+use aead::{AeadCore as BaseAeadCore, AeadInPlace as BaseAeadInPlace, KeyInit as BaseKeyInit};
 use byteorder::{BigEndian, ByteOrder};
 use generic_array::GenericArray;
 use zeroize::Zeroize;
@@ -19,7 +19,7 @@ use zeroize::Zeroize;
 pub trait Aead {
     /// The underlying AEAD implementation
     #[doc(hidden)]
-    type AeadImpl: BaseAeadCore + BaseAeadInPlace + BaseNewAead + Clone;
+    type AeadImpl: BaseAeadCore + BaseAeadInPlace + BaseKeyInit + Clone;
 
     /// The algorithm identifier for an AEAD implementation
     const AEAD_ID: u16;
@@ -53,13 +53,16 @@ impl<A: Aead> Drop for AeadNonce<A> {
 }
 
 pub(crate) struct AeadKey<A: Aead>(
-    pub(crate) GenericArray<u8, <A::AeadImpl as aead::NewAead>::KeySize>,
+    pub(crate) GenericArray<u8, <A::AeadImpl as aead::KeySizeUser>::KeySize>,
 );
 
 // We use this to get an empty buffer we can read key material into
 impl<A: Aead> Default for AeadKey<A> {
     fn default() -> AeadKey<A> {
-        AeadKey(GenericArray::<u8, <A::AeadImpl as aead::NewAead>::KeySize>::default())
+        AeadKey(GenericArray::<
+            u8,
+            <A::AeadImpl as aead::KeySizeUser>::KeySize,
+        >::default())
     }
 }
 
@@ -195,7 +198,7 @@ impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AeadCtx<A, Kdf, Kem> {
         let suite_id = full_suite_id::<A, Kdf, Kem>();
         AeadCtx {
             overflowed: false,
-            encryptor: <A::AeadImpl as aead::NewAead>::new(&key.0),
+            encryptor: <A::AeadImpl as aead::KeyInit>::new(&key.0),
             base_nonce,
             exporter_secret,
             seq: <Seq as Default>::default(),

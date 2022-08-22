@@ -1,6 +1,9 @@
 use crate::aead::Aead;
 
-use aead::{AeadCore as BaseAeadCore, AeadInPlace as BaseAeadInPlace, NewAead as BaseNewAead};
+use aead::{
+    AeadCore as BaseAeadCore, AeadInPlace as BaseAeadInPlace, KeyInit as BaseKeyInit,
+    KeySizeUser as BaseKeySizeUser,
+};
 use generic_array::typenum;
 
 /// An inert underlying Aead implementation. The open/seal routines panic. The `new()` function
@@ -38,9 +41,11 @@ impl BaseAeadInPlace for EmptyAeadImpl {
     }
 }
 
-impl BaseNewAead for EmptyAeadImpl {
+impl BaseKeySizeUser for EmptyAeadImpl {
     type KeySize = typenum::U0;
+}
 
+impl BaseKeyInit for EmptyAeadImpl {
     // Ignore the key, since we can't encrypt or decrypt anything anyway. Just return the object
     fn new(_: &aead::Key<Self>) -> Self {
         EmptyAeadImpl

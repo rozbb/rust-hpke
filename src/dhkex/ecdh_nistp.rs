@@ -88,7 +88,7 @@ impl Serializable for KexResult {
 
     fn to_bytes(&self) -> GenericArray<u8, Self::OutputSize> {
         // ecdh::SharedSecret::as_bytes returns the serialized x-coordinate
-        *self.0.as_bytes()
+        *self.0.raw_secret_bytes()
     }
 }
 
