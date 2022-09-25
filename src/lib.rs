@@ -101,7 +101,6 @@ mod kat_tests;
 
 // kat_tests requires serde
 #[cfg(all(test, feature = "std", feature = "x25519", feature = "p256"))]
-#[macro_use]
 extern crate serde_derive;
 
 #[cfg(test)]
