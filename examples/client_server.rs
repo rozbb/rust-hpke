@@ -91,7 +91,8 @@ fn server_decrypt_msg(
         .open_in_place_detached(&mut ciphertext_copy, associated_data, &tag)
         .expect("invalid ciphertext!");
 
-    // Rename for clarity
+    // Rename for clarity. Cargo clippy thinks it's unnecessary, but I disagree
+    #[allow(clippy::let_and_return)]
     let plaintext = ciphertext_copy;
 
     plaintext

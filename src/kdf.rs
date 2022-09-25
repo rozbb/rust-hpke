@@ -112,9 +112,11 @@ pub fn labeled_extract<Kdf: KdfTrait>(
 }
 
 // This trait only exists so I can implement it for hkdf::Hkdf
-/// Describes the `labeled_expand` key derivation function
 #[doc(hidden)]
 pub trait LabeledExpand {
+    /// Does a `LabeledExpand` key derivation function using HKDF. If `out.len()` is more than 255x
+    /// the digest size (in bytes) of the underlying hash function, returns an
+    /// `Err(hkdf::InvalidLength)`.
     fn labeled_expand(
         &self,
         suite_id: &[u8],
@@ -133,6 +135,10 @@ where
     //   labeled_info = concat(I2OSP(L, 2), "HPKE-v1", suite_id,
     //                         label, info)
     //   return Expand(prk, labeled_info, L)
+
+    /// Does a `LabeledExpand` key derivation function using HKDF. If `out.len()` is more than 255x
+    /// the digest size (in bytes) of the underlying hash function, returns an
+    /// `Err(hkdf::InvalidLength)`.
     fn labeled_expand(
         &self,
         suite_id: &[u8],
@@ -141,7 +147,10 @@ where
         out: &mut [u8],
     ) -> Result<(), hkdf::InvalidLength> {
         // We need to write the length as a u16, so that's the de-facto upper bound on length
-        assert!(out.len() <= u16::MAX as usize);
+        if out.len() > u16::MAX as usize {
+            // The error condition is met, since 2^16 is way bigger than 255 * digest_bytelen
+            return Err(hkdf::InvalidLength);
+        }
 
         // Encode the output length in the info string
         let mut len_buf = [0u8; 2];
