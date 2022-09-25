@@ -4,7 +4,7 @@ use crate::{
     kem::Kem as KemTrait,
     op_mode::{OpModeR, OpModeS},
     setup::{setup_receiver, setup_sender},
-    HpkeError, Vec,
+    HpkeError,
 };
 
 use rand_core::{CryptoRng, RngCore};
@@ -56,6 +56,8 @@ where
 /// Returns `Ok((encapped_key, ciphertext))` on success. If an error happened during key
 /// encapsulation, returns `Err(HpkeError::EncapError)`. If an error happened during encryption,
 /// returns `Err(HpkeError::SealError)`.
+#[cfg_attr(docsrs, doc(cfg(any(feature = "alloc", feature = "std"))))]
+#[cfg(any(feature = "alloc", feature = "std"))]
 pub fn single_shot_seal<A, Kdf, Kem, R>(
     mode: &OpModeS<Kem>,
     pk_recip: &Kem::PublicKey,
@@ -63,7 +65,7 @@ pub fn single_shot_seal<A, Kdf, Kem, R>(
     plaintext: &[u8],
     aad: &[u8],
     csprng: &mut R,
-) -> Result<(Kem::EncappedKey, Vec<u8>), HpkeError>
+) -> Result<(Kem::EncappedKey, crate::Vec<u8>), HpkeError>
 where
     A: Aead,
     Kdf: KdfTrait,
@@ -122,6 +124,8 @@ where
 /// Returns `Ok(plaintext)` on success. If an error happened during key decapsulation, returns
 /// `Err(HpkeError::DecapError)`. If an error happened during decryption, returns
 /// `Err(HpkeError::OpenError)`.
+#[cfg_attr(docsrs, doc(cfg(any(feature = "alloc", feature = "std"))))]
+#[cfg(any(feature = "alloc", feature = "std"))]
 pub fn single_shot_open<A, Kdf, Kem>(
     mode: &OpModeR<Kem>,
     sk_recip: &Kem::PrivateKey,
@@ -129,7 +133,7 @@ pub fn single_shot_open<A, Kdf, Kem>(
     info: &[u8],
     ciphertext: &[u8],
     aad: &[u8],
-) -> Result<Vec<u8>, HpkeError>
+) -> Result<crate::Vec<u8>, HpkeError>
 where
     A: Aead,
     Kdf: KdfTrait,
@@ -141,9 +145,10 @@ where
     aead_ctx.open(ciphertext, aad)
 }
 
+#[cfg(any(feature = "alloc", feature = "std"))]
 #[cfg(test)]
 mod test {
-    use super::{single_shot_open, single_shot_seal};
+    use super::*;
     use crate::{
         aead::ChaCha20Poly1305,
         kdf::HkdfSha256,
@@ -220,7 +225,7 @@ mod test {
         };
     }
 
-    #[cfg(feature = "x25519-dalek")]
+    #[cfg(feature = "x25519")]
     test_single_shot_correctness!(
         test_single_shot_correctness_x25519,
         ChaCha20Poly1305,

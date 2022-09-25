@@ -44,14 +44,15 @@ Here are all the primitives listed in the spec. The primitives with checked boxe
 Crate Features
 --------------
 
-Default features flags: `x25519`, `p256`.
+Default features flags: `alloc`, `x25519`, `p256`.
 
 Feature flag list:
 
+* `alloc` - Includes allocating methods like `open()` and `seal()`
 * `x25519` - Enables X25519-based KEMs
 * `p256` - Enables NIST P-256-based KEMs
 * `serde_impls` - Includes implementations of `serde::Serialize` and `serde::Deserialize` for all `hpke::Serializable` and `hpke::Deserializable` types
-* `std` - Includes an implementation of `std::error::Error` for `HpkeError`
+* `std` - Includes an implementation of `std::error::Error` for `HpkeError`. Also does what `alloc` does.
 
 For info on how to omit or include feature flags, see the [cargo docs on features](https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html#choosing-features).
 

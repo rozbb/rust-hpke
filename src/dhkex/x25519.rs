@@ -161,6 +161,7 @@ mod tests {
         },
         test_util::dhkex_gen_keypair,
     };
+    use generic_array::typenum::Unsigned;
     use rand::{rngs::StdRng, RngCore, SeedableRng};
 
     // We need this in our serialize-deserialize tests
@@ -193,7 +194,8 @@ mod tests {
 
         // Fill a buffer with randomness
         let orig_bytes = {
-            let mut buf = vec![0u8; <Kex as DhKeyExchange>::PublicKey::size()];
+            let mut buf =
+                [0u8; <<Kex as DhKeyExchange>::PublicKey as Serializable>::OutputSize::USIZE];
             csprng.fill_bytes(buf.as_mut_slice());
             buf
         };

@@ -5,7 +5,7 @@ use crate::{
     kem::Kem as KemTrait,
     setup::ExporterSecret,
     util::{enforce_equal_len, full_suite_id, FullSuiteId},
-    Deserializable, HpkeError, Serializable, Vec,
+    Deserializable, HpkeError, Serializable,
 };
 
 use core::{default::Default, marker::PhantomData, u8};
@@ -307,7 +307,9 @@ impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AeadCtxR<A, Kdf, Kem> {
     /// Returns `Ok(())` on success. If this context has been used for so many encryptions that the
     /// sequence number overflowed, returns `Err(HpkeError::MessageLimitReached)`. If the tag fails
     /// to validate, returns `Err(HpkeError::OpenError)`.
-    pub fn open(&mut self, ciphertext: &[u8], aad: &[u8]) -> Result<Vec<u8>, HpkeError> {
+    #[cfg_attr(docsrs, doc(cfg(any(feature = "alloc", feature = "std"))))]
+    #[cfg(any(feature = "alloc", feature = "std"))]
+    pub fn open(&mut self, ciphertext: &[u8], aad: &[u8]) -> Result<crate::Vec<u8>, HpkeError> {
         // Make sure the auth'd ciphertext is long enough to contain a tag. If it isn't, it's
         // certainly not valid.
         let tag_len = AeadTag::<A>::size();
@@ -414,7 +416,9 @@ impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AeadCtxS<A, Kdf, Kem> {
     /// Returns `Ok(ciphertext)` on success.  If this context has been used for so many encryptions
     /// that the sequence number overflowed, returns `Err(HpkeError::MessageLimitReached)`. If an
     /// error happened during encryption, returns `Err(HpkeError::SealError)`.
-    pub fn seal(&mut self, plaintext: &[u8], aad: &[u8]) -> Result<Vec<u8>, HpkeError> {
+    #[cfg_attr(docsrs, doc(cfg(any(feature = "alloc", feature = "std"))))]
+    #[cfg(any(feature = "alloc", feature = "std"))]
+    pub fn seal(&mut self, plaintext: &[u8], aad: &[u8]) -> Result<crate::Vec<u8>, HpkeError> {
         let msg_len = plaintext.len();
         let tag_len = AeadTag::<A>::size();
 
@@ -454,6 +458,7 @@ pub use crate::aead::{aes_gcm::*, chacha20_poly1305::*, export_only::*};
 #[cfg(test)]
 mod test {
     use super::{AeadTag, AesGcm128, AesGcm256, ChaCha20Poly1305, ExportOnlyAead, Seq};
+
     use crate::{
         kdf::HkdfSha256, test_util::gen_ctx_simple_pair, Deserializable, HpkeError, Serializable,
     };
@@ -479,6 +484,7 @@ mod test {
     /// Tests that encryption context secret export does not change behavior based on the
     /// underlying sequence number This logic is cipher-agnostic, so we don't make the test generic
     /// over ciphers.
+    #[cfg(any(feature = "alloc", feature = "std"))]
     macro_rules! test_export_idempotence {
         ($test_name:ident, $kem_ty:ty) => {
             #[test]
@@ -515,6 +521,7 @@ mod test {
 
     /// Tests that anything other than `export()` called on an `ExportOnly` context results in a
     /// panic
+    #[cfg(any(feature = "alloc", feature = "std"))]
     macro_rules! test_exportonly_panics {
         ($test_name1:ident, $test_name2:ident, $kem_ty:ty) => {
             #[should_panic]
@@ -548,6 +555,7 @@ mod test {
 
     /// Tests that sequence overflowing causes an error. This logic is cipher-agnostic, so we don't
     /// make the test generic over ciphers.
+    #[cfg(any(feature = "alloc", feature = "std"))]
     macro_rules! test_overflow {
         ($test_name:ident, $kem_ty:ty) => {
             #[test]
@@ -576,8 +584,10 @@ mod test {
 
                 // Do one round trip and ensure it works
                 {
+                    let mut buf = msg.clone();
+
                     // Encrypt the plaintext
-                    let ciphertext = sender_ctx.seal(msg, aad).expect("seal() failed");
+                    let ciphertext = sender_ctx.seal(&mut buf, aad).expect("seal() failed");
 
                     // Now to decrypt on the other side
                     let roundtrip_plaintext =
@@ -615,6 +625,7 @@ mod test {
     }
 
     /// Tests that `open()` can decrypt things properly encrypted with `seal()`
+    #[cfg(any(feature = "alloc", feature = "std"))]
     macro_rules! test_ctx_correctness {
         ($test_name:ident, $aead_ty:ty, $kem_ty:ty) => {
             #[test]
@@ -659,7 +670,7 @@ mod test {
     test_invalid_nonce!(test_invalid_nonce_aes256, AesGcm128);
     test_invalid_nonce!(test_invalid_nonce_chacha, ChaCha20Poly1305);
 
-    #[cfg(feature = "x25519-dalek")]
+    #[cfg(all(feature = "x25519", any(feature = "alloc", feature = "std")))]
     mod x25519_tests {
         use super::*;
 
@@ -688,7 +699,7 @@ mod test {
         );
     }
 
-    #[cfg(feature = "p256")]
+    #[cfg(all(feature = "p256", any(feature = "alloc", feature = "std")))]
     mod p256_tests {
         use super::*;
 
