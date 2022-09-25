@@ -36,7 +36,7 @@ p256 = { version = "0.11", default-features = false, features = ["arithmetic", "
 sha2 = { version = "0.10", default-features = false }
 serde = { version = "1.0", default-features = false, optional = true }
 subtle = { version = "2.4", default-features = false }
-zeroize = { version = ">=1.3", default-features = false, features = ["zeroize_derive"] }
+zeroize = { version = "1", default-features = false, features = ["zeroize_derive"] }
 
 [dependencies.x25519-dalek]
 version = "2.0.0-pre.1"
