@@ -56,6 +56,11 @@ Feature flag list:
 
 For info on how to omit or include feature flags, see the [cargo docs on features](https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html#choosing-features).
 
+MSRV
+----
+
+The current minimum supported Rust version (MSRV) is 1.57.0 (`f1edd0429` 2021-11-29).
+
 Tests
 -----
 
