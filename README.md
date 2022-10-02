@@ -56,10 +56,20 @@ Feature flag list:
 
 For info on how to omit or include feature flags, see the [cargo docs on features](https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html#choosing-features).
 
+Usage Examples
+--------------
+
+See the [client-server](examples/client_server.rs) example for an idea of how to use HPKE.
+
 MSRV
 ----
 
 The current minimum supported Rust version (MSRV) is 1.57.0 (`f1edd0429` 2021-11-29).
+
+Changelog
+---------
+
+See [CHANGELOG.md](CHANGELOG.md) for a list of changes made throughout past versions.
 
 Tests
 -----
@@ -83,11 +93,6 @@ Functions benchmarked in each ciphersuite:
 * `setup_receiver` with OpModes of Base, Auth, Psk, and AuthPsk
 * `AeadCtxS::seal` with plaintext length 64 and AAD length 64
 * `AeadCtxR::open` with ciphertext length 64 and AAD length 64
-
-Usage Examples
---------------
-
-See the [client-server](examples/client_server.rs) example for an idea of how to use HPKE.
 
 Agility
 -------
