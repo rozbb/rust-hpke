@@ -96,12 +96,6 @@ A definition: *crypto agility* refers to the ability of a cryptosystem or protoc
 
 This crate does not support crypto agility out of the box. This is because the cryptographic primitives are encoded as types satisfying certain constraints, and types need to be determined at compile time (broadly speaking). That said, there is nothing preventing you from implementing agility yourself. There is a [sample implementation](examples/agility.rs) in the examples folder. The sample implementation is messy because agility is messy.
 
-What's next
------------
-
-* Add support for more KEMs
-* More examples
-
 License
 -------
 
