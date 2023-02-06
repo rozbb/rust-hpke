@@ -41,6 +41,9 @@ pub trait Kem: Sized {
     #[cfg(not(feature = "serde_impls"))]
     type PrivateKey: Clone + Serializable + Deserializable;
 
+    /// Computes the public key of a given private key
+    fn sk_to_pk(sk: &Self::PrivateKey) -> Self::PublicKey;
+
     /// The encapsulated key for this KEM. This is used by the recipient to derive the shared
     /// secret.
     #[cfg(feature = "serde_impls")]

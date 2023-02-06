@@ -198,6 +198,11 @@ macro_rules! impl_dhkem {
                 type PrivateKey = PrivateKey;
                 type EncappedKey = EncappedKey;
 
+                /// Computes the public key of a given private key
+                fn sk_to_pk(sk: &PrivateKey) -> PublicKey {
+                    <$dhkex as DhKeyExchange>::sk_to_pk(sk)
+                }
+
                 const KEM_ID: u16 = $kem_id;
 
                 /// Deterministically derives a keypair from the given input keying material
