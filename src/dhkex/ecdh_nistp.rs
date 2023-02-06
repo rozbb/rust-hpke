@@ -54,6 +54,18 @@ impl Deserializable for PublicKey {
     }
 }
 
+impl PartialEq for PublicKey {
+    fn eq(&self, other: &PublicKey) -> bool {
+        self.0 == other.0
+    }
+}
+
+impl core::fmt::Debug for PublicKey {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> Result<(), core::fmt::Error> {
+        write!(f, "PublicKey({:?})", self.0)
+    }
+}
+
 impl Serializable for PrivateKey {
     // RFC 9180 §7.1: Nsk of DHKEM(P-256, HKDF-SHA256) is 32
     type OutputSize = U32;
@@ -75,6 +87,12 @@ impl Deserializable for PrivateKey {
         let sk = p256::SecretKey::from_be_bytes(encoded).map_err(|_| HpkeError::ValidationError)?;
 
         Ok(PrivateKey(sk))
+    }
+}
+
+impl PartialEq for PrivateKey {
+    fn eq(&self, other: &PrivateKey) -> bool {
+        self.to_bytes() == other.to_bytes()
     }
 }
 
@@ -183,7 +201,7 @@ impl DhKeyExchange for DhP256 {
 mod tests {
     use crate::{
         dhkex::{
-            ecdh_nistp::{DhP256, PrivateKey, PublicKey},
+            ecdh_nistp::DhP256,
             DhKeyExchange,
         },
         test_util::dhkex_gen_keypair,
@@ -191,26 +209,6 @@ mod tests {
     };
 
     use rand::{rngs::StdRng, SeedableRng};
-
-    // We need this in our serialize-deserialize tests
-    impl PartialEq for PrivateKey {
-        fn eq(&self, other: &PrivateKey) -> bool {
-            self.to_bytes() == other.to_bytes()
-        }
-    }
-
-    // We need this in our serialize-deserialize tests
-    impl PartialEq for PublicKey {
-        fn eq(&self, other: &PublicKey) -> bool {
-            self.0 == other.0
-        }
-    }
-
-    impl core::fmt::Debug for PublicKey {
-        fn fmt(&self, f: &mut core::fmt::Formatter) -> Result<(), core::fmt::Error> {
-            write!(f, "PublicKey({:?})", self.0)
-        }
-    }
 
     // Test vector comes from RFC 5903 §8.1
     // https://tools.ietf.org/html/rfc5903

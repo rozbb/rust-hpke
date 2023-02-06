@@ -51,6 +51,18 @@ impl Deserializable for PublicKey {
     }
 }
 
+impl PartialEq for PublicKey {
+    fn eq(&self, other: &PublicKey) -> bool {
+        self.0.as_bytes() == other.0.as_bytes()
+    }
+}
+
+impl core::fmt::Debug for PublicKey {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> Result<(), core::fmt::Error> {
+        write!(f, "PublicKey({:?})", self.0)
+    }
+}
+
 impl Serializable for PrivateKey {
     // RFC 9180 §7.1 Table 2: Nsk of DHKEM(X25519, HKDF-SHA256) is 32
     type OutputSize = typenum::U32;
@@ -80,6 +92,12 @@ impl Deserializable for PrivateKey {
         // multiple of 8. However, 8q > 2^257 which is already out of representable range! So k
         // cannot be 0 (mod q).
         Ok(PrivateKey(x25519_dalek::StaticSecret::from(arr)))
+    }
+}
+
+impl PartialEq for PrivateKey {
+    fn eq(&self, other: &PrivateKey) -> bool {
+        self.0.to_bytes() == other.0.to_bytes()
     }
 }
 
@@ -156,34 +174,13 @@ impl DhKeyExchange for X25519 {
 mod tests {
     use crate::{
         dhkex::{
-            x25519::{PrivateKey, PublicKey, X25519},
+            x25519::X25519,
             Deserializable, DhKeyExchange, Serializable,
         },
         test_util::dhkex_gen_keypair,
     };
     use generic_array::typenum::Unsigned;
     use rand::{rngs::StdRng, RngCore, SeedableRng};
-
-    // We need this in our serialize-deserialize tests
-    impl PartialEq for PrivateKey {
-        fn eq(&self, other: &PrivateKey) -> bool {
-            self.0.to_bytes() == other.0.to_bytes()
-        }
-    }
-
-    // We need this in our serialize-deserialize tests
-    impl PartialEq for PublicKey {
-        fn eq(&self, other: &PublicKey) -> bool {
-            self.0.as_bytes() == other.0.as_bytes()
-        }
-    }
-
-    // For KEM tests
-    impl core::fmt::Debug for PublicKey {
-        fn fmt(&self, f: &mut core::fmt::Formatter) -> Result<(), core::fmt::Error> {
-            write!(f, "PublicKey({:?})", self.0)
-        }
-    }
 
     /// Tests that an serialize-deserialize round-trip ends up at the same pubkey
     #[test]
