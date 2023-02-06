@@ -36,6 +36,7 @@ pub trait Kem: Sized {
         + Serializable
         + Deserializable
         + SerdeSerialize
+        + PartialEq
         + for<'a> SerdeDeserialize<'a>;
 
     /// The key exchange's private key type. If you want to generate a keypair, see
@@ -50,7 +51,6 @@ pub trait Kem: Sized {
         + Serializable
         + Deserializable
         + SerdeSerialize
-        + PartialEq
         + for<'a> SerdeDeserialize<'a>;
     /// The encapsulated key for this KEM. This is used by the recipient to derive the shared
     /// secret.
