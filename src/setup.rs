@@ -337,7 +337,7 @@ mod test {
         };
     }
 
-    #[cfg(feature = "x25519-dalek")]
+    #[cfg(feature = "x25519")]
     mod x25519_tests {
         use super::*;
 
@@ -370,6 +370,25 @@ mod test {
             ChaCha20Poly1305,
             HkdfSha256,
             crate::kem::dhp256_hkdfsha256::DhP256HkdfSha256
+        );
+    }
+
+    #[cfg(feature = "p384")]
+    mod p384_tests {
+        use super::*;
+        use crate::kdf::HkdfSha384;
+
+        test_setup_correctness!(
+            test_setup_correctness_p384,
+            ChaCha20Poly1305,
+            HkdfSha384,
+            crate::kem::dhp384_hkdfsha384::DhP384HkdfSha384
+        );
+        test_setup_soundness!(
+            test_setup_soundness_p384,
+            ChaCha20Poly1305,
+            HkdfSha384,
+            crate::kem::dhp384_hkdfsha384::DhP384HkdfSha384
         );
     }
 }

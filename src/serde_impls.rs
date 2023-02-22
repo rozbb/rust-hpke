@@ -157,7 +157,7 @@ mod test {
         };
     }
 
-    #[cfg(feature = "x25519-dalek")]
+    #[cfg(feature = "x25519")]
     test_serde_roundtrip!(test_serde_roundtrip_x25519, crate::kem::X25519HkdfSha256);
 
     #[cfg(feature = "p256")]

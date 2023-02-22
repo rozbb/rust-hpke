@@ -15,7 +15,7 @@
 use hpke::{
     aead::{Aead, AeadCtxR, AeadCtxS, AeadTag, AesGcm128, AesGcm256, ChaCha20Poly1305},
     kdf::{HkdfSha256, HkdfSha384, HkdfSha512, Kdf as KdfTrait},
-    kem::{DhP256HkdfSha256, Kem as KemTrait, X25519HkdfSha256},
+    kem::{DhP256HkdfSha256, DhP384HkdfSha384, Kem as KemTrait, X25519HkdfSha256},
     setup_receiver, setup_sender, Deserializable, HpkeError, OpModeR, OpModeS, PskBundle,
     Serializable,
 };
@@ -308,6 +308,7 @@ fn agile_gen_keypair<R: CryptoRng + RngCore>(kem_alg: KemAlg, csprng: &mut R) ->
     match kem_alg {
         KemAlg::X25519HkdfSha256 => do_gen_keypair!(X25519HkdfSha256, kem_alg, csprng),
         KemAlg::DhP256HkdfSha256 => do_gen_keypair!(DhP256HkdfSha256, kem_alg, csprng),
+        KemAlg::DhP384HkdfSha384 => do_gen_keypair!(DhP384HkdfSha384, kem_alg, csprng),
         _ => unimplemented!(),
     }
 }
@@ -678,7 +679,11 @@ fn main() {
         AeadAlg::AesGcm256,
         AeadAlg::ChaCha20Poly1305,
     ];
-    let supported_kem_algs = &[KemAlg::X25519HkdfSha256, KemAlg::DhP256HkdfSha256];
+    let supported_kem_algs = &[
+        KemAlg::X25519HkdfSha256,
+        KemAlg::DhP256HkdfSha256,
+        KemAlg::DhP384HkdfSha384,
+    ];
     let supported_kdf_algs = &[KdfAlg::HkdfSha256, KdfAlg::HkdfSha384, KdfAlg::HkdfSha512];
 
     // For every combination of supported algorithms, test an encryption-decryption round trip

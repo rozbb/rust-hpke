@@ -86,7 +86,7 @@ where
 }
 
 // Each individual test case looks like this
-#[derive(Clone, Deserialize, Debug)]
+#[derive(Clone, serde::Deserialize, Debug)]
 struct MainTestVector {
     // Parameters
     mode: u8,
@@ -146,7 +146,7 @@ struct MainTestVector {
     exports: Vec<ExporterTestVector>,
 }
 
-#[derive(Clone, Deserialize, Debug)]
+#[derive(Clone, serde::Deserialize, Debug)]
 struct EncryptionTestVector {
     #[serde(rename = "pt", deserialize_with = "bytes_from_hex")]
     plaintext: Vec<u8>,
@@ -158,7 +158,7 @@ struct EncryptionTestVector {
     ciphertext: Vec<u8>,
 }
 
-#[derive(Clone, Deserialize, Debug)]
+#[derive(Clone, serde::Deserialize, Debug)]
 struct ExporterTestVector {
     #[serde(rename = "exporter_context", deserialize_with = "bytes_from_hex")]
     export_ctx: Vec<u8>,

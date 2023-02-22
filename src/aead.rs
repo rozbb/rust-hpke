@@ -731,4 +731,33 @@ mod test {
             crate::kem::DhP256HkdfSha256
         );
     }
+
+    #[cfg(all(feature = "p384", any(feature = "alloc", feature = "std")))]
+    mod p384_tests {
+        use super::*;
+
+        test_export_idempotence!(test_export_idempotence_p384, crate::kem::DhP384HkdfSha384);
+        test_exportonly_panics!(
+            test_exportonly_panics_p384_seal,
+            test_exportonly_panics_p384_open,
+            crate::kem::DhP384HkdfSha384
+        );
+        test_overflow!(test_overflow_p384, crate::kem::DhP384HkdfSha384);
+
+        test_ctx_correctness!(
+            test_ctx_correctness_aes128_p384,
+            AesGcm128,
+            crate::kem::DhP384HkdfSha384
+        );
+        test_ctx_correctness!(
+            test_ctx_correctness_aes256_p384,
+            AesGcm256,
+            crate::kem::DhP384HkdfSha384
+        );
+        test_ctx_correctness!(
+            test_ctx_correctness_chacha_p384,
+            ChaCha20Poly1305,
+            crate::kem::DhP384HkdfSha384
+        );
+    }
 }

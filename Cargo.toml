@@ -13,9 +13,12 @@ categories = ["cryptography", "no-std"]
 
 [features]
 # "p256" enables the use of ECDH-NIST-P256 as a KEM
+# "p384" enables the use of ECDH-NIST-P384 as a KEM
 # "x25519" enables the use of the X25519 as a KEM
-default = ["alloc", "p256", "x25519"]
-x25519 = ["x25519-dalek"]
+default = ["alloc", "p256", "p384", "x25519"]
+x25519 = ["dep:x25519-dalek"]
+p384 = ["dep:p384"]
+p256 = ["dep:p256"]
 # Include serde Serialize/Deserialize impls for all relevant types
 serde_impls = ["serde", "generic-array/serde"]
 # Include allocating methods like open() and seal()
@@ -33,10 +36,11 @@ digest = "0.10"
 hkdf = "0.12"
 hmac = "0.12"
 rand_core = { version = "0.6", default-features = false }
-p256 = { version = "0.11", default-features = false, features = ["arithmetic", "ecdh" ], optional = true}
+p256 = { version = "0.13", default-features = false, features = ["arithmetic", "ecdh"], optional = true}
+p384 = { version = "0.13", default-features = false, features = ["arithmetic", "ecdh"], optional = true}
 sha2 = { version = "0.10", default-features = false }
 serde = { version = "1.0", default-features = false, optional = true }
-subtle = { version = "2.4", default-features = false }
+subtle = { version = "=2.4.1", default-features = false }
 zeroize = { version = "1", default-features = false, features = ["zeroize_derive"] }
 
 [dependencies.x25519-dalek]
@@ -48,8 +52,7 @@ optional = true
 [dev-dependencies]
 criterion = { version = "0.4", features = ["html_reports"] }
 hex = "0.4"
-serde = "1.0"
-serde_derive = "1.0"
+serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 rand = { version = "0.8", default-features = false, features = ["getrandom", "std_rng"] }
 
@@ -59,7 +62,7 @@ required-features = ["x25519"]
 
 [[example]]
 name = "agility"
-required-features = ["p256", "x25519"]
+required-features = ["p256", "p384", "x25519"]
 
 # Tell docs.rs to build docs with `--all-features` and `--cfg docsrs` (for nightly docs features)
 [package.metadata.docs.rs]

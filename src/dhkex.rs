@@ -67,12 +67,14 @@ pub trait DhKeyExchange {
     ) -> (Self::PrivateKey, Self::PublicKey);
 }
 
-#[cfg(feature = "p256")]
+#[cfg(any(feature = "p256", feature = "p384"))]
 pub(crate) mod ecdh_nistp;
 #[cfg(feature = "p256")]
-pub use ecdh_nistp::DhP256;
+pub use ecdh_nistp::p256::DhP256;
+#[cfg(feature = "p384")]
+pub use ecdh_nistp::p384::DhP384;
 
-#[cfg(feature = "x25519-dalek")]
+#[cfg(feature = "x25519")]
 pub(crate) mod x25519;
-#[cfg(feature = "x25519-dalek")]
+#[cfg(feature = "x25519")]
 pub use x25519::X25519;

@@ -349,7 +349,7 @@ macro_rules! impl_dhkem {
 }
 
 // Implement DHKEM(X25519, HKDF-SHA256)
-#[cfg(feature = "x25519-dalek")]
+#[cfg(feature = "x25519")]
 impl_dhkem!(
     x25519_hkdfsha256,
     X25519HkdfSha256,
@@ -364,8 +364,19 @@ impl_dhkem!(
 impl_dhkem!(
     dhp256_hkdfsha256,
     DhP256HkdfSha256,
-    crate::dhkex::ecdh_nistp::DhP256,
+    crate::dhkex::ecdh_nistp::p256::DhP256,
     crate::kdf::HkdfSha256,
     0x0010,
     "Represents DHKEM(P-256, HKDF-SHA256)"
+);
+
+// Implement DHKEM(P-384, HKDF-SHA384)
+#[cfg(feature = "p384")]
+impl_dhkem!(
+    dhp384_hkdfsha384,
+    DhP384HkdfSha384,
+    crate::dhkex::ecdh_nistp::p384::DhP384,
+    crate::kdf::HkdfSha384,
+    0x0011,
+    "Represents DHKEM(P-384, HKDF-SHA384)"
 );
