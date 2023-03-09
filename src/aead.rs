@@ -127,6 +127,7 @@ fn mix_nonce<A: Aead>(base_nonce: &AeadNonce<A>, seq: &Seq) -> AeadNonce<A> {
 }
 
 /// An authenticated encryption tag
+#[derive(Clone)]
 pub struct AeadTag<A: Aead>(GenericArray<u8, <A::AeadImpl as BaseAeadCore>::TagSize>);
 
 impl<A: Aead> Default for AeadTag<A> {
