@@ -10,16 +10,23 @@ use generic_array::{
     GenericArray,
 };
 use p256::elliptic_curve::{ecdh::diffie_hellman, sec1::ToEncodedPoint};
+use subtle::{Choice, ConstantTimeEq};
 
 /// An ECDH-P256 public key. This is never the point at infinity.
-#[derive(Clone)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PublicKey(p256::PublicKey);
 
 // This is only ever constructed via its Deserializable::from_bytes, which checks for the 0 value.
 // Also, the underlying type is zeroize-on-drop.
 /// An ECDH-P256 private key. This is a scalar in the range `[1,p)` where `p` is the group order.
-#[derive(Clone)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct PrivateKey(p256::SecretKey);
+
+impl ConstantTimeEq for PrivateKey {
+    fn ct_eq(&self, other: &Self) -> Choice {
+        self.0.ct_eq(&other.0)
+    }
+}
 
 // The underlying type is zeroize-on-drop
 /// A bare DH computation result
@@ -182,35 +189,12 @@ impl DhKeyExchange for DhP256 {
 #[cfg(test)]
 mod tests {
     use crate::{
-        dhkex::{
-            ecdh_nistp::{DhP256, PrivateKey, PublicKey},
-            DhKeyExchange,
-        },
+        dhkex::{ecdh_nistp::DhP256, DhKeyExchange},
         test_util::dhkex_gen_keypair,
         Deserializable, Serializable,
     };
 
     use rand::{rngs::StdRng, SeedableRng};
-
-    // We need this in our serialize-deserialize tests
-    impl PartialEq for PrivateKey {
-        fn eq(&self, other: &PrivateKey) -> bool {
-            self.to_bytes() == other.to_bytes()
-        }
-    }
-
-    // We need this in our serialize-deserialize tests
-    impl PartialEq for PublicKey {
-        fn eq(&self, other: &PublicKey) -> bool {
-            self.0 == other.0
-        }
-    }
-
-    impl core::fmt::Debug for PublicKey {
-        fn fmt(&self, f: &mut core::fmt::Formatter) -> Result<(), core::fmt::Error> {
-            write!(f, "PublicKey({:?})", self.0)
-        }
-    }
 
     // Test vector comes from RFC 5903 §8.1
     // https://tools.ietf.org/html/rfc5903
