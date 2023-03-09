@@ -9,18 +9,32 @@ use generic_array::{
     typenum::{self, Unsigned},
     GenericArray,
 };
-use subtle::ConstantTimeEq;
+use subtle::{Choice, ConstantTimeEq};
 
 // We wrap the types in order to abstract away the dalek dep
 
 /// An X25519 public key
-#[derive(Clone)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PublicKey(x25519_dalek::PublicKey);
 
 // The underlying type is zeroize-on-drop
 /// An X25519 private key
 #[derive(Clone)]
 pub struct PrivateKey(x25519_dalek::StaticSecret);
+
+impl ConstantTimeEq for PrivateKey {
+    fn ct_eq(&self, other: &Self) -> Choice {
+        // We can use to_bytes because StaticSecret is only ever constructed from a clamped scalar
+        self.0.to_bytes().ct_eq(&other.0.to_bytes())
+    }
+}
+
+impl PartialEq for PrivateKey {
+    fn eq(&self, other: &Self) -> bool {
+        self.ct_eq(other).into()
+    }
+}
+impl Eq for PrivateKey {}
 
 // The underlying type is zeroize-on-drop
 /// A bare DH computation result
@@ -155,35 +169,11 @@ impl DhKeyExchange for X25519 {
 #[cfg(test)]
 mod tests {
     use crate::{
-        dhkex::{
-            x25519::{PrivateKey, PublicKey, X25519},
-            Deserializable, DhKeyExchange, Serializable,
-        },
+        dhkex::{x25519::X25519, Deserializable, DhKeyExchange, Serializable},
         test_util::dhkex_gen_keypair,
     };
     use generic_array::typenum::Unsigned;
     use rand::{rngs::StdRng, RngCore, SeedableRng};
-
-    // We need this in our serialize-deserialize tests
-    impl PartialEq for PrivateKey {
-        fn eq(&self, other: &PrivateKey) -> bool {
-            self.0.to_bytes() == other.0.to_bytes()
-        }
-    }
-
-    // We need this in our serialize-deserialize tests
-    impl PartialEq for PublicKey {
-        fn eq(&self, other: &PublicKey) -> bool {
-            self.0.as_bytes() == other.0.as_bytes()
-        }
-    }
-
-    // For KEM tests
-    impl core::fmt::Debug for PublicKey {
-        fn fmt(&self, f: &mut core::fmt::Formatter) -> Result<(), core::fmt::Error> {
-            write!(f, "PublicKey({:?})", self.0)
-        }
-    }
 
     /// Tests that an serialize-deserialize round-trip ends up at the same pubkey
     #[test]
