@@ -30,9 +30,8 @@ impl ConstantTimeEq for PrivateKey {
 }
 
 impl PartialEq for PrivateKey {
-    fn eq(&self, other: &PrivateKey) -> bool {
-        // We can use to_bytes because StaticSecret is only ever constructed from a clamped scalar
-        self.0.to_bytes() == other.0.to_bytes()
+    fn eq(&self, other: &Self) -> bool {
+        self.ct_eq(other).into()
     }
 }
 impl Eq for PrivateKey {}
