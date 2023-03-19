@@ -114,7 +114,7 @@ macro_rules! impl_dhkem {
 
                 // The encapped key is the ephemeral pubkey
                 let encapped_key = {
-                    let pk_eph = <$dhkex as DhKeyExchange>::sk_to_pk(&sk_eph);
+                    let pk_eph = <$kem_name as KemTrait>::sk_to_pk(&sk_eph);
                     EncappedKey(pk_eph)
                 };
 
@@ -210,6 +210,11 @@ macro_rules! impl_dhkem {
                 fn derive_keypair(ikm: &[u8]) -> (Self::PrivateKey, Self::PublicKey) {
                     let suite_id = kem_suite_id::<Self>();
                     <$dhkex as DhKeyExchange>::derive_keypair::<$kdf>(&suite_id, ikm)
+                }
+
+                /// Computes the public key of a given private key
+                fn sk_to_pk(sk: &PrivateKey) -> PublicKey {
+                    <$dhkex as DhKeyExchange>::sk_to_pk(sk)
                 }
 
                 // Runs encap_with_eph using a random ephemeral key
