@@ -30,7 +30,7 @@ Here are all the primitives listed in the spec. The primitives with checked boxe
     - [X] DHKEM(Curve25519, HKDF-SHA256)
     - [ ] DHKEM(Curve448, HKDF-SHA512)
     - [X] DHKEM(P-256, HKDF-SHA256)
-    - [ ] DHKEM(P-384, HKDF-SHA384)
+    - [X] DHKEM(P-384, HKDF-SHA384)
     - [ ] DHKEM(P-521, HKDF-SHA512)
 * KDFs
     - [X] HKDF-SHA256
@@ -48,9 +48,10 @@ Default features flags: `alloc`, `x25519`, `p256`.
 
 Feature flag list:
 
-* `alloc` - Includes allocating methods like `open()` and `seal()`
+* `alloc` - Includes allocating methods like `AeadCtxR::open()` and `AeadCtxS::seal()`
 * `x25519` - Enables X25519-based KEMs
 * `p256` - Enables NIST P-256-based KEMs
+* `p384` - Enables NIST P-384-based KEMs
 * `serde_impls` - Includes implementations of `serde::Serialize` and `serde::Deserialize` for all `hpke::Serializable` and `hpke::Deserializable` types
 * `std` - Includes an implementation of `std::error::Error` for `HpkeError`. Also does what `alloc` does.
 

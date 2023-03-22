@@ -15,7 +15,7 @@ categories = ["cryptography", "no-std"]
 # "p256" enables the use of ECDH-NIST-P256 as a KEM
 # "p384" enables the use of ECDH-NIST-P384 as a KEM
 # "x25519" enables the use of the X25519 as a KEM
-default = ["alloc", "p256", "p384", "x25519"]
+default = ["alloc", "p256", "x25519"]
 x25519 = ["dep:x25519-dalek"]
 p384 = ["dep:p384"]
 p256 = ["dep:p256"]
@@ -40,7 +40,7 @@ p256 = { version = "0.13", default-features = false, features = ["arithmetic", "
 p384 = { version = "0.13", default-features = false, features = ["arithmetic", "ecdh"], optional = true}
 sha2 = { version = "0.10", default-features = false }
 serde = { version = "1.0", default-features = false, optional = true }
-subtle = { version = "=2.4.1", default-features = false }
+subtle = { version = "2.4", default-features = false }
 zeroize = { version = "1", default-features = false, features = ["zeroize_derive"] }
 
 [dependencies.x25519-dalek]
