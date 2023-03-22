@@ -1,7 +1,9 @@
 use crate::{
     aead::{Aead, AesGcm128, AesGcm256, ChaCha20Poly1305, ExportOnlyAead},
     kdf::{HkdfSha256, HkdfSha384, HkdfSha512, Kdf as KdfTrait},
-    kem::{self, DhP256HkdfSha256, Kem as KemTrait, SharedSecret, X25519HkdfSha256},
+    kem::{
+        self, DhP256HkdfSha256, DhP384HkdfSha384, Kem as KemTrait, SharedSecret, X25519HkdfSha256,
+    },
     op_mode::{OpModeR, PskBundle},
     setup::setup_receiver,
     Deserializable, HpkeError, Serializable,
@@ -54,6 +56,20 @@ impl TestableKem for DhP256HkdfSha256 {
         sk_eph: Self::EphemeralKey,
     ) -> Result<(SharedSecret<Self>, Self::EncappedKey), HpkeError> {
         kem::dhp256_hkdfsha256::encap_with_eph(pk_recip, sender_id_keypair, sk_eph)
+    }
+}
+
+impl TestableKem for DhP384HkdfSha384 {
+    // In DHKEM, ephemeral keys and private keys are both scalars
+    type EphemeralKey = <DhP384HkdfSha384 as KemTrait>::PrivateKey;
+
+    // Call the p384 deterministic encap function we defined in dhkem.rs
+    fn encap_with_eph(
+        pk_recip: &Self::PublicKey,
+        sender_id_keypair: Option<(&Self::PrivateKey, &Self::PublicKey)>,
+        sk_eph: Self::EphemeralKey,
+    ) -> Result<(SharedSecret<Self>, Self::EncappedKey), HpkeError> {
+        kem::dhp384_hkdfsha384::encap_with_eph(pk_recip, sender_id_keypair, sk_eph)
     }
 }
 
@@ -349,17 +365,21 @@ fn kat_test() {
     let tvs: Vec<MainTestVector> = serde_json::from_reader(file).unwrap();
 
     for tv in tvs.into_iter() {
-        // Ignore everything that doesn't use X25519 or P256, since that's all we support right now
-        if tv.kem_id != DhP256HkdfSha256::KEM_ID && tv.kem_id != X25519HkdfSha256::KEM_ID {
+        // Ignore everything that doesn't use X25519, P256, or P384, since that's all we support
+        // right now
+        if tv.kem_id != X25519HkdfSha256::KEM_ID
+            && tv.kem_id != DhP256HkdfSha256::KEM_ID
+            && tv.kem_id != DhP384HkdfSha384::KEM_ID
+        {
             continue;
         }
 
-        // This unrolls into 24 `if let` statements
+        // This unrolls into 36 `if let` statements
         dispatch_testcase!(
             tv,
             (AesGcm128, AesGcm256, ChaCha20Poly1305, ExportOnlyAead),
             (HkdfSha256, HkdfSha384, HkdfSha512),
-            (X25519HkdfSha256, DhP256HkdfSha256)
+            (X25519HkdfSha256, DhP256HkdfSha256, DhP384HkdfSha384)
         );
 
         // The above macro has a `continue` in every branch. We only get to this line if it failed
