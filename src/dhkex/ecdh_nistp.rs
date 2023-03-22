@@ -1,6 +1,8 @@
+// We define all the NIST P- curve ECDH functionalities in one macro
 macro_rules! nistp_dhkex {
     (
-        $dhname:ident,
+        $curve_name:expr,
+        $dh_name:ident,
         $curve:ident,
         $pubkey_size:ty,
         $privkey_size:ty,
@@ -18,19 +20,25 @@ macro_rules! nistp_dhkex {
             };
 
             use ::$curve as curve_crate;
-
             use curve_crate::elliptic_curve::{ecdh::diffie_hellman, sec1::ToEncodedPoint};
             use generic_array::{typenum::Unsigned, GenericArray};
             use subtle::{Choice, ConstantTimeEq};
 
-            /// An ECDH-P256 public key. This is never the point at infinity.
+            #[doc = concat!(
+                "An ECDH ",
+                $curve_name,
+                " public key. This is never the point at infinity."
+            )]
             #[derive(Clone, Debug, Eq, PartialEq)]
             pub struct PublicKey(curve_crate::PublicKey);
 
             // This is only ever constructed via its Deserializable::from_bytes, which checks for
             // the 0 value. Also, the underlying type is zeroize-on-drop.
-            /// An ECDH-P256 private key. This is a scalar in the range `[1,p)` where `p` is the
-            /// group order.
+            #[doc = concat!(
+                "An ECDH ",
+                $curve_name,
+                " private key. This is a scalar in the range `[1,p)` where `p` is the group order."
+            )]
             #[derive(Clone, Eq, PartialEq)]
             pub struct PrivateKey(curve_crate::SecretKey);
 
@@ -109,15 +117,16 @@ macro_rules! nistp_dhkex {
                 type OutputSize = $ss_size;
 
                 fn to_bytes(&self) -> GenericArray<u8, Self::OutputSize> {
-                    // ecdh::SharedSecret::as_bytes returns the serialized x-coordinate
+                    // elliptic_curve::ecdh::SharedSecret::raw_secret_bytes returns the serialized
+                    // x-coordinate
                     *self.0.raw_secret_bytes()
                 }
             }
 
-            /// Represents ECDH functionality over NIST curve P-256
-            pub struct $dhname {}
+            #[doc = concat!("Represents ECDH functionality over NIST curve ", $curve_name, ".")]
+            pub struct $dh_name {}
 
-            impl DhKeyExchange for $dhname {
+            impl DhKeyExchange for $dh_name {
                 #[doc(hidden)]
                 type PublicKey = PublicKey;
                 #[doc(hidden)]
@@ -125,7 +134,7 @@ macro_rules! nistp_dhkex {
                 #[doc(hidden)]
                 type KexResult = KexResult;
 
-                /// Converts an P256 private key to a public key
+                /// Converts a private key to a public key
                 #[doc(hidden)]
                 fn sk_to_pk(sk: &PrivateKey) -> PublicKey {
                     // pk = sk·G where G is the generator. This maintains the invariant of the
@@ -134,14 +143,15 @@ macro_rules! nistp_dhkex {
                     PublicKey(sk.0.public_key())
                 }
 
-                /// Does the DH operation. This function is infallible, thanks to invariants on its inputs.
+                /// Does the DH operation. This function is infallible, thanks to invariants on its
+                /// inputs.
                 #[doc(hidden)]
                 fn dh(sk: &PrivateKey, pk: &PublicKey) -> Result<KexResult, DhError> {
                     // Do the DH operation
                     let dh_res = diffie_hellman(sk.0.to_nonzero_scalar(), pk.0.as_affine());
 
-                    // RFC 9180 §7.1.4: Senders and recipients MUST ensure that dh_res is not the point at
-                    // infinity
+                    // RFC 9180 §7.1.4: Senders and recipients MUST ensure that dh_res is not the
+                    // point at infinity
                     //
                     // This is already true, since:
                     // 1. pk is not the point at infinity (due to the invariant we keep on
@@ -207,7 +217,7 @@ macro_rules! nistp_dhkex {
                     }
 
                     // The code should never ever get here. The likelihood that we get 256 bad
-                    // samples in a row for p256 is 2^-8192.
+                    // samples in a row for P-256 is 2^-8192. For P-384 it's (2^-256)^256.
                     panic!("DeriveKeyPair failed all attempts");
                 }
             }
@@ -219,6 +229,7 @@ use generic_array::typenum;
 
 #[cfg(feature = "p256")]
 nistp_dhkex!(
+    "P-256",
     DhP256,
     p256,
     typenum::U65, // RFC 9180 §7.1: Npk of DHKEM(P-256, HKDF-SHA256) is 65
@@ -229,6 +240,7 @@ nistp_dhkex!(
 
 #[cfg(feature = "p384")]
 nistp_dhkex!(
+    "P-384",
     DhP384,
     p384,
     typenum::U97, // RFC 9180 §7.1: Npk of DHKEM(P-384, HKDF-SHA384) is 97
