@@ -64,7 +64,7 @@ See the [client-server](examples/client_server.rs) example for an idea of how to
 MSRV
 ----
 
-The current minimum supported Rust version (MSRV) is 1.57.0 (`f1edd0429` 2021-11-29).
+The current minimum supported Rust version (MSRV) is 1.65.0 (897e37553 2022-11-02).
 
 Changelog
 ---------
