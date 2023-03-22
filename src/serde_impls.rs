@@ -84,11 +84,18 @@ impl_serde_noparam!(dhkex::x25519::PublicKey);
 impl_serde_noparam!(kem::x25519_hkdfsha256::EncappedKey);
 
 #[cfg(feature = "p256")]
-impl_serde_noparam!(dhkex::ecdh_nistp::PrivateKey);
+impl_serde_noparam!(dhkex::ecdh_nistp::p256::PrivateKey);
 #[cfg(feature = "p256")]
-impl_serde_noparam!(dhkex::ecdh_nistp::PublicKey);
+impl_serde_noparam!(dhkex::ecdh_nistp::p256::PublicKey);
 #[cfg(feature = "p256")]
 impl_serde_noparam!(kem::dhp256_hkdfsha256::EncappedKey);
+
+#[cfg(feature = "p384")]
+impl_serde_noparam!(dhkex::ecdh_nistp::p384::PrivateKey);
+#[cfg(feature = "p384")]
+impl_serde_noparam!(dhkex::ecdh_nistp::p384::PublicKey);
+#[cfg(feature = "p384")]
+impl_serde_noparam!(kem::dhp384_hkdfsha384::EncappedKey);
 
 #[cfg(test)]
 mod test {
@@ -162,4 +169,7 @@ mod test {
 
     #[cfg(feature = "p256")]
     test_serde_roundtrip!(test_serde_roundtrip_p256, crate::kem::DhP256HkdfSha256);
+
+    #[cfg(feature = "p384")]
+    test_serde_roundtrip!(test_serde_roundtrip_p384, crate::kem::DhP384HkdfSha384);
 }
