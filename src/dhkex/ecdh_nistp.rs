@@ -1,20 +1,18 @@
-use crate::{
-    dhkex::{DhKeyExchange, KemSuiteId},
-    kdf::{labeled_extract, Kdf as KdfTrait, LabeledExpand},
-};
-use generic_array::{
-    typenum::{U32, U48, U65, U97},
-    GenericArray,
-};
-
 macro_rules! nistp_dhkex {
-    ($dhname:ident, $mod:ident, $curve:ident, $pubkey_size:ty, $privkey_size:ty, $ss_size:ty, $keygen_bitmask:expr) => {
-        pub(crate) mod $mod {
+    (
+        $dhname:ident,
+        $curve:ident,
+        $pubkey_size:ty,
+        $privkey_size:ty,
+        $ss_size:ty,
+        $keygen_bitmask:expr
+    ) => {
+        pub(crate) mod $curve {
             use super::*;
 
             use crate::{
                 dhkex::{DhError, DhKeyExchange},
-                kdf::Kdf as KdfTrait,
+                kdf::{labeled_extract, Kdf as KdfTrait, LabeledExpand},
                 util::{enforce_equal_len, KemSuiteId},
                 Deserializable, HpkeError, Serializable,
             };
@@ -217,49 +215,24 @@ macro_rules! nistp_dhkex {
     };
 }
 
-// RFC 9180 §7.1: Npk of DHKEM(P-256, HKDF-SHA256) is 65
-type P256PubkeySize = U65;
-// RFC 9180 §7.1: Nsk of DHKEM(P-256, HKDF-SHA256) is 32
-type P256PrivkeySize = U32;
-// RFC 9180 §4.1
-// P-256, P-384, and P-521, the size Ndh of the Diffie-Hellman shared secret is equal to
-// 32, 48, and 66, respectively, corresponding to the x-coordinate of the resulting elliptic
-// curve point.
-type P256SsSize = U32;
-// RFC 9180 §7.1.3:
-// The `bitmask` in DeriveKeyPair to be 0xFF for P-256, i.e., the mask doesn't do anything
-const P256BITMASK: u8 = 0xFF;
+use generic_array::typenum;
 
 #[cfg(feature = "p256")]
 nistp_dhkex!(
     DhP256,
     p256,
-    p256,
-    P256PubkeySize,
-    P256PrivkeySize,
-    P256SsSize,
-    P256BITMASK
+    typenum::U65, // RFC 9180 §7.1: Npk of DHKEM(P-256, HKDF-SHA256) is 65
+    typenum::U32, // RFC 9180 §7.1: Nsk of DHKEM(P-256, HKDF-SHA256) is 32
+    typenum::U32, // RFC 9180 §4.1: Ndh of P-256 is equal to 32
+    0xFF          // RFC 9180 §7.1.3: The `bitmask` in DeriveKeyPair to be 0xFF for P-256
 );
-
-// RFC 9180 §7.1: Npk of DHKEM(P-384, HKDF-SHA256) is 97
-type P384PubkeySize = U97;
-// RFC 9180 §7.1: Nsk of DHKEM(P-384, HKDF-SHA256) is 48
-type P384PrivkeySize = U48;
-// RFC 9180 §4.1
-// For P-384, the size Ndh of the Diffie-Hellman shared secret is equal to 48, corresponding to the
-// x-coordinate of the resulting elliptic curve point.
-type P384SsSize = U48;
-// RFC 9180 §7.1.3:
-// The `bitmask` in DeriveKeyPair to be 0xFF for P-384, i.e., the mask doesn't do anything
-const P384BITMASK: u8 = 0xFF;
 
 #[cfg(feature = "p384")]
 nistp_dhkex!(
     DhP384,
     p384,
-    p384,
-    P384PubkeySize,
-    P384PrivkeySize,
-    P384SsSize,
-    P384BITMASK
+    typenum::U97, // RFC 9180 §7.1: Npk of DHKEM(P-384, HKDF-SHA384) is 97
+    typenum::U48, // RFC 9180 §7.1: Nsk of DHKEM(P-384, HKDF-SHA384) is 48
+    typenum::U48, // RFC 9180 §4.1: Ndh of P-384 is equal to 48
+    0xFF          // RFC 9180 §7.1.3: The `bitmask` in DeriveKeyPair to be 0xFF for P-384
 );
