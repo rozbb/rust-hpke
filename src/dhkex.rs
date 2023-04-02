@@ -1,5 +1,7 @@
 use crate::{kdf::Kdf as KdfTrait, util::KemSuiteId, Deserializable, Serializable};
 
+use core::fmt::Debug;
+
 #[cfg(feature = "serde_impls")]
 use serde::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
 
@@ -23,6 +25,9 @@ pub trait DhKeyExchange {
     /// `Kem::gen_keypair` or `Kem::derive_keypair`
     #[cfg(feature = "serde_impls")]
     type PublicKey: Clone
+        + Debug
+        + PartialEq
+        + Eq
         + Serializable
         + Deserializable
         + SerdeSerialize
@@ -30,7 +35,7 @@ pub trait DhKeyExchange {
     /// The key exchange's public key type. If you want to generate a keypair, see
     /// `Kem::gen_keypair` or `Kem::derive_keypair`
     #[cfg(not(feature = "serde_impls"))]
-    type PublicKey: Clone + Serializable + Deserializable;
+    type PublicKey: Clone + Debug + PartialEq + Eq + Serializable + Deserializable;
 
     /// The key exchange's private key type. If you want to generate a keypair, see
     /// `Kem::gen_keypair` or `Kem::derive_keypair`
@@ -67,12 +72,14 @@ pub trait DhKeyExchange {
     ) -> (Self::PrivateKey, Self::PublicKey);
 }
 
-#[cfg(feature = "p256")]
+#[cfg(any(feature = "p256", feature = "p384"))]
 pub(crate) mod ecdh_nistp;
 #[cfg(feature = "p256")]
-pub use ecdh_nistp::DhP256;
+pub use ecdh_nistp::p256::DhP256;
+#[cfg(feature = "p384")]
+pub use ecdh_nistp::p384::DhP384;
 
-#[cfg(feature = "x25519-dalek")]
+#[cfg(feature = "x25519")]
 pub(crate) mod x25519;
-#[cfg(feature = "x25519-dalek")]
+#[cfg(feature = "x25519")]
 pub use x25519::X25519;

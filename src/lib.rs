@@ -96,12 +96,14 @@ pub(crate) use alloc::vec::Vec;
 
 // kat_tests tests all the implemented ciphersuites, and thus needs all the dependencies. It also
 // needs std for file IO.
-#[cfg(all(test, feature = "std", feature = "x25519", feature = "p256"))]
+#[cfg(all(
+    test,
+    feature = "std",
+    feature = "x25519",
+    feature = "p256",
+    feature = "p384"
+))]
 mod kat_tests;
-
-// kat_tests requires serde
-#[cfg(all(test, feature = "std", feature = "x25519", feature = "p256"))]
-extern crate serde_derive;
 
 #[cfg(test)]
 mod test_util;

@@ -3,7 +3,6 @@ rust-hpke
 [![Version](https://img.shields.io/crates/v/hpke.svg)](https://crates.io/crates/hpke)
 [![Docs](https://docs.rs/hpke/badge.svg)](https://docs.rs/hpke)
 [![CI](https://github.com/rozbb/rust-hpke/workflows/CI/badge.svg)](https://github.com/rozbb/rust-hpke/actions)
-[![Coverage](https://codecov.io/gh/rozbb/rust-hpke/branch/master/graph/badge.svg)](https://codecov.io/gh/rozbb/rust-hpke)
 
 This is an implementation of the [HPKE](https://www.rfc-editor.org/rfc/rfc9180.html) hybrid encryption standard (RFC 9180).
 
@@ -30,7 +29,7 @@ Here are all the primitives listed in the spec. The primitives with checked boxe
     - [X] DHKEM(Curve25519, HKDF-SHA256)
     - [ ] DHKEM(Curve448, HKDF-SHA512)
     - [X] DHKEM(P-256, HKDF-SHA256)
-    - [ ] DHKEM(P-384, HKDF-SHA384)
+    - [X] DHKEM(P-384, HKDF-SHA384)
     - [ ] DHKEM(P-521, HKDF-SHA512)
 * KDFs
     - [X] HKDF-SHA256
@@ -48,9 +47,10 @@ Default features flags: `alloc`, `x25519`, `p256`.
 
 Feature flag list:
 
-* `alloc` - Includes allocating methods like `open()` and `seal()`
+* `alloc` - Includes allocating methods like `AeadCtxR::open()` and `AeadCtxS::seal()`
 * `x25519` - Enables X25519-based KEMs
 * `p256` - Enables NIST P-256-based KEMs
+* `p384` - Enables NIST P-384-based KEMs
 * `serde_impls` - Includes implementations of `serde::Serialize` and `serde::Deserialize` for all `hpke::Serializable` and `hpke::Deserializable` types
 * `std` - Includes an implementation of `std::error::Error` for `HpkeError`. Also does what `alloc` does.
 
@@ -64,7 +64,7 @@ See the [client-server](examples/client_server.rs) example for an idea of how to
 MSRV
 ----
 
-The current minimum supported Rust version (MSRV) is 1.57.0 (`f1edd0429` 2021-11-29).
+The current minimum supported Rust version (MSRV) is 1.65.0 (897e37553 2022-11-02).
 
 Changelog
 ---------

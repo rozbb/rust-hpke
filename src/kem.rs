@@ -229,7 +229,7 @@ mod tests {
         };
     }
 
-    #[cfg(feature = "x25519-dalek")]
+    #[cfg(feature = "x25519")]
     mod x25519_tests {
         use super::*;
 
@@ -243,5 +243,13 @@ mod tests {
 
         test_encap_correctness!(test_encap_correctness_p256, crate::kem::DhP256HkdfSha256);
         test_encapped_serialize!(test_encapped_serialize_p256, crate::kem::DhP256HkdfSha256);
+    }
+
+    #[cfg(feature = "p384")]
+    mod p384_tests {
+        use super::*;
+
+        test_encap_correctness!(test_encap_correctness_p384, crate::kem::DhP384HkdfSha384);
+        test_encapped_serialize!(test_encapped_serialize_p384, crate::kem::DhP384HkdfSha384);
     }
 }

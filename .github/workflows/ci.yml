@@ -43,6 +43,12 @@ jobs:
           RUSTFLAGS: -D warnings -A dead_code -A unused_imports
         run: cargo test --no-default-features --features="p256"
 
+      - name: Run cargo test with just P384 enabled
+        env:
+          CARGO_INCREMENTAL: 0
+          RUSTFLAGS: -D warnings -A dead_code -A unused_imports
+        run: cargo test --no-default-features --features="p384"
+
       - name: Run cargo test with X25519 and serde impls enabled
         env:
           CARGO_INCREMENTAL: 0
@@ -54,6 +60,7 @@ jobs:
           CARGO_INCREMENTAL: 0
           RUSTFLAGS: -D warnings -A dead_code -A unused_imports
         run: cargo test --all-features
+
       - name: Run cargo build with all features
         env:
           CARGO_INCREMENTAL: 0
@@ -77,6 +84,22 @@ jobs:
         with:
           command: fmt
           args: --all -- --check
+
+  # Enable this once x25519-dalek has another 2.0-pre.X release
+  #msrv:
+  #  name: Current MSRV is 1.65.0
+  #  runs-on: ubuntu-latest
+  #  steps:
+  #  - uses: actions/checkout@v3
+  #  # First run `cargo +nightly -Z minimal-verisons check` in order to get a
+  #  # Cargo.lock with the oldest possible deps
+  #  - uses: dtolnay/rust-toolchain@nightly
+  #  - run: cargo -Z minimal-versions check --all-features
+  #  # Now check that `cargo build` works with respect to the oldest possible
+  #  # deps and the stated MSRV
+  #  - uses: dtolnay/rust-toolchain@1.65.0
+  #  - run: cargo build --all-features
+
   clippy:
     runs-on: ubuntu-latest
     steps:
@@ -87,34 +110,3 @@ jobs:
           toolchain: stable
           components: clippy
       - run: cargo clippy --all-features -- -D warnings
-
-  codecov:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v2
-
-      - name: Install stable toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          override: true
-
-      - name: Run cargo-tarpaulin
-        uses: actions-rs/tarpaulin@v0.1
-        env:
-          CARGO_INCREMENTAL: 0
-        with:
-          version: 0.15.0
-          args: --all-features
-
-      - name: Upload to codecov.io
-        uses: codecov/codecov-action@v1.0.2
-        with:
-          token: ${{secrets.CODECOV_TOKEN}}
-
-      - name: Archive code coverage results
-        uses: actions/upload-artifact@v1
-        with:
-          name: code-coverage-report
-          path: cobertura.xml
