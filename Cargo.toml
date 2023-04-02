@@ -52,6 +52,7 @@ optional = true
 [dev-dependencies]
 criterion = { version = "0.4", features = ["html_reports"] }
 hex = "0.4"
+hex-literal = "0.4"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 rand = { version = "0.8", default-features = false, features = ["getrandom", "std_rng"] }

@@ -1,5 +1,7 @@
 use crate::{kdf::Kdf as KdfTrait, util::KemSuiteId, Deserializable, Serializable};
 
+use core::fmt::Debug;
+
 #[cfg(feature = "serde_impls")]
 use serde::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
 
@@ -23,6 +25,9 @@ pub trait DhKeyExchange {
     /// `Kem::gen_keypair` or `Kem::derive_keypair`
     #[cfg(feature = "serde_impls")]
     type PublicKey: Clone
+        + Debug
+        + PartialEq
+        + Eq
         + Serializable
         + Deserializable
         + SerdeSerialize
@@ -30,7 +35,7 @@ pub trait DhKeyExchange {
     /// The key exchange's public key type. If you want to generate a keypair, see
     /// `Kem::gen_keypair` or `Kem::derive_keypair`
     #[cfg(not(feature = "serde_impls"))]
-    type PublicKey: Clone + Serializable + Deserializable;
+    type PublicKey: Clone + Debug + PartialEq + Eq + Serializable + Deserializable;
 
     /// The key exchange's private key type. If you want to generate a keypair, see
     /// `Kem::gen_keypair` or `Kem::derive_keypair`
