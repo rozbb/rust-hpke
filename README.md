@@ -3,7 +3,6 @@ rust-hpke
 [![Version](https://img.shields.io/crates/v/hpke.svg)](https://crates.io/crates/hpke)
 [![Docs](https://docs.rs/hpke/badge.svg)](https://docs.rs/hpke)
 [![CI](https://github.com/rozbb/rust-hpke/workflows/CI/badge.svg)](https://github.com/rozbb/rust-hpke/actions)
-[![Coverage](https://codecov.io/gh/rozbb/rust-hpke/branch/master/graph/badge.svg)](https://codecov.io/gh/rozbb/rust-hpke)
 
 This is an implementation of the [HPKE](https://www.rfc-editor.org/rfc/rfc9180.html) hybrid encryption standard (RFC 9180).
 
