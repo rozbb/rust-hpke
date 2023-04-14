@@ -64,7 +64,7 @@ where
     (ctx1.into(), ctx2.into())
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 pub(crate) enum OpModeKind {
     Base,
     Auth,

@@ -15,10 +15,12 @@ categories = ["cryptography", "no-std"]
 # "p256" enables the use of ECDH-NIST-P256 as a KEM
 # "p384" enables the use of ECDH-NIST-P384 as a KEM
 # "x25519" enables the use of the X25519 as a KEM
+# "xyber768d00" enables the use of X25519Kyber768Draft00 as a KEM
 default = ["alloc", "p256", "x25519"]
 x25519 = ["dep:x25519-dalek"]
 p384 = ["dep:p384"]
 p256 = ["dep:p256"]
+xyber768d00 = ["dep:pqc_kyber", "x25519"]
 # Include serde Serialize/Deserialize impls for all relevant types
 serde_impls = ["serde", "generic-array/serde"]
 # Include allocating methods like open() and seal()
@@ -47,6 +49,20 @@ zeroize = { version = "1", default-features = false, features = ["zeroize_derive
 version = "2.0.0-pre.1"
 default-features = false
 features = ["u64_backend"]
+optional = true
+
+[dependencies.pqc_kyber]
+# Be careful when switching to upstream, as the latest version might not have
+# been reviewed for implementation mistakes, and might still use explicit
+# rejection. Also, enable the avx2 at your own risk, as it's not been reviewed.
+# Examples of earlier issues:
+#
+#   https://github.com/Argyle-Software/kyber/issues/73
+#   https://github.com/Argyle-Software/kyber/issues/75
+#   https://github.com/Argyle-Software/kyber/issues/77
+git="https://github.com/bwesterb/argyle-kyber"
+default-features = false
+features = ["kyber768", "std"] # TODO get rid of std dep
 optional = true
 
 [dev-dependencies]

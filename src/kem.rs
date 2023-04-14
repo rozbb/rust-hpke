@@ -11,6 +11,12 @@ use zeroize::Zeroize;
 mod dhkem;
 pub use dhkem::*;
 
+#[cfg(feature = "xyber768d00")]
+pub mod xyber768d00;
+
+#[cfg(feature = "xyber768d00")]
+pub use xyber768d00::*;
+
 #[cfg(feature = "serde_impls")]
 use serde::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
 
