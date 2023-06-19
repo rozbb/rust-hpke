@@ -22,7 +22,7 @@ p384 = ["dep:p384"]
 p256 = ["dep:p256"]
 xyber768d00 = ["dep:pqc_kyber", "x25519"]
 # Include serde Serialize/Deserialize impls for all relevant types
-serde_impls = ["serde", "generic-array/serde"]
+serde_impls = ["dep:serde", "dep:serde-big-array", "generic-array/serde"]
 # Include allocating methods like open() and seal()
 alloc = []
 # Includes an implementation of `std::error::Error` for `HpkeError`. Also does what `alloc` does.
@@ -42,6 +42,7 @@ p256 = { version = "0.13", default-features = false, features = ["arithmetic", "
 p384 = { version = "0.13", default-features = false, features = ["arithmetic", "ecdh"], optional = true}
 sha2 = { version = "0.10", default-features = false }
 serde = { version = "1.0", default-features = false, optional = true }
+serde-big-array = { version = "0.5", optional = true }
 subtle = { version = "2.4", default-features = false }
 zeroize = { version = "1", default-features = false, features = ["zeroize_derive"] }
 
@@ -60,7 +61,8 @@ optional = true
 #   https://github.com/Argyle-Software/kyber/issues/73
 #   https://github.com/Argyle-Software/kyber/issues/75
 #   https://github.com/Argyle-Software/kyber/issues/77
-git="https://github.com/bwesterb/argyle-kyber"
+git = "https://github.com/bwesterb/argyle-kyber"
+package = "safe_pqc_kyber"
 default-features = false
 features = ["kyber768", "std"] # TODO get rid of std dep
 optional = true

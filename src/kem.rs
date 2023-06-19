@@ -1,4 +1,5 @@
 //! Traits and structs for key encapsulation mechanisms
+#![allow(ambiguous_glob_reexports)]
 
 use crate::{Deserializable, HpkeError, Serializable};
 
@@ -13,7 +14,6 @@ pub use dhkem::*;
 
 #[cfg(feature = "xyber768d00")]
 pub mod xyber768d00;
-
 #[cfg(feature = "xyber768d00")]
 pub use xyber768d00::*;
 
