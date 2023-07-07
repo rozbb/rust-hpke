@@ -92,20 +92,26 @@ impl Deserializable for PrivateKey {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
+#[cfg_attr(feature = "serde_impls", derive(serde::Serialize, serde::Deserialize))]
 pub struct PublicKey {
     x: <X25519HkdfSha256 as KemTrait>::PublicKey,
+    #[cfg_attr(feature = "serde_impls", serde(with = "serde_big_array::BigArray"))]
     k: pqc_kyber::PublicKey,
 }
 
 #[derive(Clone)]
+#[cfg_attr(feature = "serde_impls", derive(serde::Serialize, serde::Deserialize))]
 pub struct PrivateKey {
     x: <X25519HkdfSha256 as KemTrait>::PrivateKey,
+    #[cfg_attr(feature = "serde_impls", serde(with = "serde_big_array::BigArray"))]
     k: pqc_kyber::SecretKey,
 }
 
 #[derive(Clone)]
+#[cfg_attr(feature = "serde_impls", derive(serde::Serialize, serde::Deserialize))]
 pub struct EncappedKey {
     x: <X25519HkdfSha256 as KemTrait>::EncappedKey,
+    #[cfg_attr(feature = "serde_impls", serde(with = "serde_big_array::BigArray"))]
     k: [u8; 1088],
 }
 
