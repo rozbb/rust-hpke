@@ -29,8 +29,8 @@ impl Deserializable for EncappedKey {
             &encoded[..32],
         )?;
         Ok(EncappedKey {
-            x: x,
-            k: (&encoded[32..].try_into()).unwrap(),
+            x,
+            k: encoded[32..].try_into().unwrap(),
         })
     }
 }
@@ -55,8 +55,8 @@ impl Deserializable for PublicKey {
             &encoded[..32],
         )?;
         Ok(PublicKey {
-            x: x,
-            k: (&encoded[32..].try_into()).unwrap(),
+            x,
+            k: encoded[32..].try_into().unwrap(),
         })
     }
 }
@@ -85,8 +85,8 @@ impl Deserializable for PrivateKey {
             &encoded[..32],
         )?;
         Ok(PrivateKey {
-            x: x,
-            k: (&encoded[32..].try_into()).unwrap(),
+            x,
+            k: encoded[32..].try_into().unwrap(),
         })
     }
 }

@@ -1,5 +1,4 @@
 //! Traits and structs for key encapsulation mechanisms
-#![allow(ambiguous_glob_reexports)]
 
 use crate::{Deserializable, HpkeError, Serializable};
 
