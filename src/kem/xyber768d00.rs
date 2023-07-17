@@ -27,7 +27,7 @@ type U2400 = <<typenum::U1000 as core::ops::Add<typenum::U1000>>::Output as core
 >>::Output;
 
 impl Serializable for EncappedKey {
-    // X25519Kyber768Draft00 §5: Nenc of X25519Kyber768Draft00 is 1120
+    // X25519Kyber768Draft00 v2 §5: Nenc of X25519Kyber768Draft00 is 1120
     type OutputSize = U1120;
 
     fn to_bytes(&self) -> GenericArray<u8, Self::OutputSize> {
@@ -54,7 +54,7 @@ impl Deserializable for EncappedKey {
 }
 
 impl Serializable for PublicKey {
-    // X25519Kyber768Draft00 §5: Npk of X25519Kyber768Draft00 is 1216
+    // X25519Kyber768Draft00 v2 §5: Npk of X25519Kyber768Draft00 is 1216
     type OutputSize = U1216;
 
     fn to_bytes(&self) -> GenericArray<u8, Self::OutputSize> {
@@ -81,7 +81,7 @@ impl Deserializable for PublicKey {
 }
 
 impl Serializable for PrivateKey {
-    // X25519Kyber768Draft00 §5: Nsk of X25519Kyber768Draft00 is 2432
+    // X25519Kyber768Draft00 v2 §5: Nsk of X25519Kyber768Draft00 is 2432
     type OutputSize = U2432;
 
     fn to_bytes(&self) -> GenericArray<u8, Self::OutputSize> {
@@ -152,11 +152,11 @@ impl PartialEq for PrivateKey {
 
 impl Eq for PrivateKey {}
 
-#[doc = "Represents X25519Kyber768Draft00"]
+#[doc = "Represents X25519Kyber768Draft00 v2"]
 pub struct X25519Kyber768Draft00;
 
 impl KemTrait for X25519Kyber768Draft00 {
-    // X25519Kyber768Draft00 §5: Nsecret of X25519Kyber768Draft00 is 64
+    // X25519Kyber768Draft00 v2 §5: Nsecret of X25519Kyber768Draft00 is 64
     #[doc(hidden)]
     type NSecret = typenum::U64;
 
@@ -166,7 +166,7 @@ impl KemTrait for X25519Kyber768Draft00 {
 
     const KEM_ID: u16 = 0x30;
 
-    // X25519Kyber768Draft00 §3.3
+    // X25519Kyber768Draft00 v2 §3.3
     // def DeriveKeyPair(ikm):
     //   dkp_prk = LabeledExtract("", "dkp_prk", ikm)
     //   seed = LabeledExpand(dkp_prk, "sk", 32 + 64)
@@ -209,7 +209,7 @@ impl KemTrait for X25519Kyber768Draft00 {
         }
     }
 
-    // X25519Kyber768Draft00 §3.4
+    // X25519Kyber768Draft00 v2 §3.4
     //
     // def Encap(pkR):
     //   (pkA, pkB) = pkR
@@ -245,7 +245,7 @@ impl KemTrait for X25519Kyber768Draft00 {
         Ok((ss, EncappedKey { x: enc1, k: enc2 }))
     }
 
-    // X25519Kyber768Draft00 §3.4
+    // X25519Kyber768Draft00 v2 §3.4
     // def Decap(enc, skR):
     //   (skA, skB) = skR
     //   enc1 = enc[0:32]
