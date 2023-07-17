@@ -19,63 +19,72 @@ use serde::{de::Error as SError, Deserialize, Deserializer};
 use serde_json;
 
 // For known-answer tests we need to be able to encap with fixed randomness. This allows that.
-trait TestableDhKem: KemTrait {
+trait TestableKem: KemTrait {
     /// The ephemeral key used in encapsulation. This is the same thing as a private key in the
     /// case of DHKEM, but this is not always true
-    type EphemeralKey: Deserializable;
-
-    // Encap with fixed randomness
-    #[doc(hidden)]
-    fn encap_with_eph(
+    fn encaps_det(
+        tv: &MainTestVector,
         pk_recip: &Self::PublicKey,
         sender_id_keypair: Option<(&Self::PrivateKey, &Self::PublicKey)>,
-        sk_eph: Self::EphemeralKey,
     ) -> Result<(SharedSecret<Self>, Self::EncappedKey), HpkeError>;
 }
 
-trait TestablePlainKem: KemTrait {}
-
-impl TestablePlainKem for X25519Kyber768Draft00 {}
-
 // Now implement TestableDhKem for all the KEMs in the KAT
-impl TestableDhKem for X25519HkdfSha256 {
-    // In DHKEM, ephemeral keys and private keys are both scalars
-    type EphemeralKey = <X25519HkdfSha256 as KemTrait>::PrivateKey;
-
+impl TestableKem for X25519HkdfSha256 {
     // Call the x25519 deterministic encap function we defined in dhkem.rs
-    fn encap_with_eph(
+    fn encaps_det(
+        tv: &MainTestVector,
         pk_recip: &Self::PublicKey,
         sender_id_keypair: Option<(&Self::PrivateKey, &Self::PublicKey)>,
-        sk_eph: Self::EphemeralKey,
     ) -> Result<(SharedSecret<Self>, Self::EncappedKey), HpkeError> {
+        // In DHKEM, ephemeral keys and private keys are both scalars
+        type EphemeralKey = <X25519HkdfSha256 as KemTrait>::PrivateKey;
+
+        let sk_eph = EphemeralKey::from_bytes(tv.sk_eph.as_ref().unwrap()).unwrap();
         kem::x25519_hkdfsha256::encap_with_eph(pk_recip, sender_id_keypair, sk_eph)
     }
 }
-impl TestableDhKem for DhP256HkdfSha256 {
-    // In DHKEM, ephemeral keys and private keys are both scalars
-    type EphemeralKey = <DhP256HkdfSha256 as KemTrait>::PrivateKey;
-
+impl TestableKem for DhP256HkdfSha256 {
     // Call the p256 deterministic encap function we defined in dhkem.rs
-    fn encap_with_eph(
+    fn encaps_det(
+        tv: &MainTestVector,
         pk_recip: &Self::PublicKey,
         sender_id_keypair: Option<(&Self::PrivateKey, &Self::PublicKey)>,
-        sk_eph: Self::EphemeralKey,
     ) -> Result<(SharedSecret<Self>, Self::EncappedKey), HpkeError> {
+        // In DHKEM, ephemeral keys and private keys are both scalars
+        type EphemeralKey = <DhP256HkdfSha256 as KemTrait>::PrivateKey;
+
+        let sk_eph = EphemeralKey::from_bytes(tv.sk_eph.as_ref().unwrap()).unwrap();
         kem::dhp256_hkdfsha256::encap_with_eph(pk_recip, sender_id_keypair, sk_eph)
     }
 }
 
-impl TestableDhKem for DhP384HkdfSha384 {
-    // In DHKEM, ephemeral keys and private keys are both scalars
-    type EphemeralKey = <DhP384HkdfSha384 as KemTrait>::PrivateKey;
-
+impl TestableKem for DhP384HkdfSha384 {
     // Call the p384 deterministic encap function we defined in dhkem.rs
-    fn encap_with_eph(
+    fn encaps_det(
+        tv: &MainTestVector,
         pk_recip: &Self::PublicKey,
         sender_id_keypair: Option<(&Self::PrivateKey, &Self::PublicKey)>,
-        sk_eph: Self::EphemeralKey,
     ) -> Result<(SharedSecret<Self>, Self::EncappedKey), HpkeError> {
+        // In DHKEM, ephemeral keys and private keys are both scalars
+        type EphemeralKey = <DhP384HkdfSha384 as KemTrait>::PrivateKey;
+
+        let sk_eph = EphemeralKey::from_bytes(tv.sk_eph.as_ref().unwrap()).unwrap();
         kem::dhp384_hkdfsha384::encap_with_eph(pk_recip, sender_id_keypair, sk_eph)
+    }
+}
+
+impl TestableKem for X25519Kyber768Draft00 {
+    fn encaps_det(
+        tv: &MainTestVector,
+        pk_recip: &Self::PublicKey,
+        sender_keypair: Option<(&Self::PrivateKey, &Self::PublicKey)>,
+    ) -> Result<(SharedSecret<Self>, Self::EncappedKey), HpkeError> {
+        let seed = tv.ier.as_ref().unwrap();
+        let mut prng = PromptedRng::new(&seed);
+        let ret = X25519Kyber768Draft00::encap(&pk_recip, sender_keypair, &mut prng);
+        prng.assert_done();
+        ret
     }
 }
 
@@ -268,43 +277,6 @@ fn make_op_mode_r<'a, Kem: KemTrait>(
         2 => OpModeR::Auth(pk.unwrap()),
         3 => OpModeR::AuthPsk(pk.unwrap(), bundle.unwrap()),
         _ => panic!("Invalid mode ID: {}", mode_id),
-    }
-}
-
-trait TestableKem: KemTrait {
-    fn encaps_det(
-        tv: &MainTestVector,
-        pk_recip: &Self::PublicKey,
-        sender_id_keypair: Option<(&Self::PrivateKey, &Self::PublicKey)>,
-    ) -> Result<(SharedSecret<Self>, Self::EncappedKey), HpkeError>;
-}
-
-impl<Kem> TestableKem for Kem
-where
-    Kem: TestableDhKem,
-{
-    fn encaps_det(
-        tv: &MainTestVector,
-        pk_recip: &Self::PublicKey,
-        sender_keypair: Option<(&Self::PrivateKey, &Self::PublicKey)>,
-    ) -> Result<(SharedSecret<Self>, Self::EncappedKey), HpkeError> {
-        let sk_eph =
-            <Kem as TestableDhKem>::EphemeralKey::from_bytes(tv.sk_eph.as_ref().unwrap()).unwrap();
-        Kem::encap_with_eph(&pk_recip, sender_keypair, sk_eph)
-    }
-}
-
-impl TestableKem for X25519Kyber768Draft00 {
-    fn encaps_det(
-        tv: &MainTestVector,
-        pk_recip: &Self::PublicKey,
-        sender_keypair: Option<(&Self::PrivateKey, &Self::PublicKey)>,
-    ) -> Result<(SharedSecret<Self>, Self::EncappedKey), HpkeError> {
-        let seed = tv.ier.as_ref().unwrap();
-        let mut prng = PromptedRng::new(&seed);
-        let ret = X25519Kyber768Draft00::encap(&pk_recip, sender_keypair, &mut prng);
-        prng.assert_done();
-        ret
     }
 }
 
