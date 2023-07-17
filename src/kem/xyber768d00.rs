@@ -1,93 +1,108 @@
 use crate::{
     kdf::{labeled_extract, HkdfSha256, LabeledExpand},
     kem::{Kem as KemTrait, SharedSecret, X25519HkdfSha256},
+    util::enforce_equal_len,
     util::kem_suite_id,
     Deserializable, HpkeError, Serializable,
 };
 
-use generic_array::{sequence::Concat, typenum, GenericArray};
+use generic_array::{
+    sequence::Concat,
+    typenum::{self, Unsigned},
+    GenericArray,
+};
 use rand_core::{CryptoRng, RngCore};
 use subtle::{Choice, ConstantTimeEq};
 
+type U1120 = <typenum::U1000 as core::ops::Add<typenum::U120>>::Output;
+type U1088 = <typenum::U1000 as core::ops::Add<typenum::U88>>::Output;
+type U1216 = <typenum::U1000 as core::ops::Add<typenum::U216>>::Output;
+type U1184 = <typenum::U1000 as core::ops::Add<typenum::U184>>::Output;
+type U2432 = <<typenum::U1000 as core::ops::Add<typenum::U1000>>::Output as core::ops::Add<
+    typenum::U432,
+>>::Output;
+type U2400 = <<typenum::U1000 as core::ops::Add<typenum::U1000>>::Output as core::ops::Add<
+    typenum::U400,
+>>::Output;
+
 impl Serializable for EncappedKey {
-    type OutputSize = <typenum::U1000 as core::ops::Add<typenum::U120>>::Output;
+    // X25519Kyber768Draft00 §5: Nenc of X25519Kyber768Draft00 is 1120
+    type OutputSize = U1120;
 
     fn to_bytes(&self) -> GenericArray<u8, Self::OutputSize> {
-        self.x.to_bytes().concat(*<GenericArray<
-            u8,
-            <typenum::U1000 as core::ops::Add<typenum::U88>>::Output,
-        >>::from_slice(&self.k[..]))
+        // Output DH encapped key || Kyber encapped key. That's 32 bytes + 1088 bytes += 1120.
+        self.x
+            .to_bytes()
+            .concat(*<GenericArray<u8, U1088>>::from_slice(&self.k[..]))
     }
 }
 
 impl Deserializable for EncappedKey {
     fn from_bytes(encoded: &[u8]) -> Result<Self, HpkeError> {
-        if encoded.len() != 1120 {
-            return Err(HpkeError::IncorrectInputLength(1120, encoded.len()));
-        }
+        enforce_equal_len(Self::OutputSize::to_usize(), encoded.len())?;
+
+        // Grab the DH encapped key then the Kyber encapped key. The unwrap() is permitted because
+        // of the enforce_equal_len above.
         let x = <<X25519HkdfSha256 as KemTrait>::EncappedKey as Deserializable>::from_bytes(
             &encoded[..32],
         )?;
-        Ok(EncappedKey {
-            x,
-            k: encoded[32..].try_into().unwrap(),
-        })
+        let k = encoded[32..].try_into().unwrap();
+
+        Ok(EncappedKey { x, k })
     }
 }
 
 impl Serializable for PublicKey {
-    type OutputSize = <typenum::U1000 as core::ops::Add<typenum::U216>>::Output;
+    // X25519Kyber768Draft00 §5: Npk of X25519Kyber768Draft00 is 1216
+    type OutputSize = U1216;
 
     fn to_bytes(&self) -> GenericArray<u8, Self::OutputSize> {
-        self.x.to_bytes().concat(*<GenericArray<
-            u8,
-            <typenum::U1000 as core::ops::Add<typenum::U184>>::Output,
-        >>::from_slice(&self.k[..]))
+        // Output DH pubkey || Kyber pubkey. That's 32 bytes + 1184 bytes += 1216.
+        self.x
+            .to_bytes()
+            .concat(*<GenericArray<u8, U1184>>::from_slice(&self.k[..]))
     }
 }
 
 impl Deserializable for PublicKey {
     fn from_bytes(encoded: &[u8]) -> Result<Self, HpkeError> {
-        if encoded.len() != 1216 {
-            return Err(HpkeError::IncorrectInputLength(1216, encoded.len()));
-        }
+        enforce_equal_len(Self::OutputSize::to_usize(), encoded.len())?;
+
+        // Grab the DH pubkey then the Kyber pubkey. The unwrap() is permitted because of the
+        // enforce_equal_len above.
         let x = <<X25519HkdfSha256 as KemTrait>::PublicKey as Deserializable>::from_bytes(
             &encoded[..32],
         )?;
-        Ok(PublicKey {
-            x,
-            k: encoded[32..].try_into().unwrap(),
-        })
+        let k = encoded[32..].try_into().unwrap();
+
+        Ok(PublicKey { x, k })
     }
 }
 
 impl Serializable for PrivateKey {
-    type OutputSize =
-        <<typenum::U1000 as core::ops::Add<typenum::U1000>>::Output as core::ops::Add<
-            typenum::U432,
-        >>::Output;
+    // X25519Kyber768Draft00 §5: Nsk of X25519Kyber768Draft00 is 2432
+    type OutputSize = U2432;
+
     fn to_bytes(&self) -> GenericArray<u8, Self::OutputSize> {
-        self.x.to_bytes().concat(*<GenericArray<
-            u8,
-            <<typenum::U1000 as core::ops::Add<typenum::U1000>>::Output as core::ops::Add<
-                typenum::U400,
-            >>::Output,
-        >>::from_slice(&self.k[..]))
+        // Output DH privkey || Kyber privkey. That's 32 bytes + 1184 bytes += 1216.
+        self.x
+            .to_bytes()
+            .concat(*<GenericArray<u8, U2400>>::from_slice(&self.k[..]))
     }
 }
 
 impl Deserializable for PrivateKey {
     fn from_bytes(encoded: &[u8]) -> Result<Self, HpkeError> {
-        if encoded.len() != 2432 {
-            return Err(HpkeError::IncorrectInputLength(2432, encoded.len()));
-        }
+        enforce_equal_len(Self::OutputSize::to_usize(), encoded.len())?;
+
+        // Grab the DH privkey then the Kyber privkey. The unwrap() is permitted because of the
+        // enforce_equal_len above.
         let x = <<X25519HkdfSha256 as KemTrait>::PrivateKey as Deserializable>::from_bytes(
             &encoded[..32],
         )?;
-        Ok(PrivateKey {
-            x,
-            k: encoded[32..].try_into().unwrap(),
-        })
+        let k = encoded[32..].try_into().unwrap();
+
+        Ok(PrivateKey { x, k })
     }
 }
 
@@ -133,6 +148,7 @@ impl Eq for PrivateKey {}
 pub struct X25519Kyber768Draft00;
 
 impl KemTrait for X25519Kyber768Draft00 {
+    // X25519Kyber768Draft00 §5: Nsecret of X25519Kyber768Draft00 is 32
     #[doc(hidden)]
     type NSecret = typenum::U64;
 
@@ -142,6 +158,19 @@ impl KemTrait for X25519Kyber768Draft00 {
 
     const KEM_ID: u16 = 0x30;
 
+    // X25519Kyber768Draft00 §3.3
+    // def DeriveKeyPair(ikm):
+    //     dkp_prk = LabeledExtract("", "dkp_prk", ikm)
+    //     seed = LabeledExpand(dkp_prk, "sk", 32 + 64)
+    //     seed1 = seed[0:32]
+    //     seed2 = seed[32:96]
+    //     sk1, pk1 = DHKEM.DeriveKeyPair(seed1)
+    //     sk2, pk2 = Kyber768Draft00.DeriveKeyPair(seed2)
+    //     return (concat(sk1, sk2), concat(pk1, pk2))
+
+    /// Deterministically derives a keypair from the given input keying material and ciphersuite
+    /// ID. The keying material SHOULD have as many bits of entropy as the bit length of a secret
+    /// key, i.e., 19,456.
     fn derive_keypair(ikm: &[u8]) -> (Self::PrivateKey, Self::PublicKey) {
         let suite_id = kem_suite_id::<Self>();
         let (_, dkp_prk) = labeled_extract::<HkdfSha256>(&[], &suite_id, b"dkp_prk", ikm);
@@ -149,8 +178,9 @@ impl KemTrait for X25519Kyber768Draft00 {
         dkp_prk
             .labeled_expand(&suite_id, b"sk", &[], &mut buf)
             .unwrap();
-        let (skx, pkx) = X25519HkdfSha256::derive_keypair(&buf[..32]);
-        let kpk = pqc_kyber::derive(&buf[32..]).unwrap();
+        let (seed1, seed2) = buf.split_at(32);
+        let (skx, pkx) = X25519HkdfSha256::derive_keypair(seed1);
+        let kpk = pqc_kyber::derive(seed2).unwrap();
         (
             PrivateKey {
                 x: skx,
