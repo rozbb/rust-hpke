@@ -7,12 +7,12 @@ use crate::{
     },
     op_mode::{OpModeR, PskBundle},
     setup::setup_receiver,
+    test_util::PromptedRng,
     Deserializable, HpkeError, Serializable,
 };
 
 extern crate std;
-use rand::{CryptoRng, RngCore};
-use std::{fs::File, slice, string::String, vec::Vec};
+use std::{fs::File, string::String, vec::Vec};
 
 use hex;
 use serde::{de::Error as SError, Deserialize, Deserializer};
@@ -80,52 +80,13 @@ impl TestableKem for X25519Kyber768Draft00 {
         pk_recip: &Self::PublicKey,
         sender_keypair: Option<(&Self::PrivateKey, &Self::PublicKey)>,
     ) -> Result<(SharedSecret<Self>, Self::EncappedKey), HpkeError> {
-        let seed = tv.ier.as_ref().unwrap();
+        // The encap randomness is given in the TV. Rig a PRNG to output exactly that sequence, and
+        // run the encapsulation process.
+        let seed = tv.encap_randomness.as_ref().unwrap();
         let mut prng = PromptedRng::new(&seed);
         let ret = X25519Kyber768Draft00::encap(&pk_recip, sender_keypair, &mut prng);
         prng.assert_done();
         ret
-    }
-}
-
-struct PromptedRng<'a> {
-    iter: slice::Iter<'a, u8>,
-}
-
-impl PromptedRng<'_> {
-    pub fn new(prompt: &[u8]) -> PromptedRng {
-        PromptedRng {
-            iter: prompt.iter(),
-        }
-    }
-
-    fn next(&mut self) -> u8 {
-        self.iter.next().cloned().unwrap()
-    }
-
-    pub fn assert_done(&mut self) -> () {
-        if self.iter.next().is_some() {
-            panic!()
-        }
-    }
-}
-
-impl CryptoRng for PromptedRng<'_> {}
-
-impl RngCore for PromptedRng<'_> {
-    fn next_u32(&mut self) -> u32 {
-        rand_core::impls::next_u32_via_fill(self)
-    }
-    fn next_u64(&mut self) -> u64 {
-        rand_core::impls::next_u64_via_fill(self)
-    }
-    fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), rand::Error> {
-        Ok(self.fill_bytes(dest))
-    }
-    fn fill_bytes(&mut self, dst: &mut [u8]) {
-        for d in dst.iter_mut() {
-            *d = self.next();
-        }
     }
 }
 
@@ -176,7 +137,7 @@ struct MainTestVector {
     #[serde(default, rename = "ikmE", deserialize_with = "bytes_from_hex_opt")]
     _ikm_eph: Option<Vec<u8>>,
     #[serde(default, rename = "ier", deserialize_with = "bytes_from_hex_opt")]
-    ier: Option<Vec<u8>>,
+    encap_randomness: Option<Vec<u8>>,
 
     // Private keys
     #[serde(rename = "skRm", deserialize_with = "bytes_from_hex")]
