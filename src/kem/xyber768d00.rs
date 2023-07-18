@@ -172,8 +172,7 @@ impl KemTrait for X25519Kyber768Draft00 {
     //   return (concat(sk1, sk2), concat(pk1, pk2))
 
     /// Deterministically derives a keypair from the given input keying material and ciphersuite
-    /// ID. The keying material should have as many bits of entropy as it extracts for its seeds,
-    /// i.e., 768 bits.
+    /// ID. The keying material SHOULD have at least 256 bits of entropy.
     fn derive_keypair(ikm: &[u8]) -> (Self::PrivateKey, Self::PublicKey) {
         // Hash the IKM
         let suite_id = kem_suite_id::<Self>();
