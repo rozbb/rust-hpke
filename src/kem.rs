@@ -9,11 +9,10 @@ use rand_core::{CryptoRng, RngCore};
 use zeroize::Zeroize;
 
 mod dhkem;
-// The allow here is because every KEM exports a doc(hidden) type called EncappedKey. The user
-// never sees it, but the compiler thinks it's ambiguous.
-#[allow(ambiguous_glob_reexports)]
 pub use dhkem::*;
 
+// The #[allow] here is because every KEM exports a doc(hidden) type called EncappedKey. The user
+// never sees it, but the compiler thinks it's ambiguous.
 #[cfg(feature = "xyber768d00")]
 pub(crate) mod xyber768d00;
 #[cfg(feature = "xyber768d00")]
