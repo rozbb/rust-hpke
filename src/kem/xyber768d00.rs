@@ -15,26 +15,27 @@ use pqc_kyber::Keypair as KyberKeypair;
 use rand_core::{CryptoRng, RngCore};
 use subtle::{Choice, ConstantTimeEq};
 
-type U1120 = <typenum::U1000 as core::ops::Add<typenum::U120>>::Output;
-type U1088 = <typenum::U1000 as core::ops::Add<typenum::U88>>::Output;
-type U1216 = <typenum::U1000 as core::ops::Add<typenum::U216>>::Output;
-type U1184 = <typenum::U1000 as core::ops::Add<typenum::U184>>::Output;
-type U2432 = <<typenum::U1000 as core::ops::Add<typenum::U1000>>::Output as core::ops::Add<
-    typenum::U432,
->>::Output;
-type U2400 = <<typenum::U1000 as core::ops::Add<typenum::U1000>>::Output as core::ops::Add<
+type KyberPubkeyLen = <typenum::U1000 as core::ops::Add<typenum::U184>>::Output;
+type KyberPrivkeyLen = <<typenum::U1000 as core::ops::Add<typenum::U1000>>::Output as core::ops::Add<
     typenum::U400,
+>>::Output;
+type KyberEncappedKeyLen = <typenum::U1000 as core::ops::Add<typenum::U88>>::Output;
+
+// X25519Kyber768Draft00 v2 §5: Nenc of X25519Kyber768Draft00 is 1120
+type XyberEncappedKeyLen = <typenum::U1000 as core::ops::Add<typenum::U120>>::Output;
+// X25519Kyber768Draft00 v2 §5: Npk of X25519Kyber768Draft00 is 1216
+type XyberPubkeyLen = <typenum::U1000 as core::ops::Add<typenum::U216>>::Output;
+// X25519Kyber768Draft00 v2 §5: Nsk of X25519Kyber768Draft00 is 2432
+type XyberPrivkeyLen = <<typenum::U1000 as core::ops::Add<typenum::U1000>>::Output as core::ops::Add<
+    typenum::U432,
 >>::Output;
 
 impl Serializable for EncappedKey {
-    // X25519Kyber768Draft00 v2 §5: Nenc of X25519Kyber768Draft00 is 1120
-    type OutputSize = U1120;
+    type OutputSize = XyberEncappedKeyLen;
 
     fn to_bytes(&self) -> GenericArray<u8, Self::OutputSize> {
-        // Output X25519 encapped key || Kyber encapped key. That's 32 bytes + 1088 bytes += 1120.
-        self.x
-            .to_bytes()
-            .concat(*<GenericArray<u8, U1088>>::from_slice(&self.k[..]))
+        // Output X25519 encapped key || Kyber encapped key
+        self.x.to_bytes().concat(self.k)
     }
 }
 
@@ -42,26 +43,23 @@ impl Deserializable for EncappedKey {
     fn from_bytes(encoded: &[u8]) -> Result<Self, HpkeError> {
         enforce_equal_len(Self::OutputSize::to_usize(), encoded.len())?;
 
-        // Grab the X25519 encapped key then the Kyber encapped key. The unwrap() is permitted because
-        // of the enforce_equal_len above.
+        // Grab the X25519 encapped key then the Kyber encapped key. The clone_from_slice(), which
+        // can panic, is permitted because of the enforce_equal_len above.
         let x = <<X25519HkdfSha256 as KemTrait>::EncappedKey as Deserializable>::from_bytes(
             &encoded[..32],
         )?;
-        let k = encoded[32..].try_into().unwrap();
+        let k = GenericArray::clone_from_slice(&encoded[32..]);
 
         Ok(EncappedKey { x, k })
     }
 }
 
 impl Serializable for PublicKey {
-    // X25519Kyber768Draft00 v2 §5: Npk of X25519Kyber768Draft00 is 1216
-    type OutputSize = U1216;
+    type OutputSize = XyberPubkeyLen;
 
     fn to_bytes(&self) -> GenericArray<u8, Self::OutputSize> {
-        // Output X25519 pubkey || Kyber pubkey. That's 32 bytes + 1184 bytes += 1216.
-        self.x
-            .to_bytes()
-            .concat(*<GenericArray<u8, U1184>>::from_slice(&self.k[..]))
+        // Output X25519 pubkey || Kyber pubkey
+        self.x.to_bytes().concat(self.k)
     }
 }
 
@@ -69,26 +67,23 @@ impl Deserializable for PublicKey {
     fn from_bytes(encoded: &[u8]) -> Result<Self, HpkeError> {
         enforce_equal_len(Self::OutputSize::to_usize(), encoded.len())?;
 
-        // Grab the X25519 pubkey then the Kyber pubkey. The unwrap() is permitted because of the
-        // enforce_equal_len above.
+        // Grab the X25519 pubkey then the Kyber pubkey. The clone_from_slice(), which can panic,
+        // is permitted because of the enforce_equal_len above.
         let x = <<X25519HkdfSha256 as KemTrait>::PublicKey as Deserializable>::from_bytes(
             &encoded[..32],
         )?;
-        let k = encoded[32..].try_into().unwrap();
+        let k = GenericArray::clone_from_slice(&encoded[32..]);
 
         Ok(PublicKey { x, k })
     }
 }
 
 impl Serializable for PrivateKey {
-    // X25519Kyber768Draft00 v2 §5: Nsk of X25519Kyber768Draft00 is 2432
-    type OutputSize = U2432;
+    type OutputSize = XyberPrivkeyLen;
 
     fn to_bytes(&self) -> GenericArray<u8, Self::OutputSize> {
-        // Output X25519 privkey || Kyber privkey. That's 32 bytes + 1184 bytes += 1216.
-        self.x
-            .to_bytes()
-            .concat(*<GenericArray<u8, U2400>>::from_slice(&self.k[..]))
+        // Output X25519 privkey || Kyber privkey
+        self.x.to_bytes().concat(self.k)
     }
 }
 
@@ -96,16 +91,19 @@ impl Deserializable for PrivateKey {
     fn from_bytes(encoded: &[u8]) -> Result<Self, HpkeError> {
         enforce_equal_len(Self::OutputSize::to_usize(), encoded.len())?;
 
-        // Grab the X25519 privkey then the Kyber privkey. The unwrap() is permitted because of the
-        // enforce_equal_len above.
+        // Grab the X25519 privkey then the Kyber privkey. The clone_from_slice(), which can panic,
+        // is permitted because of the enforce_equal_len above.
         let x = <<X25519HkdfSha256 as KemTrait>::PrivateKey as Deserializable>::from_bytes(
             &encoded[..32],
         )?;
-        let k = encoded[32..].try_into().unwrap();
+        let k = GenericArray::clone_from_slice(&encoded[32..]);
 
         Ok(PrivateKey { x, k })
     }
 }
+
+// We use GenericArray rather than normal fixed-size arrays because we need serde impls, and serde
+// doesn't support generic constants yet
 
 /// An X25519-Kyber768 public key. This holds an X25519 public key and a Kyber768 public key.
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -113,8 +111,7 @@ impl Deserializable for PrivateKey {
 #[doc(hidden)]
 pub struct PublicKey {
     x: <X25519HkdfSha256 as KemTrait>::PublicKey,
-    #[cfg_attr(feature = "serde_impls", serde(with = "serde_big_array::BigArray"))]
-    k: pqc_kyber::PublicKey,
+    k: GenericArray<u8, KyberPubkeyLen>,
 }
 
 /// An X25519-Kyber768 private key. This holds an X25519 private key and a Kyber768 private key.
@@ -123,8 +120,7 @@ pub struct PublicKey {
 #[doc(hidden)]
 pub struct PrivateKey {
     x: <X25519HkdfSha256 as KemTrait>::PrivateKey,
-    #[cfg_attr(feature = "serde_impls", serde(with = "serde_big_array::BigArray"))]
-    k: pqc_kyber::SecretKey,
+    k: GenericArray<u8, KyberPrivkeyLen>,
 }
 
 /// Holds the content of an encapsulated secret. This is what the receiver uses to derive the
@@ -134,8 +130,7 @@ pub struct PrivateKey {
 #[doc(hidden)]
 pub struct EncappedKey {
     x: <X25519HkdfSha256 as KemTrait>::EncappedKey,
-    #[cfg_attr(feature = "serde_impls", serde(with = "serde_big_array::BigArray"))]
-    k: [u8; 1088],
+    k: GenericArray<u8, KyberEncappedKeyLen>,
 }
 
 impl ConstantTimeEq for PrivateKey {
@@ -198,14 +193,23 @@ impl KemTrait for X25519Kyber768Draft00 {
             secret: skk,
         } = pqc_kyber::derive(seed2).unwrap();
 
-        (PrivateKey { x: skx, k: skk }, PublicKey { x: pkx, k: pkk })
+        (
+            PrivateKey {
+                x: skx,
+                k: GenericArray::clone_from_slice(&skk),
+            },
+            PublicKey {
+                x: pkx,
+                k: GenericArray::clone_from_slice(&pkk),
+            },
+        )
     }
 
     /// Converts a X25519-Kyber768 private key to a public key
     fn sk_to_pk(sk: &PrivateKey) -> PublicKey {
         PublicKey {
             x: X25519HkdfSha256::sk_to_pk(&sk.x),
-            k: pqc_kyber::public(&sk.k),
+            k: GenericArray::clone_from_slice(&pqc_kyber::public(&sk.k)),
         }
     }
 
@@ -242,7 +246,14 @@ impl KemTrait for X25519Kyber768Draft00 {
         // and ss2 are fixed-size arrays.
         let mut ss = <SharedSecret<Self> as Default>::default();
         ss.0 = ss1.0.concat(ss2.try_into().unwrap());
-        Ok((ss, EncappedKey { x: enc1, k: enc2 }))
+        // The clone_from_slice, which can panic, is OK because enc2 is a fixed-size array.
+        Ok((
+            ss,
+            EncappedKey {
+                x: enc1,
+                k: GenericArray::clone_from_slice(&enc2),
+            },
+        ))
     }
 
     // X25519Kyber768Draft00 v2 §3.4
