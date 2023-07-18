@@ -1,5 +1,9 @@
 //! Traits and structs for key encapsulation mechanisms
 
+// We allow ambiguous ::* exports because every KEM exports a doc(hidden) type called EncappedKey.
+// The user never sees it, but the compiler still thinks it's ambiguous.
+#![allow(ambiguous_glob_reexports)]
+
 use crate::{Deserializable, HpkeError, Serializable};
 
 use core::fmt::Debug;
@@ -11,12 +15,9 @@ use zeroize::Zeroize;
 mod dhkem;
 pub use dhkem::*;
 
-// The #[allow] here is because every KEM exports a doc(hidden) type called EncappedKey. The user
-// never sees it, but the compiler thinks it's ambiguous.
 #[cfg(feature = "xyber768d00")]
 pub(crate) mod xyber768d00;
 #[cfg(feature = "xyber768d00")]
-#[allow(ambiguous_glob_reexports)]
 pub use xyber768d00::*;
 
 #[cfg(feature = "serde_impls")]
