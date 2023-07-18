@@ -11,11 +11,13 @@ use zeroize::Zeroize;
 mod dhkem;
 // The allow here is because every KEM exports a doc(hidden) type called EncappedKey. The user
 // never sees it, but the compiler thinks it's ambiguous.
+#[allow(ambiguous_glob_reexports)]
 pub use dhkem::*;
 
 #[cfg(feature = "xyber768d00")]
-pub mod xyber768d00;
+pub(crate) mod xyber768d00;
 #[cfg(feature = "xyber768d00")]
+#[allow(ambiguous_glob_reexports)]
 pub use xyber768d00::*;
 
 #[cfg(feature = "serde_impls")]
