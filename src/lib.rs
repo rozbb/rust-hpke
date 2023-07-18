@@ -101,7 +101,8 @@ pub(crate) use alloc::vec::Vec;
     feature = "std",
     feature = "x25519",
     feature = "p256",
-    feature = "p384"
+    feature = "p384",
+    feature = "xyber768d00"
 ))]
 mod kat_tests;
 
@@ -163,6 +164,8 @@ pub enum HpkeError {
     EncapError,
     /// Decapsulation failed
     DecapError,
+    /// Authented modes not supported
+    AuthNotSupportedError,
     /// An input isn't the right length. First value is the expected length, second is the given
     /// length.
     IncorrectInputLength(usize, usize),
@@ -178,6 +181,7 @@ impl core::fmt::Display for HpkeError {
             HpkeError::ValidationError => write!(f, "Input value is invalid"),
             HpkeError::EncapError => write!(f, "Encapsulation failed"),
             HpkeError::DecapError => write!(f, "Decapsulation failed"),
+            HpkeError::AuthNotSupportedError => write!(f, "Authenticated modes not supported"),
             HpkeError::IncorrectInputLength(expected, given) => write!(
                 f,
                 "Incorrect input length. Expected {} bytes. Got {}.",

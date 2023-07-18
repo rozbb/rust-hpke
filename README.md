@@ -1,3 +1,9 @@
+# TESTING
+
+This is a testing branch for [draft v2](https://www.ietf.org/archive/id/draft-westerbaan-cfrg-hpke-xyber768d00-02.html) of an HPKE _hybrid post-quantum_ ciphersuite. In short, this ciphersuite, X25519Kyber768Draft00, does both X25519 and [Kyber](https://pq-crystals.org/kyber/) encapsulation/decapsulation, and uses _both_ shared secrets to establish a secure session. This construction is secure so long as at least one of its components, X25519 or Kyber, is secure.
+
+**Do NOT use this branch for anything other than testing**
+
 rust-hpke
 =========
 [![Version](https://img.shields.io/crates/v/hpke.svg)](https://crates.io/crates/hpke)

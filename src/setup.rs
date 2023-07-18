@@ -211,7 +211,7 @@ mod test {
     /// This tests that `setup_sender` and `setup_receiver` derive the same context. We do this by
     /// testing that `gen_ctx_kem_pair` returns identical encryption contexts
     macro_rules! test_setup_correctness {
-        ($test_name:ident, $aead_ty:ty, $kdf_ty:ty, $kem_ty:ty) => {
+        ($test_name:ident, $aead_ty:ty, $kdf_ty:ty, $kem_ty:ty, $supports_auth:expr) => {
             #[test]
             fn $test_name() {
                 type A = $aead_ty;
@@ -232,6 +232,13 @@ mod test {
                     OpModeKind::Psk,
                     OpModeKind::AuthPsk,
                 ] {
+                    // Skip sender-authentication tests if this KEM doesn't support authentication
+                    if [OpModeKind::Auth, OpModeKind::AuthPsk].contains(op_mode_kind)
+                        && !$supports_auth
+                    {
+                        continue;
+                    }
+
                     // Generate a mutually agreeing op mode pair
                     let (psk, psk_id) = (gen_rand_buf(), gen_rand_buf());
                     let (sender_mode, receiver_mode) =
@@ -345,7 +352,8 @@ mod test {
             test_setup_correctness_x25519,
             ChaCha20Poly1305,
             HkdfSha256,
-            crate::kem::x25519_hkdfsha256::X25519HkdfSha256
+            crate::kem::x25519_hkdfsha256::X25519HkdfSha256,
+            true
         );
         test_setup_soundness!(
             test_setup_soundness_x25519,
@@ -363,7 +371,8 @@ mod test {
             test_setup_correctness_p256,
             ChaCha20Poly1305,
             HkdfSha256,
-            crate::kem::dhp256_hkdfsha256::DhP256HkdfSha256
+            crate::kem::dhp256_hkdfsha256::DhP256HkdfSha256,
+            true
         );
         test_setup_soundness!(
             test_setup_soundness_p256,
@@ -382,13 +391,33 @@ mod test {
             test_setup_correctness_p384,
             ChaCha20Poly1305,
             HkdfSha384,
-            crate::kem::dhp384_hkdfsha384::DhP384HkdfSha384
+            crate::kem::dhp384_hkdfsha384::DhP384HkdfSha384,
+            true
         );
         test_setup_soundness!(
             test_setup_soundness_p384,
             ChaCha20Poly1305,
             HkdfSha384,
             crate::kem::dhp384_hkdfsha384::DhP384HkdfSha384
+        );
+    }
+
+    #[cfg(feature = "xyber768d00")]
+    mod xyber768d00_tests {
+        use super::*;
+
+        test_setup_correctness!(
+            test_setup_correctness_xyber768d00,
+            ChaCha20Poly1305,
+            HkdfSha256,
+            crate::kem::xyber768d00::X25519Kyber768Draft00,
+            false
+        );
+        test_setup_soundness!(
+            test_setup_soundness_xyber768d00,
+            ChaCha20Poly1305,
+            HkdfSha256,
+            crate::kem::xyber768d00::X25519Kyber768Draft00
         );
     }
 }

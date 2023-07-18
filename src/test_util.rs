@@ -64,7 +64,7 @@ where
     (ctx1.into(), ctx2.into())
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 pub(crate) enum OpModeKind {
     Base,
     Auth,
@@ -159,4 +159,49 @@ pub(crate) fn aead_ctx_eq<A: Aead, Kdf: KdfTrait, Kem: KemTrait>(
     }
 
     true
+}
+
+/// An RNG whose stream is entirely given by an iterator. This is for known-answer tests whose
+/// random coins are given directly.
+pub(crate) struct PromptedRng<'a> {
+    iter: core::slice::Iter<'a, u8>,
+}
+
+impl PromptedRng<'_> {
+    pub(crate) fn new(prompt: &[u8]) -> PromptedRng {
+        PromptedRng {
+            iter: prompt.iter(),
+        }
+    }
+
+    fn next(&mut self) -> u8 {
+        self.iter.next().cloned().unwrap()
+    }
+
+    pub(crate) fn assert_done(&mut self) -> () {
+        assert!(
+            self.iter.next().is_none(),
+            "PromptedRng still had {} bytes in the buffer",
+            self.iter.len() + 1,
+        )
+    }
+}
+
+impl CryptoRng for PromptedRng<'_> {}
+
+impl RngCore for PromptedRng<'_> {
+    fn next_u32(&mut self) -> u32 {
+        rand_core::impls::next_u32_via_fill(self)
+    }
+    fn next_u64(&mut self) -> u64 {
+        rand_core::impls::next_u64_via_fill(self)
+    }
+    fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), rand::Error> {
+        Ok(self.fill_bytes(dest))
+    }
+    fn fill_bytes(&mut self, dst: &mut [u8]) {
+        for d in dst.iter_mut() {
+            *d = self.next();
+        }
+    }
 }

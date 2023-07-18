@@ -3,9 +3,11 @@ use crate::{
     kdf::{HkdfSha256, HkdfSha384, HkdfSha512, Kdf as KdfTrait},
     kem::{
         self, DhP256HkdfSha256, DhP384HkdfSha384, Kem as KemTrait, SharedSecret, X25519HkdfSha256,
+        X25519Kyber768Draft00,
     },
     op_mode::{OpModeR, PskBundle},
     setup::setup_receiver,
+    test_util::PromptedRng,
     Deserializable, HpkeError, Serializable,
 };
 
@@ -20,56 +22,71 @@ use serde_json;
 trait TestableKem: KemTrait {
     /// The ephemeral key used in encapsulation. This is the same thing as a private key in the
     /// case of DHKEM, but this is not always true
-    type EphemeralKey: Deserializable;
-
-    // Encap with fixed randomness
-    #[doc(hidden)]
-    fn encap_with_eph(
+    fn encaps_det(
+        tv: &MainTestVector,
         pk_recip: &Self::PublicKey,
         sender_id_keypair: Option<(&Self::PrivateKey, &Self::PublicKey)>,
-        sk_eph: Self::EphemeralKey,
     ) -> Result<(SharedSecret<Self>, Self::EncappedKey), HpkeError>;
 }
 
-// Now implement TestableKem for all the KEMs in the KAT
+// Now implement TestableDhKem for all the KEMs in the KAT
 impl TestableKem for X25519HkdfSha256 {
-    // In DHKEM, ephemeral keys and private keys are both scalars
-    type EphemeralKey = <X25519HkdfSha256 as KemTrait>::PrivateKey;
-
     // Call the x25519 deterministic encap function we defined in dhkem.rs
-    fn encap_with_eph(
+    fn encaps_det(
+        tv: &MainTestVector,
         pk_recip: &Self::PublicKey,
         sender_id_keypair: Option<(&Self::PrivateKey, &Self::PublicKey)>,
-        sk_eph: Self::EphemeralKey,
     ) -> Result<(SharedSecret<Self>, Self::EncappedKey), HpkeError> {
+        // In DHKEM, ephemeral keys and private keys are both scalars
+        type EphemeralKey = <X25519HkdfSha256 as KemTrait>::PrivateKey;
+
+        let sk_eph = EphemeralKey::from_bytes(tv.sk_eph.as_ref().unwrap()).unwrap();
         kem::x25519_hkdfsha256::encap_with_eph(pk_recip, sender_id_keypair, sk_eph)
     }
 }
 impl TestableKem for DhP256HkdfSha256 {
-    // In DHKEM, ephemeral keys and private keys are both scalars
-    type EphemeralKey = <DhP256HkdfSha256 as KemTrait>::PrivateKey;
-
     // Call the p256 deterministic encap function we defined in dhkem.rs
-    fn encap_with_eph(
+    fn encaps_det(
+        tv: &MainTestVector,
         pk_recip: &Self::PublicKey,
         sender_id_keypair: Option<(&Self::PrivateKey, &Self::PublicKey)>,
-        sk_eph: Self::EphemeralKey,
     ) -> Result<(SharedSecret<Self>, Self::EncappedKey), HpkeError> {
+        // In DHKEM, ephemeral keys and private keys are both scalars
+        type EphemeralKey = <DhP256HkdfSha256 as KemTrait>::PrivateKey;
+
+        let sk_eph = EphemeralKey::from_bytes(tv.sk_eph.as_ref().unwrap()).unwrap();
         kem::dhp256_hkdfsha256::encap_with_eph(pk_recip, sender_id_keypair, sk_eph)
     }
 }
 
 impl TestableKem for DhP384HkdfSha384 {
-    // In DHKEM, ephemeral keys and private keys are both scalars
-    type EphemeralKey = <DhP384HkdfSha384 as KemTrait>::PrivateKey;
-
     // Call the p384 deterministic encap function we defined in dhkem.rs
-    fn encap_with_eph(
+    fn encaps_det(
+        tv: &MainTestVector,
         pk_recip: &Self::PublicKey,
         sender_id_keypair: Option<(&Self::PrivateKey, &Self::PublicKey)>,
-        sk_eph: Self::EphemeralKey,
     ) -> Result<(SharedSecret<Self>, Self::EncappedKey), HpkeError> {
+        // In DHKEM, ephemeral keys and private keys are both scalars
+        type EphemeralKey = <DhP384HkdfSha384 as KemTrait>::PrivateKey;
+
+        let sk_eph = EphemeralKey::from_bytes(tv.sk_eph.as_ref().unwrap()).unwrap();
         kem::dhp384_hkdfsha384::encap_with_eph(pk_recip, sender_id_keypair, sk_eph)
+    }
+}
+
+impl TestableKem for X25519Kyber768Draft00 {
+    fn encaps_det(
+        tv: &MainTestVector,
+        pk_recip: &Self::PublicKey,
+        sender_keypair: Option<(&Self::PrivateKey, &Self::PublicKey)>,
+    ) -> Result<(SharedSecret<Self>, Self::EncappedKey), HpkeError> {
+        // The encap randomness is given in the TV. Rig a PRNG to output exactly that sequence, and
+        // run the encapsulation process.
+        let seed = tv.encap_randomness.as_ref().unwrap();
+        let mut prng = PromptedRng::new(&seed);
+        let ret = X25519Kyber768Draft00::encap(&pk_recip, sender_keypair, &mut prng);
+        prng.assert_done();
+        ret
     }
 }
 
@@ -117,16 +134,18 @@ struct MainTestVector {
     ikm_recip: Vec<u8>,
     #[serde(default, rename = "ikmS", deserialize_with = "bytes_from_hex_opt")]
     ikm_sender: Option<Vec<u8>>,
-    #[serde(rename = "ikmE", deserialize_with = "bytes_from_hex")]
-    _ikm_eph: Vec<u8>,
+    #[serde(default, rename = "ikmE", deserialize_with = "bytes_from_hex_opt")]
+    _ikm_eph: Option<Vec<u8>>,
+    #[serde(default, rename = "ier", deserialize_with = "bytes_from_hex_opt")]
+    encap_randomness: Option<Vec<u8>>,
 
     // Private keys
     #[serde(rename = "skRm", deserialize_with = "bytes_from_hex")]
     sk_recip: Vec<u8>,
     #[serde(default, rename = "skSm", deserialize_with = "bytes_from_hex_opt")]
     sk_sender: Option<Vec<u8>>,
-    #[serde(rename = "skEm", deserialize_with = "bytes_from_hex")]
-    sk_eph: Vec<u8>,
+    #[serde(default, rename = "skEm", deserialize_with = "bytes_from_hex_opt")]
+    sk_eph: Option<Vec<u8>>,
 
     // Preshared Key Bundle
     #[serde(default, deserialize_with = "bytes_from_hex_opt")]
@@ -139,8 +158,8 @@ struct MainTestVector {
     pk_recip: Vec<u8>,
     #[serde(default, rename = "pkSm", deserialize_with = "bytes_from_hex_opt")]
     pk_sender: Option<Vec<u8>>,
-    #[serde(rename = "pkEm", deserialize_with = "bytes_from_hex")]
-    _pk_eph: Vec<u8>,
+    #[serde(default, rename = "pkEm", deserialize_with = "bytes_from_hex_opt")]
+    _pk_eph: Option<Vec<u8>>,
 
     // Key schedule inputs and computations
     #[serde(rename = "enc", deserialize_with = "bytes_from_hex")]
@@ -226,7 +245,6 @@ fn make_op_mode_r<'a, Kem: KemTrait>(
 fn test_case<A: Aead, Kdf: KdfTrait, Kem: TestableKem>(tv: MainTestVector) {
     // First, deserialize all the relevant keys so we can reconstruct the encapped key
     let recip_keypair = deser_keypair::<Kem>(&tv.sk_recip, &tv.pk_recip);
-    let sk_eph = <Kem as TestableKem>::EphemeralKey::from_bytes(&tv.sk_eph).unwrap();
     let sender_keypair = {
         let pk_sender = &tv.pk_sender.as_ref();
         tv.sk_sender
@@ -241,7 +259,7 @@ fn test_case<A: Aead, Kdf: KdfTrait, Kem: TestableKem>(tv: MainTestVector) {
         assert_serializable_eq!(recip_keypair.1, derived_kp.1, "pk recip doesn't match");
     }
     if let Some(sks) = sender_keypair.as_ref() {
-        let derived_kp = Kem::derive_keypair(&tv.ikm_sender.unwrap());
+        let derived_kp = Kem::derive_keypair(tv.ikm_sender.as_ref().unwrap());
         assert_serializable_eq!(sks.0, derived_kp.0, "sk sender doesn't match");
         assert_serializable_eq!(sks.1, derived_kp.1, "pk sender doesn't match");
     }
@@ -250,9 +268,9 @@ fn test_case<A: Aead, Kdf: KdfTrait, Kem: TestableKem>(tv: MainTestVector) {
 
     // Now derive the encapped key with the deterministic encap function, using all the inputs
     // above
-    let (shared_secret, encapped_key) = {
+    let (shared_secret, encapped_key): (kem::SharedSecret<Kem>, _) = {
         let sender_keypair_ref = sender_keypair.as_ref().map(|&(ref sk, ref pk)| (sk, pk));
-        Kem::encap_with_eph(&pk_recip, sender_keypair_ref, sk_eph).expect("encap failed")
+        TestableKem::encaps_det(&tv, &pk_recip, sender_keypair_ref).expect("encap failed")
     };
 
     // Assert that the derived shared secret key is identical to the one provided
@@ -361,32 +379,43 @@ macro_rules! dispatch_testcase {
 
 #[test]
 fn kat_test() {
-    let file = File::open("test-vectors-5f503c5.json").unwrap();
-    let tvs: Vec<MainTestVector> = serde_json::from_reader(file).unwrap();
+    for file_name in [
+        "test-vectors-5f503c5.json",
+        "test-vectors-xyber768d00-02.json",
+    ] {
+        let file = File::open(file_name).unwrap();
+        let tvs: Vec<MainTestVector> = serde_json::from_reader(file).unwrap();
 
-    for tv in tvs.into_iter() {
-        // Ignore everything that doesn't use X25519, P256, or P384, since that's all we support
-        // right now
-        if tv.kem_id != X25519HkdfSha256::KEM_ID
-            && tv.kem_id != DhP256HkdfSha256::KEM_ID
-            && tv.kem_id != DhP384HkdfSha384::KEM_ID
-        {
-            continue;
+        for tv in tvs.into_iter() {
+            // Ignore everything that doesn't use X25519, P256, P384,
+            // or X25519Kyber768Draft00 since that's all we support right now
+            if tv.kem_id != X25519HkdfSha256::KEM_ID
+                && tv.kem_id != DhP256HkdfSha256::KEM_ID
+                && tv.kem_id != DhP384HkdfSha384::KEM_ID
+                && tv.kem_id != X25519Kyber768Draft00::KEM_ID
+            {
+                continue;
+            }
+
+            // This unrolls into 36 `if let` statements
+            dispatch_testcase!(
+                tv,
+                (AesGcm128, AesGcm256, ChaCha20Poly1305, ExportOnlyAead),
+                (HkdfSha256, HkdfSha384, HkdfSha512),
+                (
+                    X25519HkdfSha256,
+                    DhP256HkdfSha256,
+                    DhP384HkdfSha384,
+                    X25519Kyber768Draft00
+                )
+            );
+
+            // The above macro has a `continue` in every branch. We only get to this line if it failed
+            // to match every combination of the above primitives.
+            panic!(
+                "Unrecognized (AEAD ID, KDF ID, KEM ID) combo: ({}, {}, {})",
+                tv.aead_id, tv.kdf_id, tv.kem_id
+            );
         }
-
-        // This unrolls into 36 `if let` statements
-        dispatch_testcase!(
-            tv,
-            (AesGcm128, AesGcm256, ChaCha20Poly1305, ExportOnlyAead),
-            (HkdfSha256, HkdfSha384, HkdfSha512),
-            (X25519HkdfSha256, DhP256HkdfSha256, DhP384HkdfSha384)
-        );
-
-        // The above macro has a `continue` in every branch. We only get to this line if it failed
-        // to match every combination of the above primitives.
-        panic!(
-            "Unrecognized (AEAD ID, KDF ID, KEM ID) combo: ({}, {}, {})",
-            tv.aead_id, tv.kdf_id, tv.kem_id
-        );
     }
 }
