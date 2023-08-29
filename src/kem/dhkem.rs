@@ -8,11 +8,9 @@ macro_rules! impl_dhkem {
         $kem_id:literal,
         $doc_str:expr
     ) => {
+        pub use $mod_name::$kem_name;
 
-        // Export everything from the crate we define
-        pub use $mod_name::*;
-
-        pub(crate) mod $mod_name {
+        pub mod $mod_name {
             use crate::{
                 dhkex::{DhKeyExchange, MAX_PUBKEY_SIZE},
                 kdf::{extract_and_expand, Kdf as KdfTrait},
