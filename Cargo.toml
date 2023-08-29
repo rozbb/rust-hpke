@@ -44,9 +44,9 @@ subtle = { version = "2.4", default-features = false }
 zeroize = { version = "1", default-features = false, features = ["zeroize_derive"] }
 
 [dependencies.x25519-dalek]
-version = "2.0.0-pre.1"
+version = "2.0.0"
 default-features = false
-features = ["u64_backend"]
+features = ["static_secrets"]
 optional = true
 
 [dev-dependencies]
