@@ -10,7 +10,7 @@ macro_rules! impl_dhkem {
     ) => {
         pub use $mod_name::$kem_name;
 
-        pub mod $mod_name {
+        pub(crate) mod $mod_name {
             use crate::{
                 dhkex::{DhKeyExchange, MAX_PUBKEY_SIZE},
                 kdf::{extract_and_expand, Kdf as KdfTrait},
