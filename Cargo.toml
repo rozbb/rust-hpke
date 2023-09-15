@@ -41,13 +41,8 @@ p384 = { version = "0.13", default-features = false, features = ["arithmetic", "
 sha2 = { version = "0.10", default-features = false }
 serde = { version = "1.0", default-features = false, optional = true }
 subtle = { version = "2.4", default-features = false }
+x25519-dalek = { version = "2", default-features = false, features = ["static_secrets"], optional = true }
 zeroize = { version = "1", default-features = false, features = ["zeroize_derive"] }
-
-[dependencies.x25519-dalek]
-version = "2.0.0-pre.1"
-default-features = false
-features = ["u64_backend"]
-optional = true
 
 [dev-dependencies]
 criterion = { version = "0.4", features = ["html_reports"] }
