@@ -192,8 +192,10 @@ pub trait Serializable {
     type OutputSize: ArrayLength<u8>;
 
     fn to_bytes(&self) -> GenericArray<u8, Self::OutputSize> {
+        // Make a buffer of the correct size and write to it
         let mut buf = GenericArray::default();
         self.write_to_bytes(&mut buf);
+        // Return the buffer
         buf
     }
 

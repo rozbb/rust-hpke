@@ -106,7 +106,7 @@ macro_rules! nistp_dhkex {
                     );
 
                     // SecretKeys already know how to convert to bytes
-                    buf.copy_from_slice(&self.to_bytes());
+                    buf.copy_from_slice(&self.0.to_bytes());
                 }
             }
 
