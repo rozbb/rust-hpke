@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changes
 
 * Updated `x25519-dalek` to 2.0
+* Updated `subtle` to 2.5
 
 ## [0.10.0] - 2022-10-01
 
