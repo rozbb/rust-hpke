@@ -8,9 +8,7 @@ macro_rules! impl_dhkem {
         $kem_id:literal,
         $doc_str:expr
     ) => {
-
-        // Export everything from the crate we define
-        pub use $mod_name::*;
+        pub use $mod_name::$kem_name;
 
         pub(crate) mod $mod_name {
             use crate::{
