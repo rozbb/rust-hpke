@@ -56,12 +56,22 @@ macro_rules! nistp_dhkex {
             impl Serializable for PublicKey {
                 type OutputSize = $pubkey_size;
 
-                fn to_bytes(&self) -> GenericArray<u8, Self::OutputSize> {
+                fn write_to_bytes(&self, buf: &mut [u8]) {
+                    let size = Self::size();
+                    assert_eq!(
+                        size,
+                        buf.len(),
+                        "serialized size ({}) does not match output buffer length ({})",
+                        size,
+                        buf.len()
+                    );
+
                     // Get the uncompressed pubkey encoding
                     let encoded = self.0.as_affine().to_encoded_point(false);
                     // Serialize it
-                    GenericArray::clone_from_slice(encoded.as_bytes())
+                    buf.copy_from_slice(encoded.as_bytes());
                 }
+
             }
 
             // Everything is serialized and deserialized in uncompressed form
@@ -85,9 +95,18 @@ macro_rules! nistp_dhkex {
             impl Serializable for PrivateKey {
                 type OutputSize = $privkey_size;
 
-                fn to_bytes(&self) -> GenericArray<u8, Self::OutputSize> {
+                fn write_to_bytes(&self, buf: &mut [u8]) {
+                    let size = Self::size();
+                    assert_eq!(
+                        size,
+                        buf.len(),
+                        "serialized size ({}) does not match output buffer length ({})",
+                        size,
+                        buf.len()
+                    );
+
                     // SecretKeys already know how to convert to bytes
-                    self.0.to_bytes()
+                    buf.copy_from_slice(&self.to_bytes());
                 }
             }
 
@@ -116,10 +135,19 @@ macro_rules! nistp_dhkex {
                 // resulting elliptic curve point.
                 type OutputSize = $ss_size;
 
-                fn to_bytes(&self) -> GenericArray<u8, Self::OutputSize> {
+                fn write_to_bytes(&self, buf: &mut [u8]) {
+                    let size = Self::size();
+                    assert_eq!(
+                        size,
+                        buf.len(),
+                        "serialized size ({}) does not match output buffer length ({})",
+                        size,
+                        buf.len()
+                    );
+
                     // elliptic_curve::ecdh::SharedSecret::raw_secret_bytes returns the serialized
                     // x-coordinate
-                    *self.0.raw_secret_bytes()
+                    buf.copy_from_slice(self.0.raw_secret_bytes())
                 }
             }
 

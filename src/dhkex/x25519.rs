@@ -5,10 +5,7 @@ use crate::{
     Deserializable, HpkeError, Serializable,
 };
 
-use generic_array::{
-    typenum::{self, Unsigned},
-    GenericArray,
-};
+use generic_array::typenum::{self, Unsigned};
 use subtle::{Choice, ConstantTimeEq};
 
 // We wrap the types in order to abstract away the dalek dep
@@ -46,8 +43,17 @@ impl Serializable for PublicKey {
     type OutputSize = typenum::U32;
 
     // Dalek lets us convert pubkeys to [u8; 32]
-    fn to_bytes(&self) -> GenericArray<u8, typenum::U32> {
-        GenericArray::clone_from_slice(self.0.as_bytes())
+    fn write_to_bytes(&self, buf: &mut [u8]) {
+        let size = Self::size();
+        assert_eq!(
+            size,
+            buf.len(),
+            "serialized size ({}) does not match output buffer length ({})",
+            size,
+            buf.len()
+        );
+
+        buf.copy_from_slice(self.0.as_bytes());
     }
 }
 
@@ -70,8 +76,17 @@ impl Serializable for PrivateKey {
     type OutputSize = typenum::U32;
 
     // Dalek lets us convert scalars to [u8; 32]
-    fn to_bytes(&self) -> GenericArray<u8, typenum::U32> {
-        GenericArray::clone_from_slice(&self.0.to_bytes())
+    fn write_to_bytes(&self, buf: &mut [u8]) {
+        let size = Self::size();
+        assert_eq!(
+            size,
+            buf.len(),
+            "serialized size ({}) does not match output buffer length ({})",
+            size,
+            buf.len()
+        );
+
+        buf.copy_from_slice(self.0.as_bytes());
     }
 }
 impl Deserializable for PrivateKey {
@@ -102,9 +117,18 @@ impl Serializable for KexResult {
     type OutputSize = typenum::U32;
 
     // curve25519's point representation is our DH result. We don't have to do anything special.
-    fn to_bytes(&self) -> GenericArray<u8, typenum::U32> {
+    fn write_to_bytes(&self, buf: &mut [u8]) {
+        let size = Self::size();
+        assert_eq!(
+            size,
+            buf.len(),
+            "serialized size ({}) does not match output buffer length ({})",
+            size,
+            buf.len()
+        );
+
         // Dalek lets us convert shared secrets to to [u8; 32]
-        GenericArray::clone_from_slice(self.0.as_bytes())
+        buf.copy_from_slice(self.0.as_bytes());
     }
 }
 

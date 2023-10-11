@@ -20,7 +20,6 @@ macro_rules! impl_dhkem {
             };
 
             use digest::OutputSizeUser;
-            use generic_array::GenericArray;
             use rand_core::{CryptoRng, RngCore};
 
             // Define convenience types
@@ -46,8 +45,15 @@ macro_rules! impl_dhkem {
                 type OutputSize = <<$dhkex as DhKeyExchange>::PublicKey as Serializable>::OutputSize;
 
                 // Pass to underlying to_bytes() impl
-                fn to_bytes(&self) -> GenericArray<u8, Self::OutputSize> {
-                    self.0.to_bytes()
+                fn write_to_bytes(&self, buf: &mut [u8]) {
+                    let size = Self::size();
+                    assert_eq!(
+                        size, buf.len(),
+                        "serialized size ({}) does not match output buffer length ({})",
+                        size, buf.len()
+                    );
+
+                    buf.copy_from_slice(&self.0.to_bytes());
                 }
             }
 

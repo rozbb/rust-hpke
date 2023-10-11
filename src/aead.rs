@@ -139,8 +139,18 @@ impl<A: Aead> Default for AeadTag<A> {
 impl<A: Aead> Serializable for AeadTag<A> {
     type OutputSize = <A::AeadImpl as BaseAeadCore>::TagSize;
 
-    fn to_bytes(&self) -> GenericArray<u8, Self::OutputSize> {
-        self.0.clone()
+    // Pass to underlying to_bytes() impl
+    fn write_to_bytes(&self, buf: &mut [u8]) {
+        let size = Self::size();
+        assert_eq!(
+            size,
+            buf.len(),
+            "serialized size ({}) does not match output buffer length ({})",
+            size,
+            buf.len()
+        );
+
+        buf.copy_from_slice(&self.0);
     }
 }
 
