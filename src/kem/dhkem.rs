@@ -15,12 +15,11 @@ macro_rules! impl_dhkem {
                 dhkex::{DhKeyExchange, MAX_PUBKEY_SIZE},
                 kdf::{extract_and_expand, Kdf as KdfTrait},
                 kem::{Kem as KemTrait, SharedSecret},
-                util::kem_suite_id,
+                util::{enforce_outbuf_len, kem_suite_id},
                 Deserializable, HpkeError, Serializable,
             };
 
             use digest::OutputSizeUser;
-            use generic_array::GenericArray;
             use rand_core::{CryptoRng, RngCore};
 
             // Define convenience types
@@ -46,8 +45,11 @@ macro_rules! impl_dhkem {
                 type OutputSize = <<$dhkex as DhKeyExchange>::PublicKey as Serializable>::OutputSize;
 
                 // Pass to underlying to_bytes() impl
-                fn to_bytes(&self) -> GenericArray<u8, Self::OutputSize> {
-                    self.0.to_bytes()
+                fn write_exact(&self, buf: &mut [u8]) {
+                    // Check the length is correct and panic if not
+                    enforce_outbuf_len::<Self>(buf);
+
+                    buf.copy_from_slice(&self.0.to_bytes());
                 }
             }
 

@@ -1,14 +1,11 @@
 use crate::{
     dhkex::{DhError, DhKeyExchange},
     kdf::{labeled_extract, Kdf as KdfTrait, LabeledExpand},
-    util::{enforce_equal_len, KemSuiteId},
+    util::{enforce_equal_len, enforce_outbuf_len, KemSuiteId},
     Deserializable, HpkeError, Serializable,
 };
 
-use generic_array::{
-    typenum::{self, Unsigned},
-    GenericArray,
-};
+use generic_array::typenum::{self, Unsigned};
 use subtle::{Choice, ConstantTimeEq};
 
 // We wrap the types in order to abstract away the dalek dep
@@ -46,8 +43,11 @@ impl Serializable for PublicKey {
     type OutputSize = typenum::U32;
 
     // Dalek lets us convert pubkeys to [u8; 32]
-    fn to_bytes(&self) -> GenericArray<u8, typenum::U32> {
-        GenericArray::clone_from_slice(self.0.as_bytes())
+    fn write_exact(&self, buf: &mut [u8]) {
+        // Check the length is correct and panic if not
+        enforce_outbuf_len::<Self>(buf);
+
+        buf.copy_from_slice(self.0.as_bytes());
     }
 }
 
@@ -70,8 +70,11 @@ impl Serializable for PrivateKey {
     type OutputSize = typenum::U32;
 
     // Dalek lets us convert scalars to [u8; 32]
-    fn to_bytes(&self) -> GenericArray<u8, typenum::U32> {
-        GenericArray::clone_from_slice(&self.0.to_bytes())
+    fn write_exact(&self, buf: &mut [u8]) {
+        // Check the length is correct and panic if not
+        enforce_outbuf_len::<Self>(buf);
+
+        buf.copy_from_slice(self.0.as_bytes());
     }
 }
 impl Deserializable for PrivateKey {
@@ -102,9 +105,12 @@ impl Serializable for KexResult {
     type OutputSize = typenum::U32;
 
     // curve25519's point representation is our DH result. We don't have to do anything special.
-    fn to_bytes(&self) -> GenericArray<u8, typenum::U32> {
+    fn write_exact(&self, buf: &mut [u8]) {
+        // Check the length is correct and panic if not
+        enforce_outbuf_len::<Self>(buf);
+
         // Dalek lets us convert shared secrets to to [u8; 32]
-        GenericArray::clone_from_slice(self.0.as_bytes())
+        buf.copy_from_slice(self.0.as_bytes());
     }
 }
 
