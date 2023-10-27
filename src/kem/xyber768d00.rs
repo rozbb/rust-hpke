@@ -2,7 +2,7 @@ use crate::{
     kdf::{labeled_extract, HkdfSha256, LabeledExpand},
     kem::{Kem as KemTrait, SharedSecret, X25519HkdfSha256},
     util::enforce_equal_len,
-    util::kem_suite_id,
+    util::{enforce_outbuf_len, kem_suite_id},
     Deserializable, HpkeError, Serializable,
 };
 
@@ -33,9 +33,14 @@ type XyberPrivkeyLen = <<typenum::U1000 as core::ops::Add<typenum::U1000>>::Outp
 impl Serializable for EncappedKey {
     type OutputSize = XyberEncappedKeyLen;
 
-    fn to_bytes(&self) -> GenericArray<u8, Self::OutputSize> {
-        // Output X25519 encapped key || Kyber encapped key
-        self.x.to_bytes().concat(self.k)
+    fn write_exact(&self, buf: &mut [u8]) {
+        // Check the length is correct and panic if not
+        enforce_outbuf_len::<Self>(buf);
+
+        // Write X25519 encapped key || Kyber encapped key
+        let (x_buf, kyber_buf) = buf.split_at_mut(32);
+        self.x.write_exact(x_buf);
+        kyber_buf.copy_from_slice(&self.k);
     }
 }
 
@@ -57,9 +62,14 @@ impl Deserializable for EncappedKey {
 impl Serializable for PublicKey {
     type OutputSize = XyberPubkeyLen;
 
-    fn to_bytes(&self) -> GenericArray<u8, Self::OutputSize> {
-        // Output X25519 pubkey || Kyber pubkey
-        self.x.to_bytes().concat(self.k)
+    fn write_exact(&self, buf: &mut [u8]) {
+        // Check the length is correct and panic if not
+        enforce_outbuf_len::<Self>(buf);
+
+        // Write X25519 pubkey || Kyber pubkey
+        let (x_buf, kyber_buf) = buf.split_at_mut(32);
+        self.x.write_exact(x_buf);
+        kyber_buf.copy_from_slice(&self.k);
     }
 }
 
@@ -81,9 +91,14 @@ impl Deserializable for PublicKey {
 impl Serializable for PrivateKey {
     type OutputSize = XyberPrivkeyLen;
 
-    fn to_bytes(&self) -> GenericArray<u8, Self::OutputSize> {
-        // Output X25519 privkey || Kyber privkey
-        self.x.to_bytes().concat(self.k)
+    fn write_exact(&self, buf: &mut [u8]) {
+        // Check the length is correct and panic if not
+        enforce_outbuf_len::<Self>(buf);
+
+        // Write X25519 privkey || Kyber privkey
+        let (x_buf, kyber_buf) = buf.split_at_mut(32);
+        self.x.write_exact(x_buf);
+        kyber_buf.copy_from_slice(&self.k);
     }
 }
 
@@ -135,7 +150,7 @@ pub struct EncappedKey {
 
 impl ConstantTimeEq for PrivateKey {
     fn ct_eq(&self, other: &Self) -> Choice {
-        self.x.to_bytes().ct_eq(&other.x.to_bytes()) & self.k.ct_eq(&other.k)
+        self.x.ct_eq(&other.x) & self.k.ct_eq(&other.k)
     }
 }
 
