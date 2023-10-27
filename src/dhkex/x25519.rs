@@ -1,7 +1,7 @@
 use crate::{
     dhkex::{DhError, DhKeyExchange},
     kdf::{labeled_extract, Kdf as KdfTrait, LabeledExpand},
-    util::{enforce_equal_len, KemSuiteId},
+    util::{enforce_equal_len, enforce_outbuf_len, KemSuiteId},
     Deserializable, HpkeError, Serializable,
 };
 
@@ -43,15 +43,9 @@ impl Serializable for PublicKey {
     type OutputSize = typenum::U32;
 
     // Dalek lets us convert pubkeys to [u8; 32]
-    fn write_to_bytes(&self, buf: &mut [u8]) {
-        let size = Self::size();
-        assert_eq!(
-            size,
-            buf.len(),
-            "serialized size ({}) does not match output buffer length ({})",
-            size,
-            buf.len()
-        );
+    fn write_exact(&self, buf: &mut [u8]) {
+        // Check the length is correct and panic if not
+        enforce_outbuf_len::<Self>(buf);
 
         buf.copy_from_slice(self.0.as_bytes());
     }
@@ -76,15 +70,9 @@ impl Serializable for PrivateKey {
     type OutputSize = typenum::U32;
 
     // Dalek lets us convert scalars to [u8; 32]
-    fn write_to_bytes(&self, buf: &mut [u8]) {
-        let size = Self::size();
-        assert_eq!(
-            size,
-            buf.len(),
-            "serialized size ({}) does not match output buffer length ({})",
-            size,
-            buf.len()
-        );
+    fn write_exact(&self, buf: &mut [u8]) {
+        // Check the length is correct and panic if not
+        enforce_outbuf_len::<Self>(buf);
 
         buf.copy_from_slice(self.0.as_bytes());
     }
@@ -117,15 +105,9 @@ impl Serializable for KexResult {
     type OutputSize = typenum::U32;
 
     // curve25519's point representation is our DH result. We don't have to do anything special.
-    fn write_to_bytes(&self, buf: &mut [u8]) {
-        let size = Self::size();
-        assert_eq!(
-            size,
-            buf.len(),
-            "serialized size ({}) does not match output buffer length ({})",
-            size,
-            buf.len()
-        );
+    fn write_exact(&self, buf: &mut [u8]) {
+        // Check the length is correct and panic if not
+        enforce_outbuf_len::<Self>(buf);
 
         // Dalek lets us convert shared secrets to to [u8; 32]
         buf.copy_from_slice(self.0.as_bytes());

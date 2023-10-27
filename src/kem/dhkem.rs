@@ -15,7 +15,7 @@ macro_rules! impl_dhkem {
                 dhkex::{DhKeyExchange, MAX_PUBKEY_SIZE},
                 kdf::{extract_and_expand, Kdf as KdfTrait},
                 kem::{Kem as KemTrait, SharedSecret},
-                util::kem_suite_id,
+                util::{enforce_outbuf_len, kem_suite_id},
                 Deserializable, HpkeError, Serializable,
             };
 
@@ -45,13 +45,9 @@ macro_rules! impl_dhkem {
                 type OutputSize = <<$dhkex as DhKeyExchange>::PublicKey as Serializable>::OutputSize;
 
                 // Pass to underlying to_bytes() impl
-                fn write_to_bytes(&self, buf: &mut [u8]) {
-                    let size = Self::size();
-                    assert_eq!(
-                        size, buf.len(),
-                        "serialized size ({}) does not match output buffer length ({})",
-                        size, buf.len()
-                    );
+                fn write_exact(&self, buf: &mut [u8]) {
+                    // Check the length is correct and panic if not
+                    enforce_outbuf_len::<Self>(buf);
 
                     buf.copy_from_slice(&self.0.to_bytes());
                 }

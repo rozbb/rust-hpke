@@ -4,7 +4,7 @@ use crate::{
     kdf::{Kdf as KdfTrait, LabeledExpand, SimpleHkdf},
     kem::Kem as KemTrait,
     setup::ExporterSecret,
-    util::{enforce_equal_len, full_suite_id, FullSuiteId},
+    util::{enforce_equal_len, enforce_outbuf_len, full_suite_id, FullSuiteId},
     Deserializable, HpkeError, Serializable,
 };
 
@@ -140,15 +140,9 @@ impl<A: Aead> Serializable for AeadTag<A> {
     type OutputSize = <A::AeadImpl as BaseAeadCore>::TagSize;
 
     // Pass to underlying to_bytes() impl
-    fn write_to_bytes(&self, buf: &mut [u8]) {
-        let size = Self::size();
-        assert_eq!(
-            size,
-            buf.len(),
-            "serialized size ({}) does not match output buffer length ({})",
-            size,
-            buf.len()
-        );
+    fn write_exact(&self, buf: &mut [u8]) {
+        // Check the length is correct and panic if not
+        enforce_outbuf_len::<Self>(buf);
 
         buf.copy_from_slice(&self.0);
     }
@@ -769,5 +763,17 @@ mod test {
             ChaCha20Poly1305,
             crate::kem::DhP384HkdfSha384
         );
+    }
+
+    /// Tests that Serialize::write_exact() panics when given a buffer of incorrect length
+    #[should_panic]
+    #[test]
+    fn test_write_exact() {
+        // Make an AES-GCM-128 tag (16 bytes) and try to serialize it to a buffer of 17 bytes. It
+        // shouldn't matter that this is sufficient room, since write_exact needs exactly the write
+        // size buffer
+        let tag = AeadTag::<AesGcm128>::default();
+        let mut buf = [0u8; 17];
+        tag.write_exact(&mut buf);
     }
 }
