@@ -31,6 +31,12 @@ jobs:
           toolchain: ${{ matrix.toolchain }}
           override: true
 
+      - name: Run cargo test with just K256 and serde enabled
+        env:
+          CARGO_INCREMENTAL: 0
+          RUSTFLAGS: -D warnings -A dead_code -A unused_imports
+        run: cargo test --no-default-features --features="k256,serde_impls"
+
       - name: Run cargo test with just X25519 enabled
         env:
           CARGO_INCREMENTAL: 0
