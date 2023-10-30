@@ -270,6 +270,18 @@ nistp_dhkex!(
     0x01           // RFC 9180 §7.1.3: The `bitmask` in DeriveKeyPair to be 0x01 for P-521
 );
 
+
+#[cfg(feature = "k256")]
+nistp_dhkex!(
+    "K-256",
+    DhK256,
+    k256,
+    typenum::U65,
+    typenum::U32,
+    typenum::U32,
+    0xFF
+);
+
 #[cfg(test)]
 mod tests {
     use crate::{dhkex::DhKeyExchange, test_util::dhkex_gen_keypair, Deserializable, Serializable};
