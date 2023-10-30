@@ -193,9 +193,24 @@ impl core::fmt::Display for HpkeError {
 
 /// Implemented by types that have a fixed-length byte representation
 pub trait Serializable {
+    /// Serialized size in bytes
     type OutputSize: ArrayLength<u8>;
 
-    fn to_bytes(&self) -> GenericArray<u8, Self::OutputSize>;
+    /// Serializes `self` to the given slice. `buf` MUST have length equal to `Self::size()`.
+    ///
+    /// Panics
+    /// ======
+    /// Panics if `buf.len() != Self::size()`.
+    fn write_exact(&self, buf: &mut [u8]);
+
+    /// Serializes `self` to a new array
+    fn to_bytes(&self) -> GenericArray<u8, Self::OutputSize> {
+        // Make a buffer of the correct size and write to it
+        let mut buf = GenericArray::default();
+        self.write_exact(&mut buf);
+        // Return the buffer
+        buf
+    }
 
     /// Returns the size (in bytes) of this type when serialized
     fn size() -> usize {

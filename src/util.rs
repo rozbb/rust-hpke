@@ -1,4 +1,4 @@
-use crate::{aead::Aead, kdf::Kdf as KdfTrait, kem::Kem as KemTrait, HpkeError};
+use crate::{aead::Aead, kdf::Kdf as KdfTrait, kem::Kem as KemTrait, HpkeError, Serializable};
 
 use byteorder::{BigEndian, ByteOrder};
 
@@ -92,4 +92,17 @@ pub(crate) fn enforce_equal_len(expected_len: usize, given_len: usize) -> Result
     } else {
         Ok(())
     }
+}
+
+/// Helper function for `Serializable::write_exact`. Takes a buffer and a serializable type `T` and
+/// panics iff `buf.len() != T::size()`.
+pub(crate) fn enforce_outbuf_len<T: Serializable>(buf: &[u8]) {
+    let size = T::size();
+    let buf_len = buf.len();
+    assert!(
+        size == buf_len,
+        "write_exact(): serialized size ({}) does not equal buffer length ({})",
+        size,
+        buf_len,
+    );
 }

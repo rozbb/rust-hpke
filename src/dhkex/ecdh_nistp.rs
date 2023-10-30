@@ -15,7 +15,7 @@ macro_rules! nistp_dhkex {
             use crate::{
                 dhkex::{DhError, DhKeyExchange},
                 kdf::{labeled_extract, Kdf as KdfTrait, LabeledExpand},
-                util::{enforce_equal_len, KemSuiteId},
+                util::{enforce_equal_len, enforce_outbuf_len, KemSuiteId},
                 Deserializable, HpkeError, Serializable,
             };
 
@@ -56,12 +56,16 @@ macro_rules! nistp_dhkex {
             impl Serializable for PublicKey {
                 type OutputSize = $pubkey_size;
 
-                fn to_bytes(&self) -> GenericArray<u8, Self::OutputSize> {
+                fn write_exact(&self, buf: &mut [u8]) {
+                    // Check the length is correct and panic if not
+                    enforce_outbuf_len::<Self>(buf);
+
                     // Get the uncompressed pubkey encoding
                     let encoded = self.0.as_affine().to_encoded_point(false);
                     // Serialize it
-                    GenericArray::clone_from_slice(encoded.as_bytes())
+                    buf.copy_from_slice(encoded.as_bytes());
                 }
+
             }
 
             // Everything is serialized and deserialized in uncompressed form
@@ -85,9 +89,12 @@ macro_rules! nistp_dhkex {
             impl Serializable for PrivateKey {
                 type OutputSize = $privkey_size;
 
-                fn to_bytes(&self) -> GenericArray<u8, Self::OutputSize> {
+                fn write_exact(&self, buf: &mut [u8]) {
+                    // Check the length is correct and panic if not
+                    enforce_outbuf_len::<Self>(buf);
+
                     // SecretKeys already know how to convert to bytes
-                    self.0.to_bytes()
+                    buf.copy_from_slice(&self.0.to_bytes());
                 }
             }
 
@@ -116,10 +123,13 @@ macro_rules! nistp_dhkex {
                 // resulting elliptic curve point.
                 type OutputSize = $ss_size;
 
-                fn to_bytes(&self) -> GenericArray<u8, Self::OutputSize> {
+                fn write_exact(&self, buf: &mut [u8]) {
+                    // Check the length is correct and panic if not
+                    enforce_outbuf_len::<Self>(buf);
+
                     // elliptic_curve::ecdh::SharedSecret::raw_secret_bytes returns the serialized
                     // x-coordinate
-                    *self.0.raw_secret_bytes()
+                    buf.copy_from_slice(self.0.raw_secret_bytes())
                 }
             }
 
