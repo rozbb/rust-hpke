@@ -49,12 +49,6 @@ jobs:
           RUSTFLAGS: -D warnings -A dead_code -A unused_imports
         run: cargo test --no-default-features --features="p384"
 
-      - name: Run cargo test with X25519 and serde impls enabled
-        env:
-          CARGO_INCREMENTAL: 0
-          RUSTFLAGS: -D warnings -A dead_code -A unused_imports
-        run: cargo test --no-default-features --features="x25519,serde_impls"
-
       - name: Run cargo test with all features enabled
         env:
           CARGO_INCREMENTAL: 0
