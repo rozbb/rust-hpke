@@ -126,9 +126,6 @@ mod op_mode;
 mod setup;
 mod single_shot;
 
-#[cfg(feature = "serde_impls")]
-mod serde_impls;
-
 #[doc(inline)]
 pub use kem::Kem;
 #[doc(inline)]
