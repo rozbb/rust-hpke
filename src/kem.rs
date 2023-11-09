@@ -11,57 +11,20 @@ use zeroize::Zeroize;
 mod dhkem;
 pub use dhkem::*;
 
-#[cfg(feature = "serde_impls")]
-use serde::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
-
 /// Represents authenticated encryption functionality
 pub trait Kem: Sized {
     /// The key exchange's public key type. If you want to generate a keypair, see
     /// `Kem::gen_keypair` or `Kem::derive_keypair`
-    #[cfg(feature = "serde_impls")]
-    type PublicKey: Clone
-        + Debug
-        + PartialEq
-        + Eq
-        + Serializable
-        + Deserializable
-        + SerdeSerialize
-        + for<'a> SerdeDeserialize<'a>;
-    /// The key exchange's public key type. If you want to generate a keypair, see
-    /// `Kem::gen_keypair` or `Kem::derive_keypair`
-    #[cfg(not(feature = "serde_impls"))]
     type PublicKey: Clone + Debug + PartialEq + Eq + Serializable + Deserializable;
 
     /// The key exchange's private key type. If you want to generate a keypair, see
     /// `Kem::gen_keypair` or `Kem::derive_keypair`
-    #[cfg(feature = "serde_impls")]
-    type PrivateKey: Clone
-        + PartialEq
-        + Eq
-        + Serializable
-        + Deserializable
-        + SerdeSerialize
-        + for<'a> SerdeDeserialize<'a>;
-
-    /// The key exchange's private key type. If you want to generate a keypair, see
-    /// `Kem::gen_keypair` or `Kem::derive_keypair`
-    #[cfg(not(feature = "serde_impls"))]
     type PrivateKey: Clone + PartialEq + Eq + Serializable + Deserializable;
 
     /// Computes the public key of a given private key
     fn sk_to_pk(sk: &Self::PrivateKey) -> Self::PublicKey;
-
     /// The encapsulated key for this KEM. This is used by the recipient to derive the shared
     /// secret.
-    #[cfg(feature = "serde_impls")]
-    type EncappedKey: Clone
-        + Serializable
-        + Deserializable
-        + SerdeSerialize
-        + for<'a> SerdeDeserialize<'a>;
-    /// The encapsulated key for this KEM. This is used by the recipient to derive the shared
-    /// secret.
-    #[cfg(not(feature = "serde_impls"))]
     type EncappedKey: Clone + Serializable + Deserializable;
 
     /// The size of a shared secret in this KEM
