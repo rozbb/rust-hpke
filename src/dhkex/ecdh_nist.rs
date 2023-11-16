@@ -1,5 +1,5 @@
 // We define all the NIST P- curve ECDH functionalities in one macro
-macro_rules! nistp_dhkex {
+macro_rules! nist_dhkex {
     (
         $curve_name:expr,
         $dh_name:ident,
@@ -238,7 +238,7 @@ macro_rules! nistp_dhkex {
 use generic_array::typenum;
 
 #[cfg(feature = "p256")]
-nistp_dhkex!(
+nist_dhkex!(
     "P-256",
     DhP256,
     p256,
@@ -249,7 +249,7 @@ nistp_dhkex!(
 );
 
 #[cfg(feature = "p384")]
-nistp_dhkex!(
+nist_dhkex!(
     "P-384",
     DhP384,
     p384,
@@ -260,7 +260,7 @@ nistp_dhkex!(
 );
 
 #[cfg(feature = "p521")]
-nistp_dhkex!(
+nist_dhkex!(
     "P-521",
     DhP521,
     p521,
@@ -270,9 +270,8 @@ nistp_dhkex!(
     0x01           // RFC 9180 §7.1.3: The `bitmask` in DeriveKeyPair to be 0x01 for P-521
 );
 
-
 #[cfg(feature = "k256")]
-nistp_dhkex!(
+nist_dhkex!(
     "K-256",
     DhK256,
     k256,
@@ -286,6 +285,8 @@ nistp_dhkex!(
 mod tests {
     use crate::{dhkex::DhKeyExchange, test_util::dhkex_gen_keypair, Deserializable, Serializable};
 
+    #[cfg(feature = "k256")]
+    use super::k256::DhK256;
     #[cfg(feature = "p256")]
     use super::p256::DhP256;
     #[cfg(feature = "p384")]
@@ -410,6 +411,32 @@ mod tests {
         "DDEA"
     );
 
+    #[cfg(feature = "k256")]
+    const K256_PRIVKEYS: &[&[u8]] = &[
+        &hex!("30FBC0D4 1CD01885 333211FF 53B9ED29 BCBDCCC3 FF13625A 82DB61A7 BB8EAE19"),
+        &hex!("A795C287 C132154A 8B96DC81 DC8B4E2F 02BBBAD7 8DAB0567 B59DB1D1 540751F6"),
+    ];
+
+    // The public keys corresponding to the above private keys, in order
+    #[cfg(feature = "k256")]
+    const K256_PUBKEYS: &[&[u8]] = &[
+        &hex!(
+            "04"                                                                      // Uncompressed
+            "59177516 8F328A2A DBCB887A CD287D55 A1025D7D 2B15E193 7278A5EF D1D48B19" // x-coordinate
+            "C00CF075 59320E6D 278A71C9 E58BAE5D 9AB041D7 905C6629 1F4D0845 9C946E18" // y-coordinate
+        ),
+        &hex!(
+            "04"                                                                      // Uncompressed
+            "3EE73144 07753D1B A296DE29 F07B2CD5 505CA94B 614F127E 71F3C19F C7845DAF" // x-coordinate
+            "49C9BB4B F4D00D3B 5411C8EB 86D59A2D CADC5A13 115FA9FE F44D1E0B 7EF11CAB" // y-coordinate
+        ),
+    ];
+
+    // The result of DH(privkey0, pubkey1) or equivalently, DH(privkey1, pubkey0)
+    #[cfg(feature = "k256")]
+    const K256_DH_RES_XCOORD: &[u8] =
+        &hex!("3ADDFBC2 B30E3D1B 1DF262A4 D6CECF73 A11DF8BD 93E0EB21 FC11847C 6F3DDBE2");
+
     //
     // Some helper functions for tests
     //
@@ -497,6 +524,11 @@ mod tests {
     fn test_vector_ecdh_p384() {
         test_vector_ecdh::<DhP384>(&P384_PRIVKEYS[0], &P384_PUBKEYS[1], &P384_DH_RES_XCOORD);
     }
+    #[cfg(feature = "k256")]
+    #[test]
+    fn test_vector_ecdh_k256() {
+        test_vector_ecdh::<DhK256>(&K256_PRIVKEYS[0], &K256_PUBKEYS[1], &K256_DH_RES_XCOORD);
+    }
 
     #[cfg(feature = "p521")]
     #[test]
@@ -515,6 +547,11 @@ mod tests {
     fn test_vector_corresponding_pubkey_p384() {
         test_vector_corresponding_pubkey::<DhP384>(P384_PRIVKEYS, P384_PUBKEYS);
     }
+    #[cfg(feature = "k256")]
+    #[test]
+    fn test_vector_corresponding_pubkey_k256() {
+        test_vector_corresponding_pubkey::<DhK256>(K256_PRIVKEYS, K256_PUBKEYS);
+    }
 
     #[cfg(feature = "p521")]
     #[test]
@@ -532,6 +569,11 @@ mod tests {
     #[test]
     fn test_pubkey_serialize_correctness_p384() {
         test_pubkey_serialize_correctness::<DhP384>();
+    }
+    #[cfg(feature = "k256")]
+    #[test]
+    fn test_pubkey_serialize_correctness_k256() {
+        test_pubkey_serialize_correctness::<DhK256>();
     }
 
     #[cfg(feature = "p521")]
@@ -556,5 +598,11 @@ mod tests {
     #[test]
     fn test_dh_serialize_correctness_p521() {
         test_dh_serialize_correctness::<DhP521>();
+    }
+
+    #[cfg(feature = "k256")]
+    #[test]
+    fn test_dh_serialize_correctness_k256() {
+        test_dh_serialize_correctness::<DhK256>();
     }
 }
