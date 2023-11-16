@@ -274,6 +274,8 @@ nistp_dhkex!(
 mod tests {
     use crate::{dhkex::DhKeyExchange, test_util::dhkex_gen_keypair, Deserializable, Serializable};
 
+    #[cfg(feature = "k256")]
+    use super::k256::DhK256;
     #[cfg(feature = "p256")]
     use super::p256::DhP256;
     #[cfg(feature = "p384")]
@@ -437,6 +439,12 @@ mod tests {
     fn test_vector_ecdh_p384() {
         test_vector_ecdh::<DhP384>(&P384_PRIVKEYS[0], &P384_PUBKEYS[1], &P384_DH_RES_XCOORD);
     }
+    #[cfg(feature = "k256")]
+    #[test]
+    fn test_vector_ecdh_k256() {
+        // TODO: Get some test vectors
+        test_vector_ecdh::<DhK256>(todo!(), todo!(), todo!());
+    }
 
     #[cfg(feature = "p256")]
     #[test]
@@ -447,6 +455,12 @@ mod tests {
     #[test]
     fn test_vector_corresponding_pubkey_p384() {
         test_vector_corresponding_pubkey::<DhP384>(P384_PRIVKEYS, P384_PUBKEYS);
+    }
+    #[cfg(feature = "k256")]
+    #[test]
+    fn test_vector_corresponding_pubkey_k256() {
+        // TODO: Get some test vectors
+        test_vector_corresponding_pubkey::<DhK256>(todo!(), todo!());
     }
 
     #[cfg(feature = "p256")]
@@ -459,16 +473,25 @@ mod tests {
     fn test_pubkey_serialize_correctness_p384() {
         test_pubkey_serialize_correctness::<DhP384>();
     }
+    #[cfg(feature = "k256")]
+    #[test]
+    fn test_pubkey_serialize_correctness_k256() {
+        test_pubkey_serialize_correctness::<DhK256>();
+    }
 
-    #[cfg(feature = "256")]
+    #[cfg(feature = "p256")]
     #[test]
     fn test_dh_serialize_correctness_p256() {
         test_dh_serialize_correctness::<DhP256>();
     }
-
-    #[cfg(feature = "384")]
+    #[cfg(feature = "p384")]
     #[test]
     fn test_dh_serialize_correctness_p384() {
         test_dh_serialize_correctness::<DhP384>();
+    }
+    #[cfg(feature = "k256")]
+    #[test]
+    fn test_dh_serialize_correctness_k256() {
+        test_dh_serialize_correctness::<DhK256>();
     }
 }
