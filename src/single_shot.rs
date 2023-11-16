@@ -247,4 +247,12 @@ mod test {
         crate::kdf::HkdfSha384,
         crate::kem::dhp384_hkdfsha384::DhP384HkdfSha384
     );
+
+    #[cfg(feature = "p521")]
+    test_single_shot_correctness!(
+        test_single_shot_correctness_p521,
+        ChaCha20Poly1305,
+        crate::kdf::HkdfSha512,
+        crate::kem::dhp521_hkdfsha512::DhP521HkdfSha512
+    );
 }

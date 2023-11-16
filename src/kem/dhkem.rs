@@ -380,3 +380,14 @@ impl_dhkem!(
     0x0011,
     "Represents DHKEM(P-384, HKDF-SHA384)"
 );
+
+// Implement DHKEM(P-521, HKDF-SHA512)
+#[cfg(feature = "p521")]
+impl_dhkem!(
+    dhp521_hkdfsha512,
+    DhP521HkdfSha512,
+    crate::dhkex::ecdh_nistp::p521::DhP521,
+    crate::kdf::HkdfSha512,
+    0x0012,
+    "Represents DHKEM(P-521, HKDF-SHA512)"
+);
