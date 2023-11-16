@@ -391,4 +391,22 @@ mod test {
             crate::kem::dhp384_hkdfsha384::DhP384HkdfSha384
         );
     }
+
+    #[cfg(feature = "k256")]
+    mod k256_tests {
+        use super::*;
+
+        test_setup_correctness!(
+            test_setup_correctness_k256,
+            ChaCha20Poly1305,
+            HkdfSha256,
+            crate::kem::dhk256_hkdfsha256::DhK256HkdfSha256
+        );
+        test_setup_soundness!(
+            test_setup_soundness_k256,
+            ChaCha20Poly1305,
+            HkdfSha256,
+            crate::kem::dhk256_hkdfsha256::DhK256HkdfSha256
+        );
+    }
 }
