@@ -51,7 +51,6 @@ Feature flag list:
 * `x25519` - Enables X25519-based KEMs
 * `p256` - Enables NIST P-256-based KEMs
 * `p384` - Enables NIST P-384-based KEMs
-* `serde_impls` - Includes implementations of `serde::Serialize` and `serde::Deserialize` for all `hpke::Serializable` and `hpke::Deserializable` types
 * `std` - Includes an implementation of `std::error::Error` for `HpkeError`. Also does what `alloc` does.
 
 For info on how to omit or include feature flags, see the [cargo docs on features](https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html#choosing-features).
@@ -60,6 +59,13 @@ Usage Examples
 --------------
 
 See the [client-server](examples/client_server.rs) example for an idea of how to use HPKE.
+
+Breaking changes
+----------------
+
+### Breaking changes in v0.12
+
+The `serde_impls` feature was removed. If you were using this and require backwards compatible serialization/deserialization, see the wiki page [here](https://github.com/rozbb/rust-hpke/wiki/Migrating-away-from-the-%60serde_impls%60-feature).
 
 MSRV
 ----
