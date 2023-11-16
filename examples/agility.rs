@@ -15,7 +15,9 @@
 use hpke::{
     aead::{Aead, AeadCtxR, AeadCtxS, AeadTag, AesGcm128, AesGcm256, ChaCha20Poly1305},
     kdf::{HkdfSha256, HkdfSha384, HkdfSha512, Kdf as KdfTrait},
-    kem::{DhP256HkdfSha256, DhP384HkdfSha384, Kem as KemTrait, X25519HkdfSha256},
+    kem::{
+        DhP256HkdfSha256, DhP384HkdfSha384, DhP521HkdfSha512, Kem as KemTrait, X25519HkdfSha256,
+    },
     setup_receiver, setup_sender, Deserializable, HpkeError, OpModeR, OpModeS, PskBundle,
     Serializable,
 };
@@ -309,6 +311,7 @@ fn agile_gen_keypair<R: CryptoRng + RngCore>(kem_alg: KemAlg, csprng: &mut R) ->
         KemAlg::X25519HkdfSha256 => do_gen_keypair!(X25519HkdfSha256, kem_alg, csprng),
         KemAlg::DhP256HkdfSha256 => do_gen_keypair!(DhP256HkdfSha256, kem_alg, csprng),
         KemAlg::DhP384HkdfSha384 => do_gen_keypair!(DhP384HkdfSha384, kem_alg, csprng),
+        KemAlg::DhP521HkdfSha512 => do_gen_keypair!(DhP521HkdfSha512, kem_alg, csprng),
         _ => unimplemented!(),
     }
 }
@@ -572,7 +575,7 @@ fn agile_setup_sender<R: CryptoRng + RngCore>(
         res, to_match,
         (ChaCha20Poly1305, AesGcm128, AesGcm256),
         (HkdfSha256, HkdfSha384, HkdfSha512),
-        (X25519HkdfSha256, DhP256HkdfSha256),
+        (X25519HkdfSha256, DhP256HkdfSha256, DhP384HkdfSha384, DhP521HkdfSha512),
         R,
         do_setup_sender,
             mode,
@@ -655,7 +658,7 @@ fn agile_setup_receiver(
         res, to_match,
         (ChaCha20Poly1305, AesGcm128, AesGcm256),
         (HkdfSha256, HkdfSha384, HkdfSha512),
-        (X25519HkdfSha256, DhP256HkdfSha256),
+        (X25519HkdfSha256, DhP256HkdfSha256, DhP384HkdfSha384, DhP521HkdfSha512),
         Unit,
         do_setup_receiver,
             mode,
@@ -683,6 +686,7 @@ fn main() {
         KemAlg::X25519HkdfSha256,
         KemAlg::DhP256HkdfSha256,
         KemAlg::DhP384HkdfSha384,
+        KemAlg::DhP521HkdfSha512,
     ];
     let supported_kdf_algs = &[KdfAlg::HkdfSha256, KdfAlg::HkdfSha384, KdfAlg::HkdfSha512];
 
