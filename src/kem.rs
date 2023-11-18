@@ -215,4 +215,12 @@ mod tests {
         test_encap_correctness!(test_encap_correctness_p384, crate::kem::DhP384HkdfSha384);
         test_encapped_serialize!(test_encapped_serialize_p384, crate::kem::DhP384HkdfSha384);
     }
+
+    #[cfg(feature = "p521")]
+    mod p521_tests {
+        use super::*;
+
+        test_encap_correctness!(test_encap_correctness_p521, crate::kem::DhP521HkdfSha512);
+        test_encapped_serialize!(test_encapped_serialize_p521, crate::kem::DhP521HkdfSha512);
+    }
 }

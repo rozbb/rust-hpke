@@ -391,4 +391,23 @@ mod test {
             crate::kem::dhp384_hkdfsha384::DhP384HkdfSha384
         );
     }
+
+    #[cfg(feature = "p521")]
+    mod p521_tests {
+        use super::*;
+        use crate::kdf::HkdfSha512;
+
+        test_setup_correctness!(
+            test_setup_correctness_p521,
+            ChaCha20Poly1305,
+            HkdfSha512,
+            crate::kem::dhp521_hkdfsha512::DhP521HkdfSha512
+        );
+        test_setup_soundness!(
+            test_setup_soundness_p521,
+            ChaCha20Poly1305,
+            HkdfSha512,
+            crate::kem::dhp521_hkdfsha512::DhP521HkdfSha512
+        );
+    }
 }
