@@ -266,7 +266,7 @@ nistp_dhkex!(
     p521,
     typenum::U133, // RFC 9180 §7.1: Npk of DHKEM(P-521, HKDF-SHA512) is 133
     typenum::U66,  // RFC 9180 §7.1: Nsk of DHKEM(P-521, HKDF-SHA512) is 66
-    typenum::U66,  // RFC 9180 §4.1: Ndh of P-521 is equal to 64
+    typenum::U66,  // RFC 9180 §4.1: Ndh of P-521 is equal to 66
     0x01           // RFC 9180 §7.1.3: The `bitmask` in DeriveKeyPair to be 0x01 for P-521
 );
 
