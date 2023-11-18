@@ -78,7 +78,7 @@ impl TestableKem for DhP521HkdfSha512 {
     // In DHKEM, ephemeral keys and private keys are both scalars
     type EphemeralKey = <DhP521HkdfSha512 as KemTrait>::PrivateKey;
 
-    // Call the p384 deterministic encap function we defined in dhkem.rs
+    // Call the p521 deterministic encap function we defined in dhkem.rs
     fn encap_with_eph(
         pk_recip: &Self::PublicKey,
         sender_id_keypair: Option<(&Self::PrivateKey, &Self::PublicKey)>,
