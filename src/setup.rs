@@ -234,8 +234,9 @@ mod test {
                 ] {
                     // Generate a mutually agreeing op mode pair
                     let (psk, psk_id) = (gen_rand_buf(), gen_rand_buf());
+                    let key_pair = Kem::gen_keypair(&mut csprng);
                     let (sender_mode, receiver_mode) =
-                        new_op_mode_pair::<Kdf, Kem>(*op_mode_kind, &psk, &psk_id);
+                        new_op_mode_pair::<Kdf, Kem>(&key_pair, *op_mode_kind, &psk, &psk_id);
 
                     // Construct the sender's encryption context, and get an encapped key
                     let (encapped_key, mut aead_ctx1) = setup_sender::<A, Kdf, Kem, _>(
@@ -280,8 +281,9 @@ mod test {
 
                 // Generate a mutually agreeing op mode pair
                 let (psk, psk_id) = (gen_rand_buf(), gen_rand_buf());
+                let key_pair = Kem::gen_keypair(&mut csprng);
                 let (sender_mode, receiver_mode) =
-                    new_op_mode_pair::<Kdf, Kem>(OpModeKind::Base, &psk, &psk_id);
+                    new_op_mode_pair::<Kdf, Kem>(&key_pair, OpModeKind::Base, &psk, &psk_id);
 
                 // Construct the sender's encryption context normally
                 let (encapped_key, sender_ctx) =

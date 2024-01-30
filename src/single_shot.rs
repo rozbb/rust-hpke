@@ -187,13 +187,11 @@ mod test {
                 let (sk_recip, pk_recip) = Kem::gen_keypair(&mut csprng);
 
                 // Construct the sender's encryption context, and get an encapped key
-                let sender_mode = OpModeS::<Kem>::AuthPsk(
-                    (sk_sender_id, pk_sender_id.clone()),
-                    psk_bundle.clone(),
-                );
+                let sender_mode =
+                    OpModeS::<Kem>::AuthPsk((&sk_sender_id, &pk_sender_id), psk_bundle.clone());
 
                 // Use the encapped key to derive the reciever's encryption context
-                let receiver_mode = OpModeR::<Kem>::AuthPsk(pk_sender_id, psk_bundle);
+                let receiver_mode = OpModeR::<Kem>::AuthPsk(&pk_sender_id, psk_bundle);
 
                 // Encrypt with the first context
                 let (encapped_key, ciphertext) = single_shot_seal::<A, Kdf, Kem, _>(

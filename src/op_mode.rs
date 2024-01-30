@@ -26,9 +26,9 @@ pub enum OpModeR<'a, Kem: KemTrait> {
     /// A preshared key known to the sender and receiver
     Psk(PskBundle<'a>),
     /// The identity public key of the sender
-    Auth(Kem::PublicKey),
+    Auth(&'a Kem::PublicKey),
     /// Both of the above
-    AuthPsk(Kem::PublicKey, PskBundle<'a>),
+    AuthPsk(&'a Kem::PublicKey, PskBundle<'a>),
 }
 
 // Helper function for setup_receiver
@@ -53,9 +53,9 @@ pub enum OpModeS<'a, Kem: KemTrait> {
     /// A preshared key known to the sender and receiver
     Psk(PskBundle<'a>),
     /// The identity keypair of the sender
-    Auth((Kem::PrivateKey, Kem::PublicKey)),
+    Auth((&'a Kem::PrivateKey, &'a Kem::PublicKey)),
     /// Both of the above
-    AuthPsk((Kem::PrivateKey, Kem::PublicKey), PskBundle<'a>),
+    AuthPsk((&'a Kem::PrivateKey, &'a Kem::PublicKey), PskBundle<'a>),
 }
 
 // Helpers functions for setup_sender and testing

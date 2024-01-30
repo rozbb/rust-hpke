@@ -74,12 +74,11 @@ pub(crate) enum OpModeKind {
 
 /// Makes an agreeing pair of `OpMode`s of the specified variant
 pub(crate) fn new_op_mode_pair<'a, Kdf: KdfTrait, Kem: KemTrait>(
+    (sk_sender, pk_sender): &'a (<Kem as KemTrait>::PrivateKey, <Kem as KemTrait>::PublicKey),
     kind: OpModeKind,
     psk: &'a [u8],
     psk_id: &'a [u8],
 ) -> (OpModeS<'a, Kem>, OpModeR<'a, Kem>) {
-    let mut csprng = StdRng::from_entropy();
-    let (sk_sender, pk_sender) = Kem::gen_keypair(&mut csprng);
     let psk_bundle = PskBundle { psk, psk_id };
 
     match kind {
@@ -94,12 +93,12 @@ pub(crate) fn new_op_mode_pair<'a, Kdf: KdfTrait, Kem: KemTrait>(
             (sender_mode, receiver_mode)
         }
         OpModeKind::Auth => {
-            let sender_mode = OpModeS::Auth((sk_sender, pk_sender.clone()));
+            let sender_mode = OpModeS::Auth((sk_sender, pk_sender));
             let receiver_mode = OpModeR::Auth(pk_sender);
             (sender_mode, receiver_mode)
         }
         OpModeKind::AuthPsk => {
-            let sender_mode = OpModeS::AuthPsk((sk_sender, pk_sender.clone()), psk_bundle);
+            let sender_mode = OpModeS::AuthPsk((sk_sender, pk_sender), psk_bundle);
             let receiver_mode = OpModeR::AuthPsk(pk_sender, psk_bundle);
             (sender_mode, receiver_mode)
         }
