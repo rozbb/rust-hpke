@@ -20,6 +20,7 @@ x25519 = ["dep:x25519-dalek"]
 p384 = ["dep:p384"]
 p256 = ["dep:p256"]
 p521 = ["dep:p521"]
+k256 = ["dep:k256"]
 # Include allocating methods like open() and seal()
 alloc = []
 # Includes an implementation of `std::error::Error` for `HpkeError`. Also does what `alloc` does.
@@ -35,6 +36,7 @@ digest = "0.10"
 hkdf = "0.12"
 hmac = "0.12"
 rand_core = { version = "0.6", default-features = false }
+k256 = { version = "0.13", default-features = false, features = ["arithmetic", "ecdh"], optional = true}
 p256 = { version = "0.13", default-features = false, features = ["arithmetic", "ecdh"], optional = true}
 p384 = { version = "0.13", default-features = false, features = ["arithmetic", "ecdh"], optional = true}
 p521 = { version = "0.13", default-features = false, features = ["arithmetic", "ecdh"], optional = true}

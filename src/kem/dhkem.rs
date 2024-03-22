@@ -364,7 +364,7 @@ impl_dhkem!(
 impl_dhkem!(
     dhp256_hkdfsha256,
     DhP256HkdfSha256,
-    crate::dhkex::ecdh_nistp::p256::DhP256,
+    crate::dhkex::ecdh_nist::p256::DhP256,
     crate::kdf::HkdfSha256,
     0x0010,
     "Represents DHKEM(P-256, HKDF-SHA256)"
@@ -375,7 +375,7 @@ impl_dhkem!(
 impl_dhkem!(
     dhp384_hkdfsha384,
     DhP384HkdfSha384,
-    crate::dhkex::ecdh_nistp::p384::DhP384,
+    crate::dhkex::ecdh_nist::p384::DhP384,
     crate::kdf::HkdfSha384,
     0x0011,
     "Represents DHKEM(P-384, HKDF-SHA384)"
@@ -386,8 +386,19 @@ impl_dhkem!(
 impl_dhkem!(
     dhp521_hkdfsha512,
     DhP521HkdfSha512,
-    crate::dhkex::ecdh_nistp::p521::DhP521,
+    crate::dhkex::ecdh_nist::p521::DhP521,
     crate::kdf::HkdfSha512,
     0x0012,
     "Represents DHKEM(P-521, HKDF-SHA512)"
+);
+
+// Implement DHKEM(K-256, HKDF-SHA256)
+#[cfg(feature = "k256")]
+impl_dhkem!(
+    dhk256_hkdfsha256,
+    DhK256HkdfSha256,
+    crate::dhkex::ecdh_nist::k256::DhK256,
+    crate::kdf::HkdfSha256,
+    0x0016,
+    "Represents DHKEM(K-256, HKDF-SHA256)"
 );
