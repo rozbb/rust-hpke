@@ -19,7 +19,7 @@ use zeroize::Zeroize;
 pub trait Aead {
     /// The underlying AEAD implementation
     #[doc(hidden)]
-    type AeadImpl: BaseAeadCore + BaseAeadInPlace + BaseKeyInit + Clone;
+    type AeadImpl: BaseAeadCore + BaseAeadInPlace + BaseKeyInit + Clone + Send + Sync;
 
     /// The algorithm identifier for an AEAD implementation
     const AEAD_ID: u16;
