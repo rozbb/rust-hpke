@@ -66,7 +66,7 @@ Breaking changes
 
 ### Breaking changes in v0.12
 
-The `serde_impls` feature was removed. If you were using this and require backwards compatible serialization/deserialization, see the wiki page [here](https://github.com/rozbb/rust-hpke/wiki/Migrating-away-from-the-%60serde_impls%60-feature).
+The `serde_impls` feature was removed. If you were using this and require backwards compatible serialization/deserialization, see the wiki page [here](https://github.com/rozbb/rust-hpke/wiki/Migrating-away-from-the-serde_impls-feature).
 
 MSRV
 ----
