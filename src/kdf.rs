@@ -1,6 +1,7 @@
 //! Traits and structs for key derivation functions
 
-use byteorder::{BigEndian, ByteOrder};
+use crate::util::write_u16_be;
+
 use digest::{core_api::BlockSizeUser, Digest, OutputSizeUser};
 use generic_array::GenericArray;
 use hmac::SimpleHmac;
@@ -154,7 +155,7 @@ where
 
         // Encode the output length in the info string
         let mut len_buf = [0u8; 2];
-        BigEndian::write_u16(&mut len_buf, out.len() as u16);
+        write_u16_be(&mut len_buf, out.len() as u16);
 
         // Call HKDF-Expand() with the info string set to the concatenation of all of the above
         let labeled_info = [&len_buf, VERSION_LABEL, suite_id, label, info];

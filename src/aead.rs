@@ -4,14 +4,13 @@ use crate::{
     kdf::{Kdf as KdfTrait, LabeledExpand, SimpleHkdf},
     kem::Kem as KemTrait,
     setup::ExporterSecret,
-    util::{enforce_equal_len, enforce_outbuf_len, full_suite_id, FullSuiteId},
+    util::{enforce_equal_len, enforce_outbuf_len, full_suite_id, write_u64_be, FullSuiteId},
     Deserializable, HpkeError, Serializable,
 };
 
 use core::{default::Default, marker::PhantomData};
 
 use aead::{AeadCore as BaseAeadCore, AeadInPlace as BaseAeadInPlace, KeyInit as BaseKeyInit};
-use byteorder::{BigEndian, ByteOrder};
 use generic_array::GenericArray;
 use zeroize::Zeroize;
 
@@ -113,7 +112,7 @@ fn mix_nonce<A: Aead>(base_nonce: &AeadNonce<A>, seq: &Seq) -> AeadNonce<A> {
     // because this is a big-endian number.
     let seq_size = core::mem::size_of::<Seq>();
     let nonce_size = base_nonce.0.len();
-    BigEndian::write_u64(&mut seq_buf.0[nonce_size - seq_size..], seq.0);
+    write_u64_be(&mut seq_buf.0[nonce_size - seq_size..], seq.0);
 
     // XOR the base nonce bytes with the sequence bytes
     let new_nonce_iter = base_nonce

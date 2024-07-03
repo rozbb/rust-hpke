@@ -1,13 +1,33 @@
 use crate::{aead::Aead, kdf::Kdf as KdfTrait, kem::Kem as KemTrait, HpkeError, Serializable};
 
-use byteorder::{BigEndian, ByteOrder};
-
 /// Represents a ciphersuite context. That's "KEMXX", where `XX` is the KEM ID
 pub(crate) type KemSuiteId = [u8; 5];
 
 /// Represents a ciphersuite context. That's "HPKEXXYYZZ", where `XX` is the KEM ID, `YY` is the
 /// KDF ID, and `ZZ` is the AEAD ID
 pub(crate) type FullSuiteId = [u8; 10];
+
+/// Writes a u16 to a bytestring in big-endian order. `buf.len()` MUST be 2
+#[rustfmt::skip]
+pub(crate) fn write_u16_be(buf: &mut [u8], n: u16) {
+    assert_eq!(buf.len(), 2);
+    buf[0] = ((n & 0xff00) >> 8) as u8;
+    buf[1] =  (n & 0x00ff)       as u8;
+}
+
+/// Writes a u64 to a bytestring in big-endian order. `buf.len()` MUST be 8
+#[rustfmt::skip]
+pub(crate) fn write_u64_be(buf: &mut [u8], n: u64) {
+    assert_eq!(buf.len(), 8);
+    buf[0] = ((n & 0xff00000000000000) >> 56) as u8;
+    buf[1] = ((n & 0x00ff000000000000) >> 48) as u8;
+    buf[2] = ((n & 0x0000ff0000000000) >> 40) as u8;
+    buf[3] = ((n & 0x000000ff00000000) >> 32) as u8;
+    buf[4] = ((n & 0x00000000ff000000) >> 24) as u8;
+    buf[5] = ((n & 0x0000000000ff0000) >> 16) as u8;
+    buf[6] = ((n & 0x000000000000ff00) >>  8) as u8;
+    buf[7] =  (n & 0x00000000000000ff)        as u8;
+}
 
 // RFC 9180 §5.1
 // suite_id = concat(
@@ -28,9 +48,9 @@ where
     let mut suite_id = *b"HPKEXXYYZZ";
 
     // Write the ciphersuite identifiers to the buffer. Forgive the explicit indexing.
-    BigEndian::write_u16(&mut suite_id[4..6], Kem::KEM_ID);
-    BigEndian::write_u16(&mut suite_id[6..8], Kdf::KDF_ID);
-    BigEndian::write_u16(&mut suite_id[8..10], A::AEAD_ID);
+    write_u16_be(&mut suite_id[4..6], Kem::KEM_ID);
+    write_u16_be(&mut suite_id[6..8], Kdf::KDF_ID);
+    write_u16_be(&mut suite_id[8..10], A::AEAD_ID);
 
     suite_id
 }
@@ -44,7 +64,7 @@ pub(crate) fn kem_suite_id<Kem: KemTrait>() -> KemSuiteId {
     let mut suite_id = *b"KEMXX";
 
     // Write the KEM ID to the buffer. Forgive the explicit indexing.
-    BigEndian::write_u16(&mut suite_id[3..5], Kem::KEM_ID);
+    write_u16_be(&mut suite_id[3..5], Kem::KEM_ID);
 
     suite_id
 }
