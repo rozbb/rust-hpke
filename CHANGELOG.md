@@ -4,11 +4,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Pending
+## [0.12.0] - 2024-07-03
+
+### Additions
 
 * Added `Serializable::write_exact` so serialization requires less stack space
-* Removed all impls of `serde::{Serialize, Deserailize}` from crate
 * Added support for the P-521 curve
+
+### Changes
+
+* Constrained `Aead::AeadImpl` to be `Send + Sync`
+* Bumped `subtle` dependency and removed `byteorder` dependency
+
+### Removals
+
+* Removed all impls of `serde::{Serialize, Deserailize}` from crate. See [wiki](https://github.com/rozbb/rust-hpke/wiki/Migrating-away-from-the-serde_impls-feature) for migration instructions.
 
 ## [0.11.0] - 2023-10-11
 
