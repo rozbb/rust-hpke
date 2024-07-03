@@ -8,7 +8,7 @@ use crate::{
     Deserializable, HpkeError, Serializable,
 };
 
-use core::{default::Default, marker::PhantomData, u8};
+use core::{default::Default, marker::PhantomData};
 
 use aead::{AeadCore as BaseAeadCore, AeadInPlace as BaseAeadInPlace, KeyInit as BaseKeyInit};
 use byteorder::{BigEndian, ByteOrder};
