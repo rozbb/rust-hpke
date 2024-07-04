@@ -50,15 +50,15 @@ where
     let opmodes = ["base", "auth", "psk", "authpsk"];
     let opmodes_s = vec![
         OpModeS::Base,
-        OpModeS::Auth((sk_sender.clone(), pk_sender.clone())),
+        OpModeS::Auth((&sk_sender, &pk_sender)),
         OpModeS::Psk(psk_bundle),
-        OpModeS::AuthPsk((sk_sender, pk_sender.clone()), psk_bundle),
+        OpModeS::AuthPsk((&sk_sender, &pk_sender), psk_bundle),
     ];
     let opmodes_r = vec![
         OpModeR::Base,
         OpModeR::Psk(psk_bundle),
-        OpModeR::Auth(pk_recip.clone()),
-        OpModeR::AuthPsk(pk_recip.clone(), psk_bundle),
+        OpModeR::Auth(&pk_recip),
+        OpModeR::AuthPsk(&pk_recip, psk_bundle),
     ];
 
     // Bench setup_sender() for each opmode
