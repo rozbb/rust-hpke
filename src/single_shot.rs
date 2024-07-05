@@ -255,4 +255,12 @@ mod test {
         crate::kdf::HkdfSha512,
         crate::kem::dhp521_hkdfsha512::DhP521HkdfSha512
     );
+
+    #[cfg(feature = "k256")]
+    test_single_shot_correctness!(
+        test_single_shot_correctness_k256,
+        ChaCha20Poly1305,
+        crate::kdf::HkdfSha256,
+        crate::kem::dhk256_hkdfsha256::DhK256HkdfSha256
+    );
 }

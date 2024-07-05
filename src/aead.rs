@@ -764,6 +764,35 @@ mod test {
         );
     }
 
+    #[cfg(all(feature = "k256", any(feature = "alloc", feature = "std")))]
+    mod k256_tests {
+        use super::*;
+
+        test_export_idempotence!(test_export_idempotence_k256, crate::kem::DhP256HkdfSha256);
+        test_exportonly_panics!(
+            test_exportonly_panics_k256_seal,
+            test_exportonly_panics_k256_open,
+            crate::kem::DhK256HkdfSha256
+        );
+        test_overflow!(test_overflow_k256, crate::kem::DhK256HkdfSha256);
+
+        test_ctx_correctness!(
+            test_ctx_correctness_aes128_k256,
+            AesGcm128,
+            crate::kem::DhK256HkdfSha256
+        );
+        test_ctx_correctness!(
+            test_ctx_correctness_aes256_k256,
+            AesGcm256,
+            crate::kem::DhK256HkdfSha256
+        );
+        test_ctx_correctness!(
+            test_ctx_correctness_chacha_k256,
+            ChaCha20Poly1305,
+            crate::kem::DhK256HkdfSha256
+        );
+    }
+
     /// Tests that Serialize::write_exact() panics when given a buffer of incorrect length
     #[should_panic]
     #[test]
