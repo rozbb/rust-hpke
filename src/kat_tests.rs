@@ -447,6 +447,9 @@ mod gen {
         _aead_base_nonce: Vec<u8>,
         #[serde(rename = "exporter_secret", deserialize_with = "bytes_from_hex")]
         _exporter_secret: Vec<u8>,
+
+        //encryptions: Vec<EncryptionTestVector>,
+        exports: Vec<ExporterTestVector>,
     }
 
     // fn generate_encryption_test_vectors<A: Aead, Kdf: KdfTrait, Kem: TestableKem>(
@@ -471,6 +474,9 @@ mod gen {
         println!("derived_kp: {}", pk_hex);
     }
 
+    const EXPORT_LEN: usize = 32;
+    const EXPORTER_CONTEXTS: [&[u8]; 3] = [b"", b"00", b"54657374436f6e74657874"];
+
     // This does all the legwork
     fn test_case<A: Aead, Kdf: KdfTrait, Kem: TestableKem>(tv: ShortTestVector) {
         // First, deserialize all the relevant keys so we can reconstruct the encapped key
@@ -482,7 +488,6 @@ mod gen {
                 .as_ref()
                 .map(|sk| deser_keypair::<Kem>(sk, pk_sender.unwrap()))
         };
-        use Serializable;
         // Make sure the keys match what we would've gotten had we used DeriveKeyPair
         {
             let derived_kp = Kem::derive_keypair(&tv.ikm_recip);
@@ -491,7 +496,7 @@ mod gen {
         }
         if let Some(sks) = sender_keypair.as_ref() {
             let derived_kp = Kem::derive_keypair(&tv.ikm_sender.unwrap());
-            print_derived_keypair(derived_kp.clone());
+            // print_derived_keypair(derived_kp.clone());
             assert_serializable_eq!(sks.0, derived_kp.0, "sk sender doesn't match");
             assert_serializable_eq!(sks.1, derived_kp.1, "pk sender doesn't match");
         }
@@ -523,15 +528,15 @@ mod gen {
         //     );
         // }
 
-        // // We're going to test the encryption contexts. First, construct the appropriate OpMode.
-        // let mode = make_op_mode_r(
-        //     tv.mode,
-        //     sender_keypair.map(|(_, pk)| pk),
-        //     tv.psk.as_ref().map(Vec::as_slice),
-        //     tv.psk_id.as_ref().map(Vec::as_slice),
-        // );
-        // let mut aead_ctx = setup_receiver::<A, Kdf, Kem>(&mode, &sk_recip, &encapped_key, &tv.info)
-        //     .expect("setup_receiver failed");
+        // We're going to test the encryption contexts. First, construct the appropriate OpMode.
+        let mode = make_op_mode_r(
+            tv.mode,
+            sender_keypair.map(|(_, pk)| pk),
+            tv.psk.as_ref().map(Vec::as_slice),
+            tv.psk_id.as_ref().map(Vec::as_slice),
+        );
+        let mut aead_ctx = setup_receiver::<A, Kdf, Kem>(&mode, &sk_recip, &encapped_key, &tv.info)
+            .expect("setup_receiver failed");
 
         // Go through all the plaintext-ciphertext pairs of this test vector and assert the
         // ciphertext decrypts to the corresponding plaintext
@@ -551,25 +556,42 @@ mod gen {
         //     assert_eq!(decrypted, plaintext, "plaintexts don't match");
         // }
 
-        // Now check that AeadCtx::export returns the expected values
-        // for export in tv.exports {
-        //     let mut exported_val = vec![0u8; export.export_len];
-        //     aead_ctx
-        //         .export(&export.export_ctx, &mut exported_val)
-        //         .unwrap();
-        //     assert_eq!(exported_val, export.export_val, "export values don't match");
+        // generate `exports` for each of the test vectors
+        // println!("\"exports\": [");
+        // for (index, export_ctx) in EXPORTER_CONTEXTS.iter().enumerate() {
+        //     let mut exported_val = vec![0u8; EXPORT_LEN];
+        //     aead_ctx.export(&export_ctx, &mut exported_val).unwrap();
+        //     println!("{{\"exporter_context\": \"{}\",", hex::encode(export_ctx));
+        //     println!("\"L\": \"{}\",", EXPORT_LEN);
+        //     if index == EXPORTER_CONTEXTS.len() - 1 {
+        //         println!("\"exported_value\": \"{}\"}}",  hex::encode(exported_val));
+        //     } else {
+        //         println!("\"exported_value\": \"{}\"}},", hex::encode(exported_val));
+        //     }
         // }
+        // println!("],",);
+
+        // Now check that AeadCtx::export returns the expected values
+        for export in tv.exports {
+            let mut exported_val = vec![0u8; export.export_len];
+            aead_ctx
+                .export(&export.export_ctx, &mut exported_val)
+                .unwrap();
+            assert_eq!(exported_val, export.export_val, "export values don't match");
+        }
     }
-    
+
     #[test]
     fn gen_kat_test() {
-        use std::fs::File;
         use serde_json::Value;
-    
+        use std::fs::File;
+
         // Open and read the JSON file
-        let file = File::open("test-vectors-secp256k1.json").expect("Failed to open test vectors file");
-        let incomplete_test_vectors: Vec<ShortTestVector> = serde_json::from_reader(file).expect("Failed to parse JSON");
-    
+        let file =
+            File::open("test-vectors-secp256k1.json").expect("Failed to open test vectors file");
+        let incomplete_test_vectors: Vec<ShortTestVector> =
+            serde_json::from_reader(file).expect("Failed to parse JSON");
+
         for tv in incomplete_test_vectors {
             // Extract the necessary fields from the JSON object
             //let key = hex::decode(tv["key"].as_str().expect("Missing key")).expect("Invalid key format");
@@ -578,13 +600,13 @@ mod gen {
             let pt = b"4265617574792069732074727574682c20747275746820626561757479"; // Replace with actual plaintext if available in the JSON
             let export_ctx = b"example context"; // Replace with actual export context if available in the JSON
             let export_len = 32; // Replace with actual export length if available in the JSON
-    
+
             test_case::<AesGcm128, HkdfSha256, DhK256HkdfSha256>(tv);
             println!("ONE DONE!");
             // // Generate encryption test vectors
             // let encryption_test_vectors = generate_encryption_test_vectors::<A, Kdf, Kem>(&key, &base_nonce, aad, plaintext);
             // println!("{:?}", encryption_test_vectors);
-    
+
             // // Generate exported values
             // let exported_values = generate_exported_values::<A, Kdf, Kem>(&key, &base_nonce, export_ctx, export_len);
             // println!("{:?}", exported_values);
@@ -592,25 +614,25 @@ mod gen {
     }
 }
 
-use sha2::{Sha256, Digest};
+use sha2::{Digest, Sha256};
 
-    #[test]
-    fn generate_256bit_hash_output() {
-        // Example input data
-        let input_data = b"don't tread on my fursona";
+#[test]
+fn generate_256bit_hash_output() {
+    // Example input data
+    let input_data = b"don't tread on my fursona";
 
-        // Create a Sha256 object
-        let mut hasher = Sha256::new();
+    // Create a Sha256 object
+    let mut hasher = Sha256::new();
 
-        // Write input data
-        hasher.update(input_data);
+    // Write input data
+    hasher.update(input_data);
 
-        // Read hash digest and consume hasher
-        let result = hasher.finalize();
+    // Read hash digest and consume hasher
+    let result = hasher.finalize();
 
-        // Print the 256-bit hash output
-        println!("{:x}", result);
-    }
+    // Print the 256-bit hash output
+    println!("{:x}", result);
+}
 
 #[test]
 fn kat_test() {
