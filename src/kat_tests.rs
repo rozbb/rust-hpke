@@ -386,6 +386,232 @@ macro_rules! dispatch_testcase {
     };
 }
 
+mod gen {
+    use super::*;
+
+    use crate::aead::AeadCtx;
+
+    // Each individual test case looks like this
+    #[derive(Clone, serde::Deserialize, Debug)]
+    struct ShortTestVector {
+        // Parameters
+        mode: u8,
+        kem_id: u16,
+        kdf_id: u16,
+        aead_id: u16,
+        #[serde(deserialize_with = "bytes_from_hex")]
+        info: Vec<u8>,
+
+        // Keying material
+        #[serde(rename = "ikmR", deserialize_with = "bytes_from_hex")]
+        ikm_recip: Vec<u8>,
+        #[serde(default, rename = "ikmS", deserialize_with = "bytes_from_hex_opt")]
+        ikm_sender: Option<Vec<u8>>,
+        #[serde(rename = "ikmE", deserialize_with = "bytes_from_hex")]
+        _ikm_eph: Vec<u8>,
+
+        // Private keys
+        #[serde(rename = "skRm", deserialize_with = "bytes_from_hex")]
+        sk_recip: Vec<u8>,
+        #[serde(default, rename = "skSm", deserialize_with = "bytes_from_hex_opt")]
+        sk_sender: Option<Vec<u8>>,
+        #[serde(rename = "skEm", deserialize_with = "bytes_from_hex")]
+        sk_eph: Vec<u8>,
+
+        // Preshared Key Bundle
+        #[serde(default, deserialize_with = "bytes_from_hex_opt")]
+        psk: Option<Vec<u8>>,
+        #[serde(default, rename = "psk_id", deserialize_with = "bytes_from_hex_opt")]
+        psk_id: Option<Vec<u8>>,
+
+        // Public Keys
+        #[serde(rename = "pkRm", deserialize_with = "bytes_from_hex")]
+        pk_recip: Vec<u8>,
+        #[serde(default, rename = "pkSm", deserialize_with = "bytes_from_hex_opt")]
+        pk_sender: Option<Vec<u8>>,
+        #[serde(rename = "pkEm", deserialize_with = "bytes_from_hex")]
+        _pk_eph: Vec<u8>,
+
+        // // Key schedule inputs and computations // NOT HERE?
+        // #[serde(rename = "enc", deserialize_with = "bytes_from_hex")]
+        // encapped_key: Vec<u8>,
+        #[serde(deserialize_with = "bytes_from_hex")]
+        shared_secret: Vec<u8>,
+        // #[serde(rename = "key_schedule_context", deserialize_with = "bytes_from_hex")]
+        // _hpke_context: Vec<u8>, // NOT HERE?
+        // #[serde(rename = "secret", deserialize_with = "bytes_from_hex")]
+        // _key_schedule_secret: Vec<u8>, // NOT HERE?
+        #[serde(rename = "key", deserialize_with = "bytes_from_hex")]
+        _aead_key: Vec<u8>,
+        #[serde(rename = "base_nonce", deserialize_with = "bytes_from_hex")]
+        _aead_base_nonce: Vec<u8>,
+        #[serde(rename = "exporter_secret", deserialize_with = "bytes_from_hex")]
+        _exporter_secret: Vec<u8>,
+    }
+
+    // fn generate_encryption_test_vectors<A: Aead, Kdf: KdfTrait, Kem: TestableKem>(
+    //     key: &[u8],
+    //     base_nonce: &[u8],
+    //     aad: &[u8],
+    //     plaintext: &[u8],
+    // ) -> Vec<EncryptionTestVector> {
+    //     let mut aead_ctx = AeadCtx::new(key, base_nonce);
+    //     let ciphertext = aead_ctx.seal(plaintext, aad).expect("encryption failed");
+    //     vec![MainTestVector {
+    //         aad: aad.to_vec(),
+    //         plaintext: plaintext.to_vec(),
+    //         ciphertext,
+    //     }]
+    // }
+
+    fn print_derived_keypair(derived_kp: ((impl Serializable), (impl Serializable))) {
+        let sk_hex = hex::encode(derived_kp.0.to_bytes());
+        let pk_hex = hex::encode(derived_kp.1.to_bytes());
+        println!("derived_kp: {}", sk_hex);
+        println!("derived_kp: {}", pk_hex);
+    }
+
+    // This does all the legwork
+    fn test_case<A: Aead, Kdf: KdfTrait, Kem: TestableKem>(tv: ShortTestVector) {
+        // First, deserialize all the relevant keys so we can reconstruct the encapped key
+        let recip_keypair = deser_keypair::<Kem>(&tv.sk_recip, &tv.pk_recip);
+        let sk_eph = <Kem as TestableKem>::EphemeralKey::from_bytes(&tv.sk_eph).unwrap();
+        let sender_keypair = {
+            let pk_sender = &tv.pk_sender.as_ref();
+            tv.sk_sender
+                .as_ref()
+                .map(|sk| deser_keypair::<Kem>(sk, pk_sender.unwrap()))
+        };
+        use Serializable;
+        // Make sure the keys match what we would've gotten had we used DeriveKeyPair
+        {
+            let derived_kp = Kem::derive_keypair(&tv.ikm_recip);
+            assert_serializable_eq!(recip_keypair.0, derived_kp.0, "sk recip doesn't match");
+            assert_serializable_eq!(recip_keypair.1, derived_kp.1, "pk recip doesn't match");
+        }
+        if let Some(sks) = sender_keypair.as_ref() {
+            let derived_kp = Kem::derive_keypair(&tv.ikm_sender.unwrap());
+            print_derived_keypair(derived_kp.clone());
+            assert_serializable_eq!(sks.0, derived_kp.0, "sk sender doesn't match");
+            assert_serializable_eq!(sks.1, derived_kp.1, "pk sender doesn't match");
+        }
+
+        let (sk_recip, pk_recip) = recip_keypair;
+
+        // Now derive the encapped key with the deterministic encap function, using all the inputs
+        // above
+        let (shared_secret, encapped_key) = {
+            let sender_keypair_ref = sender_keypair.as_ref().map(|&(ref sk, ref pk)| (sk, pk));
+            Kem::encap_with_eph(&pk_recip, sender_keypair_ref, sk_eph).expect("encap failed")
+        };
+
+        // Assert that the derived shared secret key is identical to the one provided
+        assert_eq!(
+            shared_secret.0.as_slice(),
+            tv.shared_secret.as_slice(),
+            "shared_secret doesn't match"
+        );
+
+        // // Assert that the derived encapped key is identical to the one provided
+        // {
+        //     let provided_encapped_key =
+        //         <Kem as KemTrait>::EncappedKey::from_bytes(&tv.encapped_key).unwrap();
+        //     assert_serializable_eq!(
+        //         encapped_key,
+        //         provided_encapped_key,
+        //         "encapped keys don't match"
+        //     );
+        // }
+
+        // // We're going to test the encryption contexts. First, construct the appropriate OpMode.
+        // let mode = make_op_mode_r(
+        //     tv.mode,
+        //     sender_keypair.map(|(_, pk)| pk),
+        //     tv.psk.as_ref().map(Vec::as_slice),
+        //     tv.psk_id.as_ref().map(Vec::as_slice),
+        // );
+        // let mut aead_ctx = setup_receiver::<A, Kdf, Kem>(&mode, &sk_recip, &encapped_key, &tv.info)
+        //     .expect("setup_receiver failed");
+
+        // Go through all the plaintext-ciphertext pairs of this test vector and assert the
+        // ciphertext decrypts to the corresponding plaintext
+        // for enc_packet in tv.encryptions {
+        //     // Descructure the vector
+        //     let EncryptionTestVector {
+        //         aad,
+        //         ciphertext,
+        //         plaintext,
+        //         ..
+        //     } = enc_packet;
+
+        //     // Open the ciphertext and assert that it succeeds
+        //     let decrypted = aead_ctx.open(&ciphertext, &aad).expect("open failed");
+
+        //     // Assert the decrypted payload equals the expected plaintext
+        //     assert_eq!(decrypted, plaintext, "plaintexts don't match");
+        // }
+
+        // Now check that AeadCtx::export returns the expected values
+        // for export in tv.exports {
+        //     let mut exported_val = vec![0u8; export.export_len];
+        //     aead_ctx
+        //         .export(&export.export_ctx, &mut exported_val)
+        //         .unwrap();
+        //     assert_eq!(exported_val, export.export_val, "export values don't match");
+        // }
+    }
+    
+    #[test]
+    fn gen_kat_test() {
+        use std::fs::File;
+        use serde_json::Value;
+    
+        // Open and read the JSON file
+        let file = File::open("test-vectors-secp256k1.json").expect("Failed to open test vectors file");
+        let incomplete_test_vectors: Vec<ShortTestVector> = serde_json::from_reader(file).expect("Failed to parse JSON");
+    
+        for tv in incomplete_test_vectors {
+            // Extract the necessary fields from the JSON object
+            //let key = hex::decode(tv["key"].as_str().expect("Missing key")).expect("Invalid key format");
+            //let base_nonce = hex::decode(tv["base_nonce"].as_str().expect("Missing base_nonce")).expect("Invalid base_nonce format");
+            let aad = b"example aad"; // Replace with actual AAD if available in the JSON
+            let pt = b"4265617574792069732074727574682c20747275746820626561757479"; // Replace with actual plaintext if available in the JSON
+            let export_ctx = b"example context"; // Replace with actual export context if available in the JSON
+            let export_len = 32; // Replace with actual export length if available in the JSON
+    
+            test_case::<AesGcm128, HkdfSha256, DhK256HkdfSha256>(tv);
+            println!("ONE DONE!");
+            // // Generate encryption test vectors
+            // let encryption_test_vectors = generate_encryption_test_vectors::<A, Kdf, Kem>(&key, &base_nonce, aad, plaintext);
+            // println!("{:?}", encryption_test_vectors);
+    
+            // // Generate exported values
+            // let exported_values = generate_exported_values::<A, Kdf, Kem>(&key, &base_nonce, export_ctx, export_len);
+            // println!("{:?}", exported_values);
+        }
+    }
+}
+
+use sha2::{Sha256, Digest};
+
+    #[test]
+    fn generate_256bit_hash_output() {
+        // Example input data
+        let input_data = b"don't tread on my fursona";
+
+        // Create a Sha256 object
+        let mut hasher = Sha256::new();
+
+        // Write input data
+        hasher.update(input_data);
+
+        // Read hash digest and consume hasher
+        let result = hasher.finalize();
+
+        // Print the 256-bit hash output
+        println!("{:x}", result);
+    }
+
 #[test]
 fn kat_test() {
     let file = File::open("test-vectors-5f503c5.json").unwrap();
