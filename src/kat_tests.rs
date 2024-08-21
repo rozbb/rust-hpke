@@ -487,6 +487,20 @@ pub mod gen {
 
         // TODO derive secret, key, base_nonce, exporter_secret
 
+        // let secret = labeled_extract::<Kdf>(&shared_secret.0, &suite_id, b"secret", psk.unwrap_or(&[]));
+
+        // // Derive the key
+        // let mut key = vec![0u8; Nk];
+        // labeled_expand::<Kdf>(&secret, &suite_id, b"key", &key_schedule_context, &mut key);
+
+        // // Derive the base_nonce
+        // let mut base_nonce = vec![0u8; Nn];
+        // labeled_expand::<Kdf>(&secret, &suite_id, b"base_nonce", &key_schedule_context, &mut base_nonce);
+
+        // // Derive the exporter_secret
+        // let mut exporter_secret = vec![0u8; Nh];
+        // labeled_expand::<Kdf>(&secret, &suite_id, b"exp", &key_schedule_context, &mut exporter_secret);
+
         // In KeySchedule(),
         //   secret = LabeledExtract(shared_secret, "secret", psk)
         //   key = LabeledExpand(secret, "key", key_schedule_context, Nk)
@@ -494,7 +508,7 @@ pub mod gen {
         //   exporter_secret = LabeledExpand(secret, "exp", key_schedule_context, Nh)
         // Instead of `secret` we derive an HKDF context which we run .expand() on to derive the
         // key-nonce pair.
-        let (_, secret_ctx) =
+        let (secret, secret_ctx) =
         labeled_extract::<Kdf>(&shared_secret.0, &suite_id, b"secret", &[mode]);
 
         // Empty fixed-size buffers
@@ -561,51 +575,33 @@ pub mod gen {
             });
         }
 
-
-        // Go through all the plaintext-ciphertext pairs of this test vector and assert the
-        // ciphertext decrypts to the corresponding plaintext
-        for enc_packet in tv.encryptions {
-            // Descructure the vector
-            let EncryptionTestVector {
-                aad,
-                ciphertext,
-                plaintext,
-                ..
-            } = enc_packet;
-
-            // Open the ciphertext and assert that it succeeds
-            let decrypted = aead_ctx_r.open(&ciphertext, &aad).expect("open failed");
-
-            // Assert the decrypted payload equals the expected plaintext
-            assert_eq!(decrypted, plaintext, "plaintexts don't match");
-        }
-
-        // Now check that AeadCtx::export returns the expected values
-        for export in tv.exports {
-            let mut exported_val = vec![0u8; export.export_len];
-            aead_ctx_r
-                .export(&export.export_ctx, &mut exported_val)
-                .unwrap();
-            assert_eq!(exported_val, export.export_val, "export values don't match");
-        }
-
-        let tv = MainTestVector {
+        MainTestVector {
             aead_id: A::AEAD_ID,
             kdf_id: Kdf::KDF_ID,
             kem_id: Kem::KEM_ID,
             info: info.to_vec(),
             mode,
-            ikm_recip: sk_recip,
-            ikm_sender: sender_keypair.map(|(sk, _)| sk),
-            sk_recip,
-            sk_sender: sender_keypair.map(|(sk, _)| sk),
-            sk_eph,
-            psk: tv.psk,
-            psk_id: tv.psk_id,
-            pk_recip,
-            pk_sender: sender_keypair.map(|(_, pk)| pk),
-        };
-        tv
+            ikm_recip: ikm_recip.to_vec(),
+            ikm_sender: psk_extras.map(|e| e.ikm.to_vec()),
+            sk_recip: sk_recip.to_bytes().to_vec(),
+            sk_eph: sk_eph.to_bytes().to_vec(),
+            sk_sender: psk_extras.map(|e| e.sender_keypair).map(|(sk, _)| sk.to_bytes().to_vec()),
+            psk: psk_extras.map(|e| e.psk),
+            psk_id: psk_extras.map(|e| e.psk_id),
+            pk_recip: pk_recip.to_bytes().to_vec(),
+            pk_sender: psk_extras.map(|e| e.sender_keypair).map(|(_, pk)| pk.to_bytes().to_vec()),
+            _ikm_eph: ikm_eph.to_vec(),
+            _pk_eph: pk_eph.to_bytes().to_vec(),
+            encapped_key: encapped_key.to_bytes().to_vec(),
+            shared_secret: shared_secret.0.to_vec(),
+            _hpke_context: key_schedule_context.to_vec(),
+            _key_schedule_secret: secret.to_vec(),
+            _aead_key: key.0.to_vec(),
+            _aead_base_nonce: base_nonce.0.to_vec(),
+            _exporter_secret: exporter_secret.0.to_vec(),
+            encryptions,
+            exports,
+        }
     }
 
     fn gen_ikm<Kem: TestableKem, R: CryptoRng + RngCore>(csprng: &mut R) -> GenericArray<u8, <Kem::PrivateKey as Serializable>::OutputSize> {
