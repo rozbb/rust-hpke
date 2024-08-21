@@ -415,7 +415,7 @@ pub mod gen {
         bundle: Option<PskBundle<'a>>,
     }
 
-    fn gen_test_cases<A: Aead, Kdf: KdfTrait, Kem: TestableKem, R: CryptoRng + RngCore>(csprng: &mut R) -> Vec<MainTestVector> {
+    fn gen_test_cases<A: Aead + 'static, Kdf: KdfTrait, Kem: TestableKem, R: CryptoRng + RngCore>(csprng: &mut R) -> Vec<MainTestVector> {
         let mut test_vectors = Vec::new();
         for mode in OP_MODES {
             println!("Generating test case for mode: {}", mode);
@@ -426,7 +426,7 @@ pub mod gen {
     }
 
     /// This does all the legwork
-    fn gen_test_case<A: Aead, Kdf: KdfTrait, Kem: TestableKem, R: CryptoRng + RngCore>(mode: u8, csprng: &mut R) -> MainTestVector {
+    fn gen_test_case<A: Aead + 'static, Kdf: KdfTrait, Kem: TestableKem, R: CryptoRng + RngCore>(mode: u8, csprng: &mut R) -> MainTestVector {
         let info = b"4f6465206f6e2061204772656369616e2055726e"; // same as RFC 9180 test vectors
         let ikm_eph = gen_ikm::<Kem, R>(csprng);
         let (sk_eph, pk_eph) = Kem::derive_keypair(&ikm_eph);
@@ -573,26 +573,30 @@ pub mod gen {
 
         // Produce encryptions
         let mut encryptions = Vec::new();
-        let plaintexts = vec![
-            b"4265617574792069732074727574682c20747275746820626561757479".to_vec(), // Example plaintext
-        ];
-        let aads = vec![
-            b"436f756e742d323536".to_vec(), // Example AAD
-        ];
 
-        for (i, plaintext) in plaintexts.iter().enumerate() {
-            let aad = &aads[i % aads.len()];
-            let mut nonce = base_nonce.0.clone();
-            let i = nonce.len() - 1; // Simple nonce increment
-            nonce[i] ^= i as u8; 
-            let ciphertext = aead_ctx_s.seal(plaintext, aad).unwrap();
+        // Check if the Aead type is ExportOnlyAead
+        if std::any::TypeId::of::<A>() != std::any::TypeId::of::<ExportOnlyAead>() {
+            let plaintexts = vec![
+                b"4265617574792069732074727574682c20747275746820626561757479".to_vec(), // Example plaintext
+            ];
+            let aads = vec![
+                b"436f756e742d323536".to_vec(), // Example AAD
+            ];
 
-            encryptions.push(EncryptionTestVector {
-                plaintext: plaintext.clone(),
-                aad: aad.clone(),
-                _nonce: nonce.to_vec(),
-                ciphertext,
-            });
+            for (i, plaintext) in plaintexts.iter().enumerate() {
+                let aad = &aads[i % aads.len()];
+                let mut nonce = base_nonce.0.clone();
+                let i = nonce.len() - 1; // Simple nonce increment
+                nonce[i] ^= i as u8; 
+                let ciphertext = aead_ctx_s.seal(plaintext, aad).unwrap();
+
+                encryptions.push(EncryptionTestVector {
+                    plaintext: plaintext.clone(),
+                    aad: aad.clone(),
+                    _nonce: nonce.to_vec(),
+                    ciphertext,
+                });
+            }
         }
 
         MainTestVector {
@@ -693,13 +697,11 @@ pub mod gen {
 
     #[test]
     fn gen_secp_test_vectors() {
-        let mut test_vectors = Vec::new();
-
-        let vecs = k256_testgen!(
+        let test_vectors = k256_testgen!(
             (AesGcm128, AesGcm256, ChaCha20Poly1305, ExportOnlyAead),
             (HkdfSha256),
             (DhK256HkdfSha256)
-        );
+        ).into_iter().flatten().collect::<Vec<MainTestVector>>();
 
         save_test_vectors_to_file(&test_vectors, "test-test-secp-vectors.json");
     }
