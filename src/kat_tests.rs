@@ -394,12 +394,14 @@ pub mod gen {
 
     use super::*;
 
-    use crate::{aead::AeadTag, kdf::{labeled_extract, LabeledExpand}, setup::ExporterSecret, setup_sender, OpModeS};
+    use crate::{kdf::{labeled_extract, LabeledExpand}, setup::ExporterSecret, setup_sender, OpModeS};
 
     const EXPORT_LEN: usize = 32;
     const EXPORTER_CONTEXTS: [&[u8]; 3] = [b"", b"00", b"54657374436f6e74657874"];
     const OP_MODES: [u8; 4] = [0x00, 0x01, 0x02, 0x03];
     const SHA256_NH: usize = 32;
+    const PSK: &[u8] = b"0247fd33b913760fa1fa51e1892d9f307fbe65eb171e8132c2af18555a738b82";
+    const PSK_ID: &[u8] = b"456e6e796e20447572696e206172616e204d6f726961";
 
     enum OpMode {
         Base,
@@ -407,12 +409,20 @@ pub mod gen {
         Auth,
         AuthPsk,
     }
+    struct SenderExtras<'a, Kem: TestableKem> {
+        keypair: Option<(Kem::PrivateKey, Kem::PublicKey)>,
+        ikm: Option<GenericArray<u8, <Kem::PrivateKey as Serializable>::OutputSize>>,
+        bundle: Option<PskBundle<'a>>,
+    }
 
-    struct PskExtras<Kem: TestableKem> {
-        sender_keypair: (Kem::PrivateKey, Kem::PublicKey),
-        ikm: GenericArray<u8, <Kem::PrivateKey as Serializable>::OutputSize>,
-        psk: Vec<u8>,
-        psk_id: Vec<u8>,
+    fn gen_test_cases<A: Aead, Kdf: KdfTrait, Kem: TestableKem, R: CryptoRng + RngCore>(csprng: &mut R) -> Vec<MainTestVector> {
+        let mut test_vectors = Vec::new();
+        for mode in OP_MODES {
+            println!("Generating test case for mode: {}", mode);
+            let test_vector = gen_test_case::<A, Kdf, Kem, R>(mode, csprng);
+            test_vectors.push(test_vector);
+        }
+        test_vectors
     }
 
     /// This does all the legwork
@@ -424,29 +434,41 @@ pub mod gen {
         let recip_keypair = Kem::derive_keypair(&ikm_recip);
         
         // for loop through the modes
-        let psk_extras: Option<PskExtras<Kem>> = match mode {
-            0x01
-            | 0x03 => {
-                let ikm_sender = gen_ikm::<Kem, R>(csprng);
-                Some(PskExtras {
-                    sender_keypair: Kem::derive_keypair(&ikm_sender),
-                    ikm: ikm_sender,
-                    psk: vec![],
-                    psk_id: vec![],
-                })
+        let sender_extras: SenderExtras<Kem> = match mode {
+            0x00=> SenderExtras {keypair: None, ikm: None, bundle: None},
+            0x01 => {
+                SenderExtras {
+                    keypair: None,
+                    ikm: None,
+                    bundle: Some(PskBundle { psk: PSK, psk_id: PSK_ID }),
+                }
             },
-            _ => None,
+            0x02 => {
+                let ikm_sender = gen_ikm::<Kem, R>(csprng);
+                SenderExtras {
+                    keypair: Some(Kem::derive_keypair(&ikm_sender)),
+                    ikm: Some(ikm_sender),
+                    bundle: None,
+                }
+            },
+            0x03 => {
+                let ikm_sender = gen_ikm::<Kem, R>(csprng);
+                SenderExtras {
+                    keypair: Some(Kem::derive_keypair(&ikm_sender)),
+                    ikm: Some(ikm_sender),
+                    bundle: Some(PskBundle { psk: PSK, psk_id: PSK_ID }),
+                }
+            },
+            _ => panic!("Invalid mode"),
         };
-        // TODO gen ikmE, skEm, ikmR, skRm, base_nonce, key, from rand
-        // TODO pk_em := enc
 
         let (sk_recip, pk_recip) = recip_keypair;
 
         // Now derive the encapped key with the deterministic encap function, using all the inputs
         // above
         let (shared_secret, encapped_key) = {
-            let sender_keypair_ref = psk_extras.as_ref().map(|extras| extras.sender_keypair).map(|(ref sk, ref pk)| (sk, pk));
-            // get sk_eph as TestableKem, it's a Kem generally
+            let sender_keypair_ref = sender_extras.keypair.as_ref().map(|(pk, sk)| (pk, sk));
+            // Convert sk_eph to TestableKem::EphemeralKey
             let sk_eph = <Kem as TestableKem>::EphemeralKey::from_bytes(&sk_eph.to_bytes()).unwrap();
             Kem::encap_with_eph(&pk_recip, sender_keypair_ref, sk_eph).expect("encap failed")
         };
@@ -466,24 +488,22 @@ pub mod gen {
         key_schedule_context.extend_from_slice(&psk_id_hash);
         key_schedule_context.extend_from_slice(&info_hash);
 
-        let psk = psk_extras.as_ref().map(|extras| extras.psk.as_slice());
-
         // set up mode_s
-        let mode_s = make_op_mode_s::<Kem>(mode, psk_extras.map(|e| e.sender_keypair), psk_extras.map(|e| e.psk.as_slice()), psk_extras.map(|e| e.psk_id.as_slice()));
+        let mode_s = make_op_mode_s::<Kem>(mode, &sender_extras);
         let (_encapped_key, mut aead_ctx_s) = setup_sender::<A, Kdf, Kem, R>(&mode_s, &pk_recip, info, csprng).expect("Sender setup failed");
         
 
         // We're going to test the encryption contexts. First, construct the appropriate OpMode.
-        let mode_r = make_op_mode_r::<Kem>(
-            0x00, // TODO iterate all
-            psk_extras.map(|extras| &extras.sender_keypair).map(|(_sk, pk)| *pk),
-            psk,
-            psk_extras.as_ref().map(|extras| extras.psk_id.as_slice()),
-        );
+        // let mode_r = make_op_mode_r::<Kem>(
+        //     0x00, // TODO iterate all
+        //     sender_extras.as_ref().map(|extras| extras.sender_keypair.clone()).map(|(_sk, pk)| pk.clone()),
+        //     psk,
+        //     sender_extras.as_ref().map(|extras| extras.psk_id.as_slice()),
+        // );
 
 
-        let mut aead_ctx_r = setup_receiver::<A, Kdf, Kem>(&mode_r, &sk_recip, &encapped_key, info)
-            .expect("setup_receiver failed");
+        // let mut aead_ctx_r = setup_receiver::<A, Kdf, Kem>(&mode_r, &sk_recip, &encapped_key, info)
+        //     .expect("setup_receiver failed");
 
         // TODO derive secret, key, base_nonce, exporter_secret
 
@@ -543,7 +563,7 @@ pub mod gen {
         let mut exports = Vec::new();
         for &context in EXPORTER_CONTEXTS.iter() {
             let mut exported_value = vec![0u8; EXPORT_LEN];
-            aead_ctx_r.export(context, &mut exported_value).unwrap();
+            aead_ctx_s.export(context, &mut exported_value).unwrap();
             exports.push(ExporterTestVector {
                 export_ctx: context.to_vec(),
                 export_len: EXPORT_LEN,
@@ -563,8 +583,8 @@ pub mod gen {
         for (i, plaintext) in plaintexts.iter().enumerate() {
             let aad = &aads[i % aads.len()];
             let mut nonce = base_nonce.0.clone();
-            nonce[nonce.len() - 1] ^= i as u8; // Simple nonce increment
-
+            let i = nonce.len() - 1; // Simple nonce increment
+            nonce[i] ^= i as u8; 
             let ciphertext = aead_ctx_s.seal(plaintext, aad).unwrap();
 
             encryptions.push(EncryptionTestVector {
@@ -582,14 +602,14 @@ pub mod gen {
             info: info.to_vec(),
             mode,
             ikm_recip: ikm_recip.to_vec(),
-            ikm_sender: psk_extras.map(|e| e.ikm.to_vec()),
+            ikm_sender: sender_extras.ikm.map(|ikm| ikm.to_vec()),
             sk_recip: sk_recip.to_bytes().to_vec(),
             sk_eph: sk_eph.to_bytes().to_vec(),
-            sk_sender: psk_extras.map(|e| e.sender_keypair).map(|(sk, _)| sk.to_bytes().to_vec()),
-            psk: psk_extras.map(|e| e.psk),
-            psk_id: psk_extras.map(|e| e.psk_id),
+            sk_sender: sender_extras.keypair.as_ref().map(|(sk, _)| sk.to_bytes().to_vec()),
+            psk: sender_extras.bundle.map(|bundle| bundle.psk.to_vec()),
+            psk_id: sender_extras.bundle.map(|bundle| bundle.psk_id.to_vec()),
             pk_recip: pk_recip.to_bytes().to_vec(),
-            pk_sender: psk_extras.map(|e| e.sender_keypair).map(|(_, pk)| pk.to_bytes().to_vec()),
+            pk_sender: sender_extras.keypair.map(|(_, pk)| pk.to_bytes().to_vec()),
             _ikm_eph: ikm_eph.to_vec(),
             _pk_eph: pk_eph.to_bytes().to_vec(),
             encapped_key: encapped_key.to_bytes().to_vec(),
@@ -615,118 +635,79 @@ pub mod gen {
     /// Constructs an `OpModeR` from the given components. The variant constructed is determined solely
     /// by `mode_id`. This will panic if there is insufficient data to construct the variants specified
     /// by `mode_id`.
-    fn make_op_mode_s<'a, Kem: KemTrait>(
+    fn make_op_mode_s<'a, Kem: KemTrait + TestableKem>(
         mode_id: u8,
-        keypair: Option<(Kem::PrivateKey, Kem::PublicKey)>,
-        psk: Option<&'a [u8]>,
-        psk_id: Option<&'a [u8]>,
+        sender_extras: &SenderExtras<'a, Kem>,
     ) -> OpModeS<'a, Kem> {
-        // Deserialize the optional bundle
-        let bundle = psk.map(|bytes| PskBundle {
-            psk: bytes,
-            psk_id: psk_id.unwrap(),
-        });
-
         // These better be set if the mode ID calls for them
         match mode_id {
             0 => OpModeS::Base,
-            1 => OpModeS::Psk(bundle.unwrap()),
-            2 => OpModeS::Auth(keypair.unwrap()),
-            3 => OpModeS::AuthPsk(keypair.unwrap(), bundle.unwrap()),
+            1 => OpModeS::Psk(sender_extras.bundle.unwrap()),
+            2 => OpModeS::Auth(sender_extras.keypair.clone().unwrap()),
+            3 => OpModeS::AuthPsk(sender_extras.keypair.clone().unwrap(), sender_extras.bundle.unwrap()),
             _ => panic!("Invalid mode ID: {}", mode_id),
         }
     }
-
+    use rand::SeedableRng;
     // This macro takes in all the supported AEADs and dispatches the given test
     // vector to the test case with the appropriate types
-    macro_rules! dispatch_testcase {
+    macro_rules! k256_testgen {
         // Step 1: Roll up the AEAD, KDF, and KEM types into tuples. We'll unroll them later
-        ($tv:ident, ($( $aead_ty:ty ),*), ($( $kdf_ty:ty ),*), ($( $kem_ty:ty ),*)) => {
-            dispatch_testcase!(@tup1 $tv, ($( $aead_ty ),*), ($( $kdf_ty ),*), ($( $kem_ty ),*))
-        };
+        (($( $aead_ty:ty ),*), ($( $kdf_ty:ty ),*), ($( $kem_ty:ty ),*)) => {{
+            let mut test_vectors = Vec::new();
+            k256_testgen!(@tup1 test_vectors, ($( $aead_ty ),*), ($( $kdf_ty ),*), ($( $kem_ty ),*));
+            test_vectors
+        }};
         // Step 2: Expand with respect to every AEAD
-        (@tup1 $tv:ident, ($( $aead_ty:ty ),*), $kdf_tup:tt, $kem_tup:tt) => {
+        (@tup1 $test_vectors:ident, ($( $aead_ty:ty ),*), $kdf_tup:tt, $kem_tup:tt) => {
             $(
-                dispatch_testcase!(@tup2 $tv, $aead_ty, $kdf_tup, $kem_tup);
+                k256_testgen!(@tup2 $test_vectors, $aead_ty, $kdf_tup, $kem_tup);
             )*
         };
         // Step 3: Expand with respect to every KDF
-        (@tup2 $tv:ident, $aead_ty:ty, ($( $kdf_ty:ty ),*), $kem_tup:tt) => {
+        (@tup2 $test_vectors:ident, $aead_ty:ty, ($( $kdf_ty:ty ),*), $kem_tup:tt) => {
             $(
-                dispatch_testcase!(@tup3 $tv, $aead_ty, $kdf_ty, $kem_tup);
+                k256_testgen!(@tup3 $test_vectors, $aead_ty, $kdf_ty, $kem_tup);
             )*
         };
         // Step 4: Expand with respect to every KEM
-        (@tup3 $tv:ident, $aead_ty:ty, $kdf_ty:ty, ($( $kem_ty:ty ),*)) => {
+        (@tup3 $test_vectors:ident, $aead_ty:ty, $kdf_ty:ty, ($( $kem_ty:ty ),*)) => {
             $(
-                dispatch_testcase!(@base $tv, $aead_ty, $kdf_ty, $kem_ty);
+                k256_testgen!(@base $test_vectors, $aead_ty, $kdf_ty, $kem_ty);
             )*
         };
-        // Step 5: Now that we're only dealing with 1 type of each kind, do the dispatch. If the test
-        // vector matches the IDs of these types, run the test case.
-        (@base $tv:ident, $aead_ty:ty, $kdf_ty:ty, $kem_ty:ty) => {
-            if let (<$aead_ty>::AEAD_ID, <$kdf_ty>::KDF_ID, <$kem_ty>::KEM_ID) =
-                ($tv.aead_id, $tv.kdf_id, $tv.kem_id)
+        // Step 5: Now that we're only dealing with 1 type of each kind, generate the test case and collect it
+        (@base $test_vectors:ident, $aead_ty:ty, $kdf_ty:ty, $kem_ty:ty) => {
             {
                 println!(
-                    "Running test case on {}, {}, {}",
+                    "Generating test case for {}, {}, {}",
                     stringify!($aead_ty),
                     stringify!($kdf_ty),
                     stringify!($kem_ty)
                 );
-
-                let tv = $tv.clone();
-                test_case::<$aead_ty, $kdf_ty, $kem_ty>(tv);
-
-                // This is so that code that comes after a dispatch_testcase! invocation will know that
-                // the test vector matched no known ciphersuites
-                continue;
+                let test_vector = gen_test_cases::<$aead_ty, $kdf_ty, $kem_ty, rand::rngs::StdRng>(&mut rand::rngs::StdRng::from_entropy());
+                $test_vectors.push(test_vector);
             }
         };
     }
 
     #[test]
     fn gen_secp_test_vectors() {
-        use serde_json::Value;
-        use std::fs::File;
+        let mut test_vectors = Vec::new();
 
-        dispatch_k256_testgen!(
+        let vecs = k256_testgen!(
             (AesGcm128, AesGcm256, ChaCha20Poly1305, ExportOnlyAead),
             (HkdfSha256),
             (DhK256HkdfSha256)
         );
 
-        for tv in incomplete_test_vectors {
-            // Extract the necessary fields from the JSON object
-            //let key = hex::decode(tv["key"].as_str().expect("Missing key")).expect("Invalid key format");
-            //let base_nonce = hex::decode(tv["base_nonce"].as_str().expect("Missing base_nonce")).expect("Invalid base_nonce format");
-            let aad = b"example aad"; // Replace with actual AAD if available in the JSON
-            let pt = b"4265617574792069732074727574682c20747275746820626561757479"; // Replace with actual plaintext if available in the JSON
-            let export_ctx = b"example context"; // Replace with actual export context if available in the JSON
-            let export_len = 32; // Replace with actual export length if available in the JSON
-
-            gen_test_case::<AesGcm128, HkdfSha256, DhK256HkdfSha256>(tv);
-            println!("ONE DONE!");
-            // // Generate encryption test vectors
-            // let encryption_test_vectors = generate_encryption_test_vectors::<A, Kdf, Kem>(&key, &base_nonce, aad, plaintext);
-            // println!("{:?}", encryption_test_vectors);
-
-            // // Generate exported values
-            // let exported_values = generate_exported_values::<A, Kdf, Kem>(&key, &base_nonce, export_ctx, export_len);
-            // println!("{:?}", exported_values);
-        }
+        save_test_vectors_to_file(&test_vectors, "test-test-secp-vectors.json");
     }
 
     fn save_test_vectors_to_file(test_vectors: &[MainTestVector], file_path: &str) {
         let mut file = File::create(file_path).expect("Failed to create file");
         let json = serde_json::to_string_pretty(test_vectors).expect("Failed to serialize test vectors");
         file.write_all(json.as_bytes()).expect("Failed to write to file");
-    }
-    
-    #[test]
-    fn generate_and_save_test_vectors() {
-        let test_vectors = generate_test_vectors();
-        save_test_vectors_to_file(&test_vectors, "test-vectors.json");
     }
 }
 
