@@ -619,7 +619,7 @@ pub mod gen {
 
         // Now derive the encapped key with the deterministic encap function, using all the inputs
         // above
-        let (shared_secret, _encapped_key) = {
+        let (shared_secret, encapped_key) = {
             let sender_keypair_ref = sender_extras.keypair.as_ref().map(|(pk, sk)| (pk, sk));
             // Convert sk_eph to TestableKem::EphemeralKey
             let sk_eph =
@@ -643,7 +643,7 @@ pub mod gen {
 
         // set up mode_s
         let mode_s = make_op_mode_s::<Kem>(mode, &sender_extras);
-        let (encapped_key, mut aead_ctx_s) =
+        let (encapped_key_s, mut aead_ctx_s) =
             setup_sender::<A, Kdf, Kem, R>(&mode_s, &pk_recip, INFO, csprng)
                 .expect("Sender setup failed");
 
@@ -655,7 +655,7 @@ pub mod gen {
             sender_extras.bundle.as_ref().map(|bundle| bundle.psk_id),
         );
 
-        let mut aead_ctx_r = setup_receiver::<A, Kdf, Kem>(&mode_r, &sk_recip, &encapped_key, INFO)
+        let mut aead_ctx_r = setup_receiver::<A, Kdf, Kem>(&mode_r, &sk_recip, &encapped_key_s, INFO)
             .expect("setup_receiver failed");
 
         let (secret, secret_ctx) =
