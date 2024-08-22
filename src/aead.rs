@@ -236,6 +236,10 @@ impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AeadCtx<A, Kdf, Kem> {
             .labeled_expand(&self.suite_id, b"sec", exporter_ctx, out_buf)
             .map_err(|_| HpkeError::KdfOutputTooLong)
     }
+
+    pub(crate) fn current_nonce(&self) -> AeadNonce<A> {
+        mix_nonce::<A>(&self.base_nonce, &self.seq)
+    }
 }
 
 /// The HPKE receiver's context. This is what you use to `open` ciphertexts and `export` secrets.
@@ -355,7 +359,7 @@ impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AeadCtxR<A, Kdf, Kem> {
 }
 
 /// The HPKE senders's context. This is what you use to `seal` plaintexts and `export` secrets.
-pub struct AeadCtxS<A: Aead, Kdf: KdfTrait, Kem: KemTrait>(AeadCtx<A, Kdf, Kem>);
+pub struct AeadCtxS<A: Aead, Kdf: KdfTrait, Kem: KemTrait>(pub(crate) AeadCtx<A, Kdf, Kem>);
 
 // AeadCtx -> AeadCtxS via wrapping
 impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> From<AeadCtx<A, Kdf, Kem>> for AeadCtxS<A, Kdf, Kem> {
