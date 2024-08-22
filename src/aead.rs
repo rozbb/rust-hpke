@@ -237,8 +237,8 @@ impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AeadCtx<A, Kdf, Kem> {
             .map_err(|_| HpkeError::KdfOutputTooLong)
     }
 
-    pub(crate) fn nonce(&self) -> std::vec::Vec<u8> {
-        self.base_nonce.0.to_vec()
+    pub(crate) fn current_nonce(&self) -> AeadNonce<A> {
+        mix_nonce::<A>(&self.base_nonce, &self.seq)
     }
 }
 

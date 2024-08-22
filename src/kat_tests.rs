@@ -741,8 +741,7 @@ pub mod gen {
                 encryptions.push(EncryptionTestVector {
                     plaintext: PLAINTEXT.to_vec(),
                     aad: aad.clone(),
-                    //_nonce: aead_ctx_s.0.nonce(),
-                    _nonce: crate::aead::AeadNonce::<A>::default().0.to_vec(),
+                    _nonce: aead_ctx_s.0.current_nonce().0.to_vec(),
                     ciphertext,
                 });
             }
