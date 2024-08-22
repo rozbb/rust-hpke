@@ -568,58 +568,61 @@ pub mod gen {
         test_vectors
     }
 
+    fn generate_keypair<Kem: TestableKem, R: CryptoRng + RngCore>(csprng: &mut R) -> (Kem::PrivateKey, Kem::PublicKey, GenericArray<u8, <Kem::PrivateKey as Serializable>::OutputSize>) {
+        let ikm = gen_ikm::<Kem, R>(csprng);
+        let (sk, pk) = Kem::derive_keypair(&ikm);
+        (sk, pk, ikm)
+    }
+
     /// This does all the legwork
     fn gen_test_case<A: Aead + 'static, Kdf: KdfTrait, Kem: TestableKem, R: CryptoRng + RngCore>(
         mode: u8,
         csprng: &mut R,
     ) -> MainTestVector {
-        let ikm_eph = gen_ikm::<Kem, R>(csprng);
-        let (sk_eph, pk_eph) = Kem::derive_keypair(&ikm_eph);
-        let ikm_recip = gen_ikm::<Kem, R>(csprng);
-        let recip_keypair = Kem::derive_keypair(&ikm_recip);
+        let suite_id: [u8; 10] = crate::util::full_suite_id::<A, Kdf, Kem>();
 
-        // for loop through the modes
-        let sender_extras: SenderExtras<Kem> = match mode {
-            0x00 => SenderExtras {
-                keypair: None,
-                ikm: None,
-                bundle: None,
-            },
-            0x01 => SenderExtras {
-                keypair: None,
-                ikm: None,
-                bundle: Some(PskBundle {
-                    psk: PSK,
-                    psk_id: PSK_ID,
-                }),
-            },
-            0x02 => {
-                let ikm_sender = gen_ikm::<Kem, R>(csprng);
-                SenderExtras {
-                    keypair: Some(Kem::derive_keypair(&ikm_sender)),
-                    ikm: Some(ikm_sender),
+        let (sk_recip, pk_recip, ikm_recip) = generate_keypair::<Kem, R>(csprng);
+        let (sk_eph, pk_eph, ikm_eph) = generate_keypair::<Kem, R>(csprng);
+
+        let sender_extras = {
+            let (sk_sender, pk_sender, ikm_sender) = generate_keypair::<Kem, R>(csprng);
+            let bundle = PskBundle {
+                psk: PSK,
+                psk_id: PSK_ID,
+            };
+
+            match mode {
+                0x00 => SenderExtras {
+                    keypair: None,
+                    ikm: None,
                     bundle: None,
+                },
+                0x01 => SenderExtras {
+                    keypair: None,
+                    ikm: None,
+                    bundle: Some(bundle),
+                },
+                0x02 => {
+                    SenderExtras {
+                        keypair: Some((sk_sender, pk_sender)),
+                        ikm: Some(ikm_sender),
+                        bundle: None,
+                    }
                 }
-            }
-            0x03 => {
-                let ikm_sender = gen_ikm::<Kem, R>(csprng);
-                SenderExtras {
-                    keypair: Some(Kem::derive_keypair(&ikm_sender)),
-                    ikm: Some(ikm_sender),
-                    bundle: Some(PskBundle {
-                        psk: PSK,
-                        psk_id: PSK_ID,
-                    }),
+                0x03 => {
+                    SenderExtras {
+                        keypair: Some((sk_sender, pk_sender)),
+                        ikm: Some(ikm_sender),
+                        bundle: Some(bundle),
+                    }
                 }
+                _ => panic!("Invalid mode"),
             }
-            _ => panic!("Invalid mode"),
         };
-
-        let (sk_recip, pk_recip) = recip_keypair;
 
         // Now derive the encapped key with the deterministic encap function, using all the inputs
         // above
-        let (shared_secret, encapped_key) = {
+        let (shared_secret, _encapped_key) = {
             let sender_keypair_ref = sender_extras.keypair.as_ref().map(|(pk, sk)| (pk, sk));
             // Convert sk_eph to TestableKem::EphemeralKey
             let sk_eph =
@@ -629,8 +632,6 @@ pub mod gen {
 
         // "enc"
         //let encapped_key = <Kem as KemTrait>::EncappedKey::from_bytes(&pk_eph.to_bytes()).unwrap();
-
-        let suite_id: [u8; 10] = crate::util::full_suite_id::<A, Kdf, Kem>();
 
         // generate key_schedule_context for PSK modes
         let (psk_id_hash, _) = labeled_extract::<Kdf>(&[], &suite_id, b"psk_id_hash", PSK_ID); // was set to ikm: &[mode] but that seemed so wrong
@@ -643,7 +644,7 @@ pub mod gen {
 
         // set up mode_s
         let mode_s = make_op_mode_s::<Kem>(mode, &sender_extras);
-        let (encapped_key_s, mut aead_ctx_s) =
+        let (encapped_key, mut aead_ctx_s) =
             setup_sender::<A, Kdf, Kem, R>(&mode_s, &pk_recip, INFO, csprng)
                 .expect("Sender setup failed");
 
@@ -655,7 +656,7 @@ pub mod gen {
             sender_extras.bundle.as_ref().map(|bundle| bundle.psk_id),
         );
 
-        let mut aead_ctx_r = setup_receiver::<A, Kdf, Kem>(&mode_r, &sk_recip, &encapped_key_s, INFO)
+        let mut aead_ctx_r = setup_receiver::<A, Kdf, Kem>(&mode_r, &sk_recip, &encapped_key, INFO)
             .expect("setup_receiver failed");
 
         let (secret, secret_ctx) =
