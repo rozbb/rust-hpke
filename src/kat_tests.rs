@@ -142,6 +142,16 @@ where
 {
     match bytes {
         Some(b) => bytes_to_hex(b, serializer),
+        None => serializer.serialize_none(),
+    }
+}
+
+fn bytes_to_hex_opt_exports<S>(bytes: &Option<Vec<u8>>, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    match bytes {
+        Some(b) => bytes_to_hex(b, serializer),
         None => serializer.serialize_str(""),
     }
 }
@@ -168,7 +178,8 @@ struct MainTestVector {
         default,
         rename = "ikmS",
         deserialize_with = "bytes_from_hex_opt",
-        serialize_with = "bytes_to_hex_opt"
+        serialize_with = "bytes_to_hex_opt",
+        skip_serializing_if = "Option::is_none"
     )]
     ikm_sender: Option<Vec<u8>>,
     #[serde(
@@ -189,7 +200,8 @@ struct MainTestVector {
         default,
         rename = "skSm",
         deserialize_with = "bytes_from_hex_opt",
-        serialize_with = "bytes_to_hex_opt"
+        serialize_with = "bytes_to_hex_opt",
+        skip_serializing_if = "Option::is_none"
     )]
     sk_sender: Option<Vec<u8>>,
     #[serde(
@@ -203,14 +215,16 @@ struct MainTestVector {
     #[serde(
         default,
         deserialize_with = "bytes_from_hex_opt",
-        serialize_with = "bytes_to_hex_opt"
+        serialize_with = "bytes_to_hex_opt",
+        skip_serializing_if = "Option::is_none"
     )]
     psk: Option<Vec<u8>>,
     #[serde(
         default,
         rename = "psk_id",
         deserialize_with = "bytes_from_hex_opt",
-        serialize_with = "bytes_to_hex_opt"
+        serialize_with = "bytes_to_hex_opt",
+        skip_serializing_if = "Option::is_none"
     )]
     psk_id: Option<Vec<u8>>,
 
@@ -225,7 +239,8 @@ struct MainTestVector {
         default,
         rename = "pkSm",
         deserialize_with = "bytes_from_hex_opt",
-        serialize_with = "bytes_to_hex_opt"
+        serialize_with = "bytes_to_hex_opt",
+        skip_serializing_if = "Option::is_none"
     )]
     pk_sender: Option<Vec<u8>>,
     #[serde(
@@ -878,7 +893,7 @@ fn generate_256bit_hash_output() {
 
 #[test]
 fn kat_test() {
-    let file = File::open("test-vectors-5f503c5.json").unwrap();
+    let file = File::open("test-test-secp-vectors.json").unwrap();
     let tvs: Vec<MainTestVector> = serde_json::from_reader(file).unwrap();
 
     for tv in tvs.into_iter() {
