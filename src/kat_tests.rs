@@ -545,6 +545,68 @@ pub mod gen {
         Auth,
         AuthPsk,
     }
+
+    fn setup_sender_with_eph<A, Kdf, Kem>(
+        mode: &OpModeS<Kem>,
+        pk_recip: &Kem::PublicKey,
+        info: &[u8],
+        eph: Kem::EphemeralKey,
+    ) -> Result<(Kem::EncappedKey, AeadCtxS<A, Kdf, Kem>), HpkeError>
+    where
+        A: Aead,
+        Kdf: KdfTrait,
+        Kem: TestableKem,
+    {
+        // If the identity key is set, use it
+        let sender_id_keypair = mode.get_sender_id_keypair();
+        // Do the encapsulation
+        let (shared_secret, encapped_key) = Kem::encap_with_eph(pk_recip, sender_id_keypair, eph)?;
+        // Use everything to derive an encryption context
+        let enc_ctx = crate::setup::derive_enc_ctx::<_, _, Kem, _>(mode, shared_secret, info);
+    
+        Ok((encapped_key, enc_ctx.into()))
+    }
+
+    // Custom RNG that produces bytes from ikm_sender cyclically
+    struct IkmRngReplacement<'a> {
+        ikm: &'a [u8],
+        index: usize,
+    }
+
+    impl<'a> IkmRngReplacement<'a> {
+        fn new(ikm: &'a [u8]) -> Self {
+            Self { ikm, index: 0 }
+        }
+    }
+
+    impl<'a> RngCore for IkmRngReplacement<'a> {
+        fn next_u32(&mut self) -> u32 {
+            let mut bytes = [0u8; 4];
+            self.fill_bytes(&mut bytes);
+            u32::from_le_bytes(bytes)
+        }
+
+        fn next_u64(&mut self) -> u64 {
+            let mut bytes = [0u8; 8];
+            self.fill_bytes(&mut bytes);
+            u64::from_le_bytes(bytes)
+        }
+
+        fn fill_bytes(&mut self, dest: &mut [u8]) {
+            for byte in dest.iter_mut() {
+                *byte = self.ikm[self.index];
+                self.index = (self.index + 1) % self.ikm.len();
+            }
+        }
+
+        fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), rand::Error> {
+            self.fill_bytes(dest);
+            Ok(())
+        }
+    }
+
+    impl<'a> CryptoRng for IkmRngReplacement<'a> {}
+
     struct SenderExtras<'a, Kem: TestableKem> {
         keypair: Option<(Kem::PrivateKey, Kem::PublicKey)>,
         ikm: Option<GenericArray<u8, <Kem::PrivateKey as Serializable>::OutputSize>>,
@@ -630,9 +692,6 @@ pub mod gen {
             Kem::encap_with_eph(&pk_recip, sender_keypair_ref, sk_eph).expect("encap failed")
         };
 
-        // "enc"
-        //let encapped_key = <Kem as KemTrait>::EncappedKey::from_bytes(&pk_eph.to_bytes()).unwrap();
-
         // generate key_schedule_context for PSK modes
         let (psk_id_hash, _) = labeled_extract::<Kdf>(&[], &suite_id, b"psk_id_hash", PSK_ID); // was set to ikm: &[mode] but that seemed so wrong
         let (info_hash, _) = labeled_extract::<Kdf>(&[], &suite_id, b"info_hash", INFO);
@@ -641,11 +700,14 @@ pub mod gen {
         key_schedule_context.extend_from_slice(&[mode]);
         key_schedule_context.extend_from_slice(&psk_id_hash);
         key_schedule_context.extend_from_slice(&info_hash);
-
         // set up mode_s
+        let sk_eph_bytes = sk_eph.to_bytes();
+        let mut ikm_sender_rng = IkmRngReplacement::new(&sk_eph_bytes);
         let mode_s = make_op_mode_s::<Kem>(mode, &sender_extras);
+        let sk_eph_ikm =
+                <Kem as TestableKem>::EphemeralKey::from_bytes(&sk_eph.to_bytes()).unwrap();
         let (encapped_key, mut aead_ctx_s) =
-            setup_sender::<A, Kdf, Kem, R>(&mode_s, &pk_recip, INFO, csprng)
+            setup_sender_with_eph::<A, Kdf, Kem>(&mode_s, &pk_recip, INFO, sk_eph_ikm)
                 .expect("Sender setup failed");
 
         // We're going to test the encryption contexts. First, construct the appropriate OpMode.
@@ -659,8 +721,10 @@ pub mod gen {
         let mut aead_ctx_r = setup_receiver::<A, Kdf, Kem>(&mode_r, &sk_recip, &encapped_key, INFO)
             .expect("setup_receiver failed");
 
+        println!("shared_secret: {:?}, suite_id: {:?}, mode: {}", shared_secret.0, suite_id, mode);
         let (secret, secret_ctx) =
-            labeled_extract::<Kdf>(&shared_secret.0, &suite_id, b"secret", &[mode]);
+            labeled_extract::<Kdf>(&shared_secret.0, &suite_id, b"secret", sender_extras.bundle.as_ref().map(|bundle| bundle.psk).unwrap_or(&[]));
+        println!("secret: {:?}", secret);
 
         // Empty fixed-size buffers
         let mut key = crate::aead::AeadKey::<A>::default();

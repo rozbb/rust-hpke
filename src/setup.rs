@@ -53,7 +53,7 @@ impl<K: KdfTrait> Drop for ExporterSecret<K> {
 
 // This is the KeySchedule function. It runs a KDF over all the parameters, inputs, and secrets,
 // and spits out a key-nonce pair to be used for symmetric encryption.
-fn derive_enc_ctx<A, Kdf, Kem, O>(
+pub(crate) fn derive_enc_ctx<A, Kdf, Kem, O>(
     mode: &O,
     shared_secret: SharedSecret<Kem>,
     info: &[u8],
