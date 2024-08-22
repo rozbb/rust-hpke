@@ -13,8 +13,7 @@ use crate::{
 extern crate std;
 use std::{fs::File, string::String, vec::Vec};
 
-use hex;
-use serde::{de::Error as SError, Deserialize, Deserializer};
+use serde::{de::Error as SError, Deserialize, Deserializer, Serializer};
 use serde_json;
 
 // For known-answer tests we need to be able to encap with fixed randomness. This allows that.
@@ -128,6 +127,25 @@ where
     bytes_from_hex(deserializer).map(|v| Some(v))
 }
 
+// Tells serde how to serialize bytes to a hex representation
+fn bytes_to_hex<S>(bytes: &[u8], serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    serializer.serialize_str(&hex::encode(bytes))
+}
+
+// Tells serde how to serialize optional bytes to a hex representation
+fn bytes_to_hex_opt<S>(bytes: &Option<Vec<u8>>, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    match bytes {
+        Some(b) => bytes_to_hex(b, serializer),
+        None => serializer.serialize_str(""),
+    }
+}
+
 // Each individual test case looks like this
 #[derive(Clone, serde::Deserialize, serde::Serialize, Debug)]
 struct MainTestVector {
@@ -136,53 +154,125 @@ struct MainTestVector {
     kem_id: u16,
     kdf_id: u16,
     aead_id: u16,
-    #[serde(deserialize_with = "bytes_from_hex")]
+    #[serde(deserialize_with = "bytes_from_hex", serialize_with = "bytes_to_hex")]
     info: Vec<u8>,
 
     // Keying material
-    #[serde(rename = "ikmR", deserialize_with = "bytes_from_hex")]
+    #[serde(
+        rename = "ikmR",
+        deserialize_with = "bytes_from_hex",
+        serialize_with = "bytes_to_hex"
+    )]
     ikm_recip: Vec<u8>,
-    #[serde(default, rename = "ikmS", deserialize_with = "bytes_from_hex_opt")]
+    #[serde(
+        default,
+        rename = "ikmS",
+        deserialize_with = "bytes_from_hex_opt",
+        serialize_with = "bytes_to_hex_opt"
+    )]
     ikm_sender: Option<Vec<u8>>,
-    #[serde(rename = "ikmE", deserialize_with = "bytes_from_hex")]
+    #[serde(
+        rename = "ikmE",
+        deserialize_with = "bytes_from_hex",
+        serialize_with = "bytes_to_hex"
+    )]
     _ikm_eph: Vec<u8>,
 
     // Private keys
-    #[serde(rename = "skRm", deserialize_with = "bytes_from_hex")]
+    #[serde(
+        rename = "skRm",
+        deserialize_with = "bytes_from_hex",
+        serialize_with = "bytes_to_hex"
+    )]
     sk_recip: Vec<u8>,
-    #[serde(default, rename = "skSm", deserialize_with = "bytes_from_hex_opt")]
+    #[serde(
+        default,
+        rename = "skSm",
+        deserialize_with = "bytes_from_hex_opt",
+        serialize_with = "bytes_to_hex_opt"
+    )]
     sk_sender: Option<Vec<u8>>,
-    #[serde(rename = "skEm", deserialize_with = "bytes_from_hex")]
+    #[serde(
+        rename = "skEm",
+        deserialize_with = "bytes_from_hex",
+        serialize_with = "bytes_to_hex"
+    )]
     sk_eph: Vec<u8>,
 
     // Preshared Key Bundle
-    #[serde(default, deserialize_with = "bytes_from_hex_opt")]
+    #[serde(
+        default,
+        deserialize_with = "bytes_from_hex_opt",
+        serialize_with = "bytes_to_hex_opt"
+    )]
     psk: Option<Vec<u8>>,
-    #[serde(default, rename = "psk_id", deserialize_with = "bytes_from_hex_opt")]
+    #[serde(
+        default,
+        rename = "psk_id",
+        deserialize_with = "bytes_from_hex_opt",
+        serialize_with = "bytes_to_hex_opt"
+    )]
     psk_id: Option<Vec<u8>>,
 
     // Public Keys
-    #[serde(rename = "pkRm", deserialize_with = "bytes_from_hex")]
+    #[serde(
+        rename = "pkRm",
+        deserialize_with = "bytes_from_hex",
+        serialize_with = "bytes_to_hex"
+    )]
     pk_recip: Vec<u8>,
-    #[serde(default, rename = "pkSm", deserialize_with = "bytes_from_hex_opt")]
+    #[serde(
+        default,
+        rename = "pkSm",
+        deserialize_with = "bytes_from_hex_opt",
+        serialize_with = "bytes_to_hex_opt"
+    )]
     pk_sender: Option<Vec<u8>>,
-    #[serde(rename = "pkEm", deserialize_with = "bytes_from_hex")]
+    #[serde(
+        rename = "pkEm",
+        deserialize_with = "bytes_from_hex",
+        serialize_with = "bytes_to_hex"
+    )]
     _pk_eph: Vec<u8>,
 
     // Key schedule inputs and computations
-    #[serde(rename = "enc", deserialize_with = "bytes_from_hex")]
+    #[serde(
+        rename = "enc",
+        deserialize_with = "bytes_from_hex",
+        serialize_with = "bytes_to_hex"
+    )]
     encapped_key: Vec<u8>,
-    #[serde(deserialize_with = "bytes_from_hex")]
+    #[serde(deserialize_with = "bytes_from_hex", serialize_with = "bytes_to_hex")]
     shared_secret: Vec<u8>,
-    #[serde(rename = "key_schedule_context", deserialize_with = "bytes_from_hex")]
+    #[serde(
+        rename = "key_schedule_context",
+        deserialize_with = "bytes_from_hex",
+        serialize_with = "bytes_to_hex"
+    )]
     _hpke_context: Vec<u8>,
-    #[serde(rename = "secret", deserialize_with = "bytes_from_hex")]
+    #[serde(
+        rename = "secret",
+        deserialize_with = "bytes_from_hex",
+        serialize_with = "bytes_to_hex"
+    )]
     _key_schedule_secret: Vec<u8>,
-    #[serde(rename = "key", deserialize_with = "bytes_from_hex")]
+    #[serde(
+        rename = "key",
+        deserialize_with = "bytes_from_hex",
+        serialize_with = "bytes_to_hex"
+    )]
     _aead_key: Vec<u8>,
-    #[serde(rename = "base_nonce", deserialize_with = "bytes_from_hex")]
+    #[serde(
+        rename = "base_nonce",
+        deserialize_with = "bytes_from_hex",
+        serialize_with = "bytes_to_hex"
+    )]
     _aead_base_nonce: Vec<u8>,
-    #[serde(rename = "exporter_secret", deserialize_with = "bytes_from_hex")]
+    #[serde(
+        rename = "exporter_secret",
+        deserialize_with = "bytes_from_hex",
+        serialize_with = "bytes_to_hex"
+    )]
     _exporter_secret: Vec<u8>,
 
     encryptions: Vec<EncryptionTestVector>,
@@ -191,23 +281,43 @@ struct MainTestVector {
 
 #[derive(Clone, serde::Deserialize, serde::Serialize, Debug)]
 struct EncryptionTestVector {
-    #[serde(rename = "pt", deserialize_with = "bytes_from_hex")]
+    #[serde(
+        rename = "pt",
+        deserialize_with = "bytes_from_hex",
+        serialize_with = "bytes_to_hex"
+    )]
     plaintext: Vec<u8>,
-    #[serde(deserialize_with = "bytes_from_hex")]
+    #[serde(deserialize_with = "bytes_from_hex", serialize_with = "bytes_to_hex")]
     aad: Vec<u8>,
-    #[serde(rename = "nonce", deserialize_with = "bytes_from_hex")]
+    #[serde(
+        rename = "nonce",
+        deserialize_with = "bytes_from_hex",
+        serialize_with = "bytes_to_hex"
+    )]
     _nonce: Vec<u8>,
-    #[serde(rename = "ct", deserialize_with = "bytes_from_hex")]
+    #[serde(
+        rename = "ct",
+        deserialize_with = "bytes_from_hex",
+        serialize_with = "bytes_to_hex"
+    )]
     ciphertext: Vec<u8>,
 }
 
 #[derive(Clone, serde::Deserialize, serde::Serialize, Debug)]
 struct ExporterTestVector {
-    #[serde(rename = "exporter_context", deserialize_with = "bytes_from_hex")]
+    #[serde(
+        rename = "exporter_context",
+        deserialize_with = "bytes_from_hex",
+        serialize_with = "bytes_to_hex"
+    )]
     export_ctx: Vec<u8>,
     #[serde(rename = "L")]
     export_len: usize,
-    #[serde(rename = "exported_value", deserialize_with = "bytes_from_hex")]
+    #[serde(
+        rename = "exported_value",
+        deserialize_with = "bytes_from_hex",
+        serialize_with = "bytes_to_hex"
+    )]
     export_val: Vec<u8>,
 }
 
@@ -390,18 +500,29 @@ pub mod gen {
     use std::io::Write;
 
     use generic_array::GenericArray;
+    use hex_literal::hex;
     use rand::{CryptoRng, RngCore};
 
     use super::*;
 
-    use crate::{kdf::{labeled_extract, LabeledExpand}, setup::ExporterSecret, setup_sender, OpModeS};
+    use crate::{
+        aead::{AeadCtxR, AeadCtxS},
+        kdf::{labeled_extract, LabeledExpand},
+        setup::ExporterSecret,
+        setup_sender, OpModeS,
+    };
 
+    const TEST_VECTOR_ENCRYPTION_COUNT: usize = 257;
+
+    const INFO: &[u8] = &hex!("4f6465206f6e2061204772656369616e2055726e"); // same as RFC 9180 test vectors
     const EXPORT_LEN: usize = 32;
-    const EXPORTER_CONTEXTS: [&[u8]; 3] = [b"", b"00", b"54657374436f6e74657874"];
+    const EXPORTER_CONTEXTS: [&[u8]; 3] = [&[], &hex!("30"), &hex!("54657374436f6e74657874")];
     const OP_MODES: [u8; 4] = [0x00, 0x01, 0x02, 0x03];
     const SHA256_NH: usize = 32;
-    const PSK: &[u8] = b"0247fd33b913760fa1fa51e1892d9f307fbe65eb171e8132c2af18555a738b82";
-    const PSK_ID: &[u8] = b"456e6e796e20447572696e206172616e204d6f726961";
+    const PSK: &[u8] = &hex!("0247fd33b913760fa1fa51e1892d9f307fbe65eb171e8132c2af18555a738b82");
+    const PSK_ID: &[u8] = &hex!("456e6e796e20447572696e206172616e204d6f726961");
+    const PLAINTEXT: &[u8] = &hex!("4265617574792069732074727574682c20747275746820626561757479");
+    const AAD: &[u8] = &hex!("436f756e742d30"); // the first one
 
     enum OpMode {
         Base,
@@ -415,7 +536,14 @@ pub mod gen {
         bundle: Option<PskBundle<'a>>,
     }
 
-    fn gen_test_cases<A: Aead + 'static, Kdf: KdfTrait, Kem: TestableKem, R: CryptoRng + RngCore>(csprng: &mut R) -> Vec<MainTestVector> {
+    fn gen_test_cases<
+        A: Aead + 'static,
+        Kdf: KdfTrait,
+        Kem: TestableKem,
+        R: CryptoRng + RngCore,
+    >(
+        csprng: &mut R,
+    ) -> Vec<MainTestVector> {
         let mut test_vectors = Vec::new();
         for mode in OP_MODES {
             println!("Generating test case for mode: {}", mode);
@@ -426,22 +554,29 @@ pub mod gen {
     }
 
     /// This does all the legwork
-    fn gen_test_case<A: Aead + 'static, Kdf: KdfTrait, Kem: TestableKem, R: CryptoRng + RngCore>(mode: u8, csprng: &mut R) -> MainTestVector {
-        let info = b"4f6465206f6e2061204772656369616e2055726e"; // same as RFC 9180 test vectors
+    fn gen_test_case<A: Aead + 'static, Kdf: KdfTrait, Kem: TestableKem, R: CryptoRng + RngCore>(
+        mode: u8,
+        csprng: &mut R,
+    ) -> MainTestVector {
         let ikm_eph = gen_ikm::<Kem, R>(csprng);
         let (sk_eph, pk_eph) = Kem::derive_keypair(&ikm_eph);
         let ikm_recip = gen_ikm::<Kem, R>(csprng);
         let recip_keypair = Kem::derive_keypair(&ikm_recip);
-        
+
         // for loop through the modes
         let sender_extras: SenderExtras<Kem> = match mode {
-            0x00=> SenderExtras {keypair: None, ikm: None, bundle: None},
-            0x01 => {
-                SenderExtras {
-                    keypair: None,
-                    ikm: None,
-                    bundle: Some(PskBundle { psk: PSK, psk_id: PSK_ID }),
-                }
+            0x00 => SenderExtras {
+                keypair: None,
+                ikm: None,
+                bundle: None,
+            },
+            0x01 => SenderExtras {
+                keypair: None,
+                ikm: None,
+                bundle: Some(PskBundle {
+                    psk: PSK,
+                    psk_id: PSK_ID,
+                }),
             },
             0x02 => {
                 let ikm_sender = gen_ikm::<Kem, R>(csprng);
@@ -450,15 +585,18 @@ pub mod gen {
                     ikm: Some(ikm_sender),
                     bundle: None,
                 }
-            },
+            }
             0x03 => {
                 let ikm_sender = gen_ikm::<Kem, R>(csprng);
                 SenderExtras {
                     keypair: Some(Kem::derive_keypair(&ikm_sender)),
                     ikm: Some(ikm_sender),
-                    bundle: Some(PskBundle { psk: PSK, psk_id: PSK_ID }),
+                    bundle: Some(PskBundle {
+                        psk: PSK,
+                        psk_id: PSK_ID,
+                    }),
                 }
-            },
+            }
             _ => panic!("Invalid mode"),
         };
 
@@ -466,22 +604,22 @@ pub mod gen {
 
         // Now derive the encapped key with the deterministic encap function, using all the inputs
         // above
-        let (shared_secret, encapped_key) = {
+        let (shared_secret, _encapped_key) = {
             let sender_keypair_ref = sender_extras.keypair.as_ref().map(|(pk, sk)| (pk, sk));
             // Convert sk_eph to TestableKem::EphemeralKey
-            let sk_eph = <Kem as TestableKem>::EphemeralKey::from_bytes(&sk_eph.to_bytes()).unwrap();
+            let sk_eph =
+                <Kem as TestableKem>::EphemeralKey::from_bytes(&sk_eph.to_bytes()).unwrap();
             Kem::encap_with_eph(&pk_recip, sender_keypair_ref, sk_eph).expect("encap failed")
         };
 
         // "enc"
-        let encapped_key = <Kem as KemTrait>::EncappedKey::from_bytes(&pk_eph.to_bytes()).unwrap();
+        //let encapped_key = <Kem as KemTrait>::EncappedKey::from_bytes(&pk_eph.to_bytes()).unwrap();
 
         let suite_id: [u8; 10] = crate::util::full_suite_id::<A, Kdf, Kem>();
 
         // generate key_schedule_context for PSK modes
-        let (psk_id_hash, _) =
-            labeled_extract::<Kdf>(&[], &suite_id, b"psk_id_hash", &[mode]);
-        let (info_hash, _) = labeled_extract::<Kdf>(&[], &suite_id, b"info_hash", info);
+        let (psk_id_hash, _) = labeled_extract::<Kdf>(&[], &suite_id, b"psk_id_hash", PSK_ID); // was set to ikm: &[mode] but that seemed so wrong
+        let (info_hash, _) = labeled_extract::<Kdf>(&[], &suite_id, b"info_hash", INFO);
 
         let mut key_schedule_context = Vec::new();
         key_schedule_context.extend_from_slice(&[mode]);
@@ -490,46 +628,23 @@ pub mod gen {
 
         // set up mode_s
         let mode_s = make_op_mode_s::<Kem>(mode, &sender_extras);
-        let (_encapped_key, mut aead_ctx_s) = setup_sender::<A, Kdf, Kem, R>(&mode_s, &pk_recip, info, csprng).expect("Sender setup failed");
-        
+        let (encapped_key, mut aead_ctx_s) =
+            setup_sender::<A, Kdf, Kem, R>(&mode_s, &pk_recip, INFO, csprng)
+                .expect("Sender setup failed");
 
         // We're going to test the encryption contexts. First, construct the appropriate OpMode.
-        // let mode_r = make_op_mode_r::<Kem>(
-        //     0x00, // TODO iterate all
-        //     sender_extras.as_ref().map(|extras| extras.sender_keypair.clone()).map(|(_sk, pk)| pk.clone()),
-        //     psk,
-        //     sender_extras.as_ref().map(|extras| extras.psk_id.as_slice()),
-        // );
+        let mode_r = make_op_mode_r::<Kem>(
+            mode,
+            sender_extras.keypair.as_ref().map(|(_, pk)| pk.clone()),
+            sender_extras.bundle.as_ref().map(|bundle| bundle.psk),
+            sender_extras.bundle.as_ref().map(|bundle| bundle.psk_id),
+        );
 
+        let mut aead_ctx_r = setup_receiver::<A, Kdf, Kem>(&mode_r, &sk_recip, &encapped_key, INFO)
+            .expect("setup_receiver failed");
 
-        // let mut aead_ctx_r = setup_receiver::<A, Kdf, Kem>(&mode_r, &sk_recip, &encapped_key, info)
-        //     .expect("setup_receiver failed");
-
-        // TODO derive secret, key, base_nonce, exporter_secret
-
-        // let secret = labeled_extract::<Kdf>(&shared_secret.0, &suite_id, b"secret", psk.unwrap_or(&[]));
-
-        // // Derive the key
-        // let mut key = vec![0u8; Nk];
-        // labeled_expand::<Kdf>(&secret, &suite_id, b"key", &key_schedule_context, &mut key);
-
-        // // Derive the base_nonce
-        // let mut base_nonce = vec![0u8; Nn];
-        // labeled_expand::<Kdf>(&secret, &suite_id, b"base_nonce", &key_schedule_context, &mut base_nonce);
-
-        // // Derive the exporter_secret
-        // let mut exporter_secret = vec![0u8; Nh];
-        // labeled_expand::<Kdf>(&secret, &suite_id, b"exp", &key_schedule_context, &mut exporter_secret);
-
-        // In KeySchedule(),
-        //   secret = LabeledExtract(shared_secret, "secret", psk)
-        //   key = LabeledExpand(secret, "key", key_schedule_context, Nk)
-        //   base_nonce = LabeledExpand(secret, "base_nonce", key_schedule_context, Nn)
-        //   exporter_secret = LabeledExpand(secret, "exp", key_schedule_context, Nh)
-        // Instead of `secret` we derive an HKDF context which we run .expand() on to derive the
-        // key-nonce pair.
         let (secret, secret_ctx) =
-        labeled_extract::<Kdf>(&shared_secret.0, &suite_id, b"secret", &[mode]);
+            labeled_extract::<Kdf>(&shared_secret.0, &suite_id, b"secret", &[mode]);
 
         // Empty fixed-size buffers
         let mut key = crate::aead::AeadKey::<A>::default();
@@ -540,7 +655,12 @@ pub mod gen {
         // 255x the digest size of the hash function. Since these values are fixed at compile time, we
         // don't worry about it.
         secret_ctx
-            .labeled_expand(&suite_id, b"key", &key_schedule_context, key.0.as_mut_slice())
+            .labeled_expand(
+                &suite_id,
+                b"key",
+                &key_schedule_context,
+                key.0.as_mut_slice(),
+            )
             .expect("aead key len is way too big");
         secret_ctx
             .labeled_expand(
@@ -571,45 +691,24 @@ pub mod gen {
             });
         }
 
-        // Produce encryptions
-        let mut encryptions = Vec::new();
-
-        // Check if the Aead type is ExportOnlyAead
-        if std::any::TypeId::of::<A>() != std::any::TypeId::of::<ExportOnlyAead>() {
-            let plaintexts = vec![
-                b"4265617574792069732074727574682c20747275746820626561757479".to_vec(), // Example plaintext
-            ];
-            let aads = vec![
-                b"436f756e742d323536".to_vec(), // Example AAD
-            ];
-
-            for (i, plaintext) in plaintexts.iter().enumerate() {
-                let aad = &aads[i % aads.len()];
-                let mut nonce = base_nonce.0.clone();
-                let i = nonce.len() - 1; // Simple nonce increment
-                nonce[i] ^= i as u8; 
-                let ciphertext = aead_ctx_s.seal(plaintext, aad).unwrap();
-
-                encryptions.push(EncryptionTestVector {
-                    plaintext: plaintext.clone(),
-                    aad: aad.clone(),
-                    _nonce: nonce.to_vec(),
-                    ciphertext,
-                });
-            }
-        }
+        // generate encryptions
+        let encryptions = generate_encryptions::<A, Kdf, Kem>(&mut aead_ctx_s, &mut aead_ctx_r)
+            .expect("Encryption generation failed");
 
         MainTestVector {
             aead_id: A::AEAD_ID,
             kdf_id: Kdf::KDF_ID,
             kem_id: Kem::KEM_ID,
-            info: info.to_vec(),
+            info: INFO.to_vec(),
             mode,
             ikm_recip: ikm_recip.to_vec(),
             ikm_sender: sender_extras.ikm.map(|ikm| ikm.to_vec()),
             sk_recip: sk_recip.to_bytes().to_vec(),
             sk_eph: sk_eph.to_bytes().to_vec(),
-            sk_sender: sender_extras.keypair.as_ref().map(|(sk, _)| sk.to_bytes().to_vec()),
+            sk_sender: sender_extras
+                .keypair
+                .as_ref()
+                .map(|(sk, _)| sk.to_bytes().to_vec()),
             psk: sender_extras.bundle.map(|bundle| bundle.psk.to_vec()),
             psk_id: sender_extras.bundle.map(|bundle| bundle.psk_id.to_vec()),
             pk_recip: pk_recip.to_bytes().to_vec(),
@@ -628,7 +727,33 @@ pub mod gen {
         }
     }
 
-    fn gen_ikm<Kem: TestableKem, R: CryptoRng + RngCore>(csprng: &mut R) -> GenericArray<u8, <Kem::PrivateKey as Serializable>::OutputSize> {
+    fn generate_encryptions<A: Aead + 'static, Kdf: KdfTrait, Kem: KemTrait>(
+        aead_ctx_s: &mut AeadCtxS<A, Kdf, Kem>,
+        aead_ctx_r: &mut AeadCtxR<A, Kdf, Kem>,
+    ) -> Result<Vec<EncryptionTestVector>, HpkeError> {
+        let mut encryptions = Vec::with_capacity(TEST_VECTOR_ENCRYPTION_COUNT);
+        if std::any::TypeId::of::<A>() != std::any::TypeId::of::<ExportOnlyAead>() {
+            for i in 0..TEST_VECTOR_ENCRYPTION_COUNT {
+                let aad = format!("Count-{}", i).into_bytes();
+                let ciphertext = aead_ctx_s.seal(PLAINTEXT, &aad)?;
+                let decrypted = aead_ctx_r.open(&ciphertext, &aad)?;
+                assert_eq!(decrypted, PLAINTEXT, "plaintexts don't match");
+                encryptions.push(EncryptionTestVector {
+                    plaintext: PLAINTEXT.to_vec(),
+                    aad: aad.clone(),
+                    //_nonce: aead_ctx_s.0.nonce(),
+                    _nonce: crate::aead::AeadNonce::<A>::default().0.to_vec(),
+                    ciphertext,
+                });
+            }
+        }
+
+        Ok(encryptions)
+    }
+
+    fn gen_ikm<Kem: TestableKem, R: CryptoRng + RngCore>(
+        csprng: &mut R,
+    ) -> GenericArray<u8, <Kem::PrivateKey as Serializable>::OutputSize> {
         let mut ikm: GenericArray<u8, <Kem::PrivateKey as Serializable>::OutputSize> =
             GenericArray::default();
         // Fill it with randomness
@@ -648,7 +773,10 @@ pub mod gen {
             0 => OpModeS::Base,
             1 => OpModeS::Psk(sender_extras.bundle.unwrap()),
             2 => OpModeS::Auth(sender_extras.keypair.clone().unwrap()),
-            3 => OpModeS::AuthPsk(sender_extras.keypair.clone().unwrap(), sender_extras.bundle.unwrap()),
+            3 => OpModeS::AuthPsk(
+                sender_extras.keypair.clone().unwrap(),
+                sender_extras.bundle.unwrap(),
+            ),
             _ => panic!("Invalid mode ID: {}", mode_id),
         }
     }
@@ -701,15 +829,20 @@ pub mod gen {
             (AesGcm128, AesGcm256, ChaCha20Poly1305, ExportOnlyAead),
             (HkdfSha256),
             (DhK256HkdfSha256)
-        ).into_iter().flatten().collect::<Vec<MainTestVector>>();
+        )
+        .into_iter()
+        .flatten()
+        .collect::<Vec<MainTestVector>>();
 
         save_test_vectors_to_file(&test_vectors, "test-test-secp-vectors.json");
     }
 
     fn save_test_vectors_to_file(test_vectors: &[MainTestVector], file_path: &str) {
         let mut file = File::create(file_path).expect("Failed to create file");
-        let json = serde_json::to_string_pretty(test_vectors).expect("Failed to serialize test vectors");
-        file.write_all(json.as_bytes()).expect("Failed to write to file");
+        let json =
+            serde_json::to_string_pretty(test_vectors).expect("Failed to serialize test vectors");
+        file.write_all(json.as_bytes())
+            .expect("Failed to write to file");
     }
 }
 
