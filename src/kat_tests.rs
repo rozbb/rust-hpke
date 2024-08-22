@@ -516,7 +516,7 @@ pub mod gen {
 
     const INFO: &[u8] = &hex!("4f6465206f6e2061204772656369616e2055726e"); // same as RFC 9180 test vectors
     const EXPORT_LEN: usize = 32;
-    const EXPORTER_CONTEXTS: [&[u8]; 3] = [&[], &hex!("30"), &hex!("54657374436f6e74657874")];
+    const EXPORT_CONTEXTS: [&[u8]; 3] = [&[], &[0x00], b"TestContext"];
     const OP_MODES: [u8; 4] = [0x00, 0x01, 0x02, 0x03];
     const SHA256_NH: usize = 32;
     const PSK: &[u8] = &hex!("0247fd33b913760fa1fa51e1892d9f307fbe65eb171e8132c2af18555a738b82");
@@ -679,21 +679,15 @@ pub mod gen {
             )
             .expect("exporter secret len is way too big");
 
-        // generate the export test vectors
-        let mut exports = Vec::new();
-        for &context in EXPORTER_CONTEXTS.iter() {
-            let mut exported_value = vec![0u8; EXPORT_LEN];
-            aead_ctx_s.export(context, &mut exported_value).unwrap();
-            exports.push(ExporterTestVector {
-                export_ctx: context.to_vec(),
-                export_len: EXPORT_LEN,
-                export_val: exported_value,
-            });
-        }
+        let encryptions = if std::any::TypeId::of::<A>() != std::any::TypeId::of::<ExportOnlyAead>() {
+            generate_encryptions::<A, Kdf, Kem>(&mut aead_ctx_s, &mut aead_ctx_r)
+                .expect("Encryption generation failed")
+        } else {
+            Vec::new()
+        };
 
-        // generate encryptions
-        let encryptions = generate_encryptions::<A, Kdf, Kem>(&mut aead_ctx_s, &mut aead_ctx_r)
-            .expect("Encryption generation failed");
+        let exports = generate_exports::<A, Kdf, Kem>(&mut aead_ctx_s, &mut aead_ctx_r)
+        .expect("Export generation failed");
 
         MainTestVector {
             aead_id: A::AEAD_ID,
@@ -727,27 +721,44 @@ pub mod gen {
         }
     }
 
-    fn generate_encryptions<A: Aead + 'static, Kdf: KdfTrait, Kem: KemTrait>(
+    fn generate_encryptions<A: Aead, Kdf: KdfTrait, Kem: KemTrait>(
         aead_ctx_s: &mut AeadCtxS<A, Kdf, Kem>,
         aead_ctx_r: &mut AeadCtxR<A, Kdf, Kem>,
     ) -> Result<Vec<EncryptionTestVector>, HpkeError> {
         let mut encryptions = Vec::with_capacity(TEST_VECTOR_ENCRYPTION_COUNT);
-        if std::any::TypeId::of::<A>() != std::any::TypeId::of::<ExportOnlyAead>() {
-            for i in 0..TEST_VECTOR_ENCRYPTION_COUNT {
-                let aad = format!("Count-{}", i).into_bytes();
-                let ciphertext = aead_ctx_s.seal(PLAINTEXT, &aad)?;
-                let decrypted = aead_ctx_r.open(&ciphertext, &aad)?;
-                assert_eq!(decrypted, PLAINTEXT, "plaintexts don't match");
-                encryptions.push(EncryptionTestVector {
-                    plaintext: PLAINTEXT.to_vec(),
-                    aad: aad.clone(),
-                    _nonce: aead_ctx_s.0.current_nonce().0.to_vec(),
-                    ciphertext,
-                });
-            }
+        for i in 0..TEST_VECTOR_ENCRYPTION_COUNT {
+            let aad = format!("Count-{}", i).into_bytes();
+            let ciphertext = aead_ctx_s.seal(PLAINTEXT, &aad)?;
+            let decrypted = aead_ctx_r.open(&ciphertext, &aad)?;
+            assert_eq!(decrypted, PLAINTEXT, "plaintexts don't match");
+            encryptions.push(EncryptionTestVector {
+                plaintext: PLAINTEXT.to_vec(),
+                aad: aad.clone(),
+                _nonce: aead_ctx_s.0.current_nonce().0.to_vec(),
+                ciphertext,
+            });
         }
-
         Ok(encryptions)
+    }
+
+    fn generate_exports<A: Aead, Kdf: KdfTrait, Kem: KemTrait>(
+        aead_ctx_s: &mut AeadCtxS<A, Kdf, Kem>,
+        aead_ctx_r: &mut AeadCtxR<A, Kdf, Kem>,
+    ) -> Result<Vec<ExporterTestVector>, HpkeError> {
+        let mut exports = Vec::with_capacity(EXPORT_CONTEXTS.len());
+        for &context in EXPORT_CONTEXTS.iter() {
+            let mut export_i = vec![0u8; EXPORT_LEN];
+            aead_ctx_s.export(context, &mut export_i)?;
+            let mut export_r = vec![0u8; EXPORT_LEN];
+            aead_ctx_r.export(context, &mut export_r)?;
+            assert_eq!(export_i, export_r, "exports don't match");
+            exports.push(ExporterTestVector {
+                export_ctx: context.to_vec(),
+                export_len: EXPORT_LEN,
+                export_val: export_i,
+            });
+        }
+        Ok(exports)
     }
 
     fn gen_ikm<Kem: TestableKem, R: CryptoRng + RngCore>(
