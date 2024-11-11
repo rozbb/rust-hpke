@@ -702,10 +702,7 @@ fn main() {
                 let psk_id = b"preshared key attempt #5, take 2. action";
                 let psk_bundle = {
                     csprng.fill_bytes(&mut psk_bytes);
-                    AgilePskBundle(PskBundle {
-                        psk: &psk_bytes,
-                        psk_id,
-                    })
+                    AgilePskBundle(PskBundle::new(&psk_bytes, psk_id).unwrap())
                 };
 
                 // Make two agreeing OpModes (AuthPsk is the most complicated, so we're just using

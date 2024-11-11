@@ -222,10 +222,7 @@ fn make_op_mode_r<'a, Kem: KemTrait>(
     psk_id: Option<&'a [u8]>,
 ) -> OpModeR<'a, Kem> {
     // Deserialize the optional bundle
-    let bundle = psk.map(|bytes| PskBundle {
-        psk: bytes,
-        psk_id: psk_id.unwrap(),
-    });
+    let bundle = psk.map(|bytes| PskBundle::new(bytes, psk_id.unwrap()).unwrap());
 
     // These better be set if the mode ID calls for them
     match mode_id {

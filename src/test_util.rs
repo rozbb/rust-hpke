@@ -80,7 +80,7 @@ pub(crate) fn new_op_mode_pair<'a, Kdf: KdfTrait, Kem: KemTrait>(
 ) -> (OpModeS<'a, Kem>, OpModeR<'a, Kem>) {
     let mut csprng = StdRng::from_entropy();
     let (sk_sender, pk_sender) = Kem::gen_keypair(&mut csprng);
-    let psk_bundle = PskBundle { psk, psk_id };
+    let psk_bundle = PskBundle::new(psk, psk_id).unwrap();
 
     match kind {
         OpModeKind::Base => {
