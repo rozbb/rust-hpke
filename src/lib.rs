@@ -164,6 +164,8 @@ pub enum HpkeError {
     /// An input isn't the right length. First value is the expected length, second is the given
     /// length.
     IncorrectInputLength(usize, usize),
+    /// A preshared key bundle was constructed incorrectly
+    InvalidPskBundle,
 }
 
 impl core::fmt::Display for HpkeError {
@@ -181,6 +183,9 @@ impl core::fmt::Display for HpkeError {
                 "Incorrect input length. Expected {} bytes. Got {}.",
                 expected, given
             ),
+            HpkeError::InvalidPskBundle => {
+                write!(f, "Preshared key bundle is missing a key or key ID")
+            }
         }
     }
 }
