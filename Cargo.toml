@@ -1,7 +1,7 @@
 [package]
 name = "hpke"
 repository = "https://github.com/rozbb/rust-hpke"
-documentation = "https://docs.rs/rust-hpke"
+documentation = "https://docs.rs/hpke"
 description = "An implementation of the HPKE hybrid encryption standard (RFC 9180) in pure Rust"
 readme = "README.md"
 version = "0.12.0"
