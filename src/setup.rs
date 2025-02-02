@@ -218,7 +218,7 @@ mod test {
                 type Kdf = $kdf_ty;
                 type Kem = $kem_ty;
 
-                let mut csprng = StdRng::from_entropy();
+                let mut csprng = StdRng::from_os_rng();
 
                 let info = b"why would you think in a million years that that would actually work";
 
@@ -271,7 +271,7 @@ mod test {
                 type Kdf = $kdf;
                 type Kem = $kem;
 
-                let mut csprng = StdRng::from_entropy();
+                let mut csprng = StdRng::from_os_rng();
 
                 let info = b"why would you think in a million years that that would actually work";
 

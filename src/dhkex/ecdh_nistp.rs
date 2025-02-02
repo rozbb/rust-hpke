@@ -422,7 +422,7 @@ mod tests {
     /// Tests that an deserialize-serialize round-trip ends up at the same pubkey
     #[allow(dead_code)]
     fn test_pubkey_serialize_correctness<Kex: DhKeyExchange>() {
-        let mut csprng = StdRng::from_entropy();
+        let mut csprng = StdRng::from_os_rng();
 
         // We can't do the same thing as in the X25519 tests, since a completely random point
         // is not likely to lie on the curve. Instead, we just generate a random point,
@@ -459,7 +459,7 @@ mod tests {
     where
         Kex::PrivateKey: PartialEq,
     {
-        let mut csprng = StdRng::from_entropy();
+        let mut csprng = StdRng::from_os_rng();
 
         // Make a random keypair and serialize it
         let (sk, pk) = dhkex_gen_keypair::<Kex, _>(&mut csprng);

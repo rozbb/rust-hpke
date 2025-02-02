@@ -23,7 +23,7 @@ where
     Kdf: KdfTrait,
     Kem: KemTrait,
 {
-    let mut csprng = StdRng::from_entropy();
+    let mut csprng = StdRng::from_os_rng();
 
     let mut group = c.benchmark_group(group_name);
 
@@ -171,7 +171,7 @@ where
     Kdf: KdfTrait,
     Kem: KemTrait,
 {
-    let mut csprng = StdRng::from_entropy();
+    let mut csprng = StdRng::from_os_rng();
 
     // Make up the recipient's keypair and setup an encryption context
     let (sk_recip, pk_recip) = Kem::gen_keypair(&mut csprng);

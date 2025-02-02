@@ -33,7 +33,7 @@ type Kdf = HkdfSha384;
 
 // Initializes the server with a fresh keypair
 fn server_init() -> (<Kem as KemTrait>::PrivateKey, <Kem as KemTrait>::PublicKey) {
-    let mut csprng = StdRng::from_entropy();
+    let mut csprng = StdRng::from_os_rng();
     Kem::gen_keypair(&mut csprng)
 }
 
@@ -44,7 +44,7 @@ fn client_encrypt_msg(
     associated_data: &[u8],
     server_pk: &<Kem as KemTrait>::PublicKey,
 ) -> (<Kem as KemTrait>::EncappedKey, Vec<u8>, AeadTag<Aead>) {
-    let mut csprng = StdRng::from_entropy();
+    let mut csprng = StdRng::from_os_rng();
 
     // Encapsulate a key and use the resulting shared secret to encrypt a message. The AEAD context
     // is what you use to encrypt.
