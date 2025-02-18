@@ -186,7 +186,7 @@ mod tests {
     fn test_pubkey_serialize_correctness() {
         type Kex = X25519;
 
-        let mut csprng = StdRng::from_entropy();
+        let mut csprng = StdRng::from_os_rng();
 
         // Fill a buffer with randomness
         let orig_bytes = {
@@ -210,7 +210,7 @@ mod tests {
     fn test_dh_serialize_correctness() {
         type Kex = X25519;
 
-        let mut csprng = StdRng::from_entropy();
+        let mut csprng = StdRng::from_os_rng();
 
         // Make a random keypair and serialize it
         let (sk, pk) = dhkex_gen_keypair::<Kex, _>(&mut csprng);

@@ -33,22 +33,38 @@ generic-array = { version = "0.14", default-features = false }
 digest = "0.10"
 hkdf = "0.12"
 hmac = "0.12"
-rand_core = { version = "0.6", default-features = false }
-p256 = { version = "0.13", default-features = false, features = ["arithmetic", "ecdh"], optional = true}
-p384 = { version = "0.13", default-features = false, features = ["arithmetic", "ecdh"], optional = true}
-p521 = { version = "0.13", default-features = false, features = ["arithmetic", "ecdh"], optional = true}
+rand_core = { version = "0.9", default-features = false }
+p256 = { version = "0.13", default-features = false, features = [
+    "arithmetic",
+    "ecdh",
+], optional = true }
+p384 = { version = "0.13", default-features = false, features = [
+    "arithmetic",
+    "ecdh",
+], optional = true }
+p521 = { version = "0.13", default-features = false, features = [
+    "arithmetic",
+    "ecdh",
+], optional = true }
 sha2 = { version = "0.10", default-features = false }
 subtle = { version = "2.6", default-features = false }
-x25519-dalek = { version = "2", default-features = false, features = ["static_secrets"], optional = true }
-zeroize = { version = "1", default-features = false, features = ["zeroize_derive"] }
+x25519-dalek = { version = "2", default-features = false, features = [
+    "static_secrets",
+], optional = true }
+zeroize = { version = "1", default-features = false, features = [
+    "zeroize_derive",
+] }
 
 [dev-dependencies]
-criterion = { version = "0.4", features = ["html_reports"] }
+criterion = { version = "0.5", features = ["html_reports"] }
 hex = "0.4"
 hex-literal = "0.4"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-rand = { version = "0.8", default-features = false, features = ["getrandom", "std_rng"] }
+rand = { version = "0.9", default-features = false, features = [
+    "os_rng",
+    "std_rng",
+] }
 
 [[example]]
 name = "client_server"

@@ -123,7 +123,7 @@ mod tests {
             fn $test_name() {
                 type Kem = $kem_ty;
 
-                let mut csprng = StdRng::from_entropy();
+                let mut csprng = StdRng::from_os_rng();
                 let (sk_recip, pk_recip) = Kem::gen_keypair(&mut csprng);
 
                 // Encapsulate a random shared secret
@@ -171,7 +171,7 @@ mod tests {
 
                 // Encapsulate a random shared secret
                 let encapped_key = {
-                    let mut csprng = StdRng::from_entropy();
+                    let mut csprng = StdRng::from_os_rng();
                     let (_, pk_recip) = Kem::gen_keypair(&mut csprng);
                     Kem::encap(&pk_recip, None, &mut csprng).unwrap().1
                 };

@@ -13,7 +13,7 @@ use rand::{rngs::StdRng, CryptoRng, Rng, RngCore, SeedableRng};
 
 /// Returns a random 32-byte buffer
 pub(crate) fn gen_rand_buf() -> [u8; 32] {
-    let mut csprng = StdRng::from_entropy();
+    let mut csprng = StdRng::from_os_rng();
     let mut buf = [0u8; 32];
     csprng.fill_bytes(&mut buf);
     buf
@@ -39,7 +39,7 @@ where
     Kdf: KdfTrait,
     Kem: KemTrait,
 {
-    let mut csprng = StdRng::from_entropy();
+    let mut csprng = StdRng::from_os_rng();
 
     // Initialize the key and nonce
     let key = {
@@ -78,7 +78,7 @@ pub(crate) fn new_op_mode_pair<'a, Kdf: KdfTrait, Kem: KemTrait>(
     psk: &'a [u8],
     psk_id: &'a [u8],
 ) -> (OpModeS<'a, Kem>, OpModeR<'a, Kem>) {
-    let mut csprng = StdRng::from_entropy();
+    let mut csprng = StdRng::from_os_rng();
     let (sk_sender, pk_sender) = Kem::gen_keypair(&mut csprng);
     let psk_bundle = PskBundle { psk, psk_id };
 
@@ -112,16 +112,16 @@ pub(crate) fn aead_ctx_eq<A: Aead, Kdf: KdfTrait, Kem: KemTrait>(
     sender: &mut AeadCtxS<A, Kdf, Kem>,
     receiver: &mut AeadCtxR<A, Kdf, Kem>,
 ) -> bool {
-    let mut csprng = StdRng::from_entropy();
+    let mut csprng = StdRng::from_os_rng();
 
     // Some random input data
-    let msg_len = csprng.gen::<u8>() as usize;
+    let msg_len = csprng.random::<u8>() as usize;
     let msg_buf = {
         let mut buf = [0u8; 255];
         csprng.fill_bytes(&mut buf);
         buf
     };
-    let aad_len = csprng.gen::<u8>() as usize;
+    let aad_len = csprng.random::<u8>() as usize;
     let aad_buf = {
         let mut buf = [0u8; 255];
         csprng.fill_bytes(&mut buf);

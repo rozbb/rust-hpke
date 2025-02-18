@@ -675,7 +675,7 @@ fn agile_setup_receiver(
 }
 
 fn main() {
-    let mut csprng = StdRng::from_entropy();
+    let mut csprng = StdRng::from_os_rng();
 
     let supported_aead_algs = &[
         AeadAlg::AesGcm128,
