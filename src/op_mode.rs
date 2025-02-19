@@ -15,8 +15,8 @@ impl<'a> PskBundle<'a> {
     ///
     /// Errors
     /// ======
-    /// `psk` and `psk_id` must either both be empty or both be nontempty. If one is empty while
-    /// the other is not, then this returns XXX
+    /// `psk` and `psk_id` must either both be empty or both be nonempty. If one is empty while
+    /// the other is not, then this returns [`HpkeError::InvalidPskBundle`].
     ///
     /// Other requirements
     /// ==================
