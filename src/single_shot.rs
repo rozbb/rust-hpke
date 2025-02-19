@@ -172,7 +172,7 @@ mod test {
                 let msg = b"Good night, a-ding ding ding ding ding";
                 let aad = b"Five four three two one";
 
-                let mut csprng = StdRng::from_entropy();
+                let mut csprng = StdRng::from_os_rng();
 
                 // Set up an arbitrary info string, a random PSK, and an arbitrary PSK ID
                 let info = b"why would you think in a million years that that would actually work";

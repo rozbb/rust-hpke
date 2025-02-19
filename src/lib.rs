@@ -22,7 +22,7 @@
 //! type Aead = ChaCha20Poly1305;
 //! type Kdf = HkdfSha384;
 //!
-//! let mut csprng = StdRng::from_entropy();
+//! let mut csprng = StdRng::from_os_rng();
 //! # let (bob_sk, bob_pk) = Kem::gen_keypair(&mut csprng);
 //!
 //! // This is a description string for the session. Both Alice and Bob need to know this value.

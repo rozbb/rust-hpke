@@ -50,7 +50,7 @@ pub enum OpModeR<'a, Kem: KemTrait> {
 }
 
 // Helper function for setup_receiver
-impl<'a, Kem: KemTrait> OpModeR<'a, Kem> {
+impl<Kem: KemTrait> OpModeR<'_, Kem> {
     /// Returns the sender's identity pubkey if it's specified
     pub(crate) fn get_pk_sender_id(&self) -> Option<&Kem::PublicKey> {
         match self {
@@ -78,7 +78,7 @@ pub enum OpModeS<'a, Kem: KemTrait> {
 }
 
 // Helpers functions for setup_sender and testing
-impl<'a, Kem: KemTrait> OpModeS<'a, Kem> {
+impl<Kem: KemTrait> OpModeS<'_, Kem> {
     /// Returns the sender's identity pubkey if it's specified
     pub(crate) fn get_sender_id_keypair(&self) -> Option<(&Kem::PrivateKey, &Kem::PublicKey)> {
         match self {
@@ -100,7 +100,7 @@ pub(crate) trait OpMode<Kem: KemTrait> {
     fn get_psk_id(&self) -> &[u8];
 }
 
-impl<'a, Kem: KemTrait> OpMode<Kem> for OpModeR<'a, Kem> {
+impl<Kem: KemTrait> OpMode<Kem> for OpModeR<'_, Kem> {
     // Defined in RFC 9180 §5 Table 1
     fn mode_id(&self) -> u8 {
         match self {
@@ -135,7 +135,7 @@ impl<'a, Kem: KemTrait> OpMode<Kem> for OpModeR<'a, Kem> {
 
 // I know there's a bunch of code reuse here, but it's not so much that I feel the need to abstract
 // something away
-impl<'a, Kem: KemTrait> OpMode<Kem> for OpModeS<'a, Kem> {
+impl<Kem: KemTrait> OpMode<Kem> for OpModeS<'_, Kem> {
     // Defined in RFC 9180 §5 Table 1
     fn mode_id(&self) -> u8 {
         match self {
