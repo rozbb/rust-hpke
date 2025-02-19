@@ -64,6 +64,11 @@ See the [client-server](examples/client_server.rs) example for an idea of how to
 Breaking changes
 ----------------
 
+### Breaking changes in v0.13
+
+* `PskBundle` now has a constructor that validates that the inputs are either both empty or nonempty.
+* `rand_core` was updated to v0.9
+
 ### Breaking changes in v0.12
 
 The `serde_impls` feature was removed. If you were using this and require backwards compatible serialization/deserialization, see the wiki page [here](https://github.com/rozbb/rust-hpke/wiki/Migrating-away-from-the-serde_impls-feature).
