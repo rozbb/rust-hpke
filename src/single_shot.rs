@@ -177,10 +177,7 @@ mod test {
                 // Set up an arbitrary info string, a random PSK, and an arbitrary PSK ID
                 let info = b"why would you think in a million years that that would actually work";
                 let (psk, psk_id) = (gen_rand_buf(), gen_rand_buf());
-                let psk_bundle = PskBundle {
-                    psk: &psk,
-                    psk_id: &psk_id,
-                };
+                let psk_bundle = PskBundle::new(&psk, &psk_id).unwrap();
 
                 // Generate the sender's and receiver's long-term keypairs
                 let (sk_sender_id, pk_sender_id) = Kem::gen_keypair(&mut csprng);

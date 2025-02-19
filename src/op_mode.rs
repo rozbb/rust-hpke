@@ -1,19 +1,36 @@
-use crate::kem::Kem as KemTrait;
+use crate::{kem::Kem as KemTrait, HpkeError};
 
 /// Contains preshared key bytes and an identifier. This is intended to go inside an `OpModeR` or
 /// `OpModeS` struct.
-///
-/// Requirements
-/// ============
-/// `psk` MUST contain at least 32 bytes of entropy. Further, `psk.len()` SHOULD be at least as
-/// long as an extracted key from the KDF you use with `setup_sender`/`setup_receiver`, i.e., at
-/// least `Kdf::extracted_key_size()`.
 #[derive(Clone, Copy)]
 pub struct PskBundle<'a> {
     /// The preshared key
-    pub psk: &'a [u8],
+    psk: &'a [u8],
     /// A bytestring that uniquely identifies this PSK
-    pub psk_id: &'a [u8],
+    psk_id: &'a [u8],
+}
+
+impl<'a> PskBundle<'a> {
+    /// Creates a new preshared key bundle from the given preshared key and its ID
+    ///
+    /// Errors
+    /// ======
+    /// `psk` and `psk_id` must either both be empty or both be nonempty. If one is empty while
+    /// the other is not, then this returns [`HpkeError::InvalidPskBundle`].
+    ///
+    /// Other requirements
+    /// ==================
+    /// Other requirements from the HPKE spec: `psk` MUST contain at least 32 bytes of entropy.
+    /// Further, `psk.len()` SHOULD be at least as long as an extracted key from the KDF you use
+    /// with `setup_sender`/`setup_receiver`, i.e., at least `Kdf::extracted_key_size()`.
+    pub fn new(psk: &'a [u8], psk_id: &'a [u8]) -> Result<Self, HpkeError> {
+        // RFC 9180 §5.1: The psk and psk_id fields MUST appear together or not at all
+        if (psk.is_empty() && psk_id.is_empty()) || (!psk.is_empty() && !psk_id.is_empty()) {
+            Ok(PskBundle { psk, psk_id })
+        } else {
+            Err(HpkeError::InvalidPskBundle)
+        }
+    }
 }
 
 /// The operation mode of the HPKE session (receiver's view). This is how the sender authenticates
@@ -23,7 +40,8 @@ pub struct PskBundle<'a> {
 pub enum OpModeR<'a, Kem: KemTrait> {
     /// No extra information included
     Base,
-    /// A preshared key known to the sender and receiver
+    /// A preshared key known to the sender and receiver. If the bundle contents is empty strings,
+    /// then this is equivalent to `Base`.
     Psk(PskBundle<'a>),
     /// The identity public key of the sender
     Auth(Kem::PublicKey),
@@ -50,7 +68,8 @@ impl<Kem: KemTrait> OpModeR<'_, Kem> {
 pub enum OpModeS<'a, Kem: KemTrait> {
     /// No extra information included
     Base,
-    /// A preshared key known to the sender and receiver
+    /// A preshared key known to the sender and receiver. If the bundle contents is empty strings,
+    /// then this is equivalent to `Base`.
     Psk(PskBundle<'a>),
     /// The identity keypair of the sender
     Auth((Kem::PrivateKey, Kem::PublicKey)),
@@ -147,4 +166,13 @@ impl<Kem: KemTrait> OpMode<Kem> for OpModeS<'_, Kem> {
             _ => &[],
         }
     }
+}
+
+// Test that you can only make a PskBundle if both fields are empty or both fields are nonempty
+#[test]
+fn psk_bundle_validation() {
+    assert!(PskBundle::new(b"hello", b"world").is_ok());
+    assert!(PskBundle::new(b"", b"").is_ok());
+    assert!(PskBundle::new(b"hello", b"").is_err());
+    assert!(PskBundle::new(b"", b"world").is_err());
 }
