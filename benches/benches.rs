@@ -38,10 +38,7 @@ where
     let mut psk_id = [0u8; 8];
     csprng.fill_bytes(&mut psk);
     csprng.fill_bytes(&mut psk_id);
-    let psk_bundle = PskBundle {
-        psk: &psk,
-        psk_id: &psk_id,
-    };
+    let psk_bundle = PskBundle::new(&psk, &psk_id).unwrap();
 
     // Make a sender keypair for OpModeAuth and OpModeAuthPsk
     let (sk_sender, pk_sender) = Kem::gen_keypair(&mut csprng);
