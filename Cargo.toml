@@ -15,20 +15,26 @@ categories = ["cryptography", "no-std"]
 # "p256" enables the use of ECDH-NIST-P256 as a KEM
 # "p384" enables the use of ECDH-NIST-P384 as a KEM
 # "x25519" enables the use of the X25519 as a KEM
-default = ["alloc", "p256", "x25519"]
+# "aes-gcm" enables the use of AES-GCM as an AEAD
+# "chacha20-poly1305" enables the use of ChaCha20-Poly1305 as an AEAD
+default = ["alloc", "p256", "x25519", "aes-gcm", "chacha20-poly1305"]
 x25519 = ["dep:x25519-dalek"]
 p384 = ["dep:p384"]
 p256 = ["dep:p256"]
 p521 = ["dep:p521"]
+aes-gcm = ["dep:aes-gcm"]
+chacha20-poly1305 = ["dep:chacha20poly1305"]
 # Include allocating methods like open() and seal()
-alloc = []
+alloc = ["aes-gcm?/alloc", "chacha20poly1305?/alloc"]
 # Includes an implementation of `std::error::Error` for `HpkeError`. Also does what `alloc` does.
-std = []
+std = ["aes-gcm?/std", "chacha20poly1305?/std"]
 
 [dependencies]
 aead = "0.5"
-aes-gcm = "0.10"
-chacha20poly1305 = "0.10"
+aes-gcm = { version = "0.10", default-features = false, features = [
+    "aes",
+], optional = true }
+chacha20poly1305 = { version = "0.10", default-features = false, optional = true }
 generic-array = { version = "0.14", default-features = false }
 digest = "0.10"
 hkdf = "0.12"
@@ -68,11 +74,11 @@ rand = { version = "0.9", default-features = false, features = [
 
 [[example]]
 name = "client_server"
-required-features = ["x25519"]
+required-features = ["x25519", "chacha20-poly1305"]
 
 [[example]]
 name = "agility"
-required-features = ["p256", "p384", "p521", "x25519"]
+required-features = ["p256", "p384", "p521", "x25519", "aes-gcm", "chacha20-poly1305"]
 
 # Tell docs.rs to build docs with `--all-features` and `--cfg docsrs` (for nightly docs features)
 [package.metadata.docs.rs]
