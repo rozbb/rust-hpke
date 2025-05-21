@@ -456,15 +456,25 @@ impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AeadCtxS<A, Kdf, Kem> {
 }
 
 // Export all the AEAD implementations
-mod aes_gcm;
-mod chacha20_poly1305;
 mod export_only;
 #[doc(inline)]
-pub use crate::aead::{aes_gcm::*, chacha20_poly1305::*, export_only::*};
+pub use export_only::*;
+
+#[cfg(feature = "aes-gcm")]
+mod aes_gcm;
+#[cfg(feature = "aes-gcm")]
+#[doc(inline)]
+pub use aes_gcm::*;
+
+#[cfg(feature = "chacha20-poly1305")]
+mod chacha20_poly1305;
+#[cfg(feature = "chacha20-poly1305")]
+#[doc(inline)]
+pub use chacha20_poly1305::*;
 
 #[cfg(test)]
 mod test {
-    use super::{AeadTag, AesGcm128, AesGcm256, ChaCha20Poly1305, ExportOnlyAead, Seq};
+    use super::{AeadTag, ExportOnlyAead, Seq};
 
     use crate::{
         kdf::HkdfSha256, test_util::gen_ctx_simple_pair, Deserializable, HpkeError, Serializable,
@@ -494,12 +504,20 @@ mod test {
     #[cfg(any(feature = "alloc", feature = "std"))]
     macro_rules! test_export_idempotence {
         ($test_name:ident, $kem_ty:ty) => {
+            // Again, this test is cipher-agnostic
+            #[cfg(feature = "chacha20-poly1305")]
+            test_export_idempotence!($test_name, $kem_ty, crate::aead::ChaCha20Poly1305);
+            #[cfg(all(feature = "aes-gcm", not(feature = "chacha20-poly1305")))]
+            test_export_idempotence!($test_name, $kem_ty, crate::aead::AesGcm128);
+        };
+
+        ($test_name:ident, $kem_ty:ty, $aead_ty:ty) => {
             #[test]
             fn $test_name() {
                 type Kem = $kem_ty;
                 type Kdf = HkdfSha256;
                 // Again, this test is cipher-agnostic
-                type A = ChaCha20Poly1305;
+                type A = $aead_ty;
 
                 // Set up a context. Logic is algorithm-independent, so we don't care about the
                 // types here
@@ -565,12 +583,18 @@ mod test {
     #[cfg(any(feature = "alloc", feature = "std"))]
     macro_rules! test_overflow {
         ($test_name:ident, $kem_ty:ty) => {
+            // Again, this test is cipher-agnostic
+            #[cfg(feature = "chacha20-poly1305")]
+            test_overflow!($test_name, $kem_ty, crate::aead::ChaCha20Poly1305);
+            #[cfg(all(feature = "aes-gcm", not(feature = "chacha20-poly1305")))]
+            test_overflow!($test_name, $kem_ty, crate::aead::AesGcm128);
+        };
+        ($test_name:ident, $kem_ty:ty, $aead_ty:ty) => {
             #[test]
             fn $test_name() {
                 type Kem = $kem_ty;
                 type Kdf = HkdfSha256;
-                // Again, this test is cipher-agnostic
-                type A = ChaCha20Poly1305;
+                type A = $aead_ty;
 
                 // Make a sequence number that's at the max
                 let big_seq = {
@@ -673,9 +697,12 @@ mod test {
         };
     }
 
-    test_invalid_nonce!(test_invalid_nonce_aes128, AesGcm128);
-    test_invalid_nonce!(test_invalid_nonce_aes256, AesGcm128);
-    test_invalid_nonce!(test_invalid_nonce_chacha, ChaCha20Poly1305);
+    #[cfg(feature = "aes-gcm")]
+    test_invalid_nonce!(test_invalid_nonce_aes128, crate::aead::AesGcm128);
+    #[cfg(feature = "aes-gcm")]
+    test_invalid_nonce!(test_invalid_nonce_aes256, crate::aead::AesGcm256);
+    #[cfg(feature = "chacha20-poly1305")]
+    test_invalid_nonce!(test_invalid_nonce_chacha, crate::aead::ChaCha20Poly1305);
 
     #[cfg(all(feature = "x25519", any(feature = "alloc", feature = "std")))]
     mod x25519_tests {
@@ -689,19 +716,22 @@ mod test {
         );
         test_overflow!(test_overflow_x25519, crate::kem::X25519HkdfSha256);
 
+        #[cfg(feature = "aes-gcm")]
         test_ctx_correctness!(
             test_ctx_correctness_aes128_x25519,
-            AesGcm128,
+            crate::aead::AesGcm128,
             crate::kem::X25519HkdfSha256
         );
+        #[cfg(feature = "aes-gcm")]
         test_ctx_correctness!(
             test_ctx_correctness_aes256_x25519,
-            AesGcm256,
+            crate::aead::AesGcm256,
             crate::kem::X25519HkdfSha256
         );
+        #[cfg(feature = "chacha20-poly1305")]
         test_ctx_correctness!(
             test_ctx_correctness_chacha_x25519,
-            ChaCha20Poly1305,
+            crate::aead::ChaCha20Poly1305,
             crate::kem::X25519HkdfSha256
         );
     }
@@ -718,19 +748,22 @@ mod test {
         );
         test_overflow!(test_overflow_p256, crate::kem::DhP256HkdfSha256);
 
+        #[cfg(feature = "aes-gcm")]
         test_ctx_correctness!(
             test_ctx_correctness_aes128_p256,
-            AesGcm128,
+            crate::aead::AesGcm128,
             crate::kem::DhP256HkdfSha256
         );
+        #[cfg(feature = "aes-gcm")]
         test_ctx_correctness!(
             test_ctx_correctness_aes256_p256,
-            AesGcm256,
+            crate::aead::AesGcm256,
             crate::kem::DhP256HkdfSha256
         );
+        #[cfg(feature = "chacha20-poly1305")]
         test_ctx_correctness!(
             test_ctx_correctness_chacha_p256,
-            ChaCha20Poly1305,
+            crate::aead::ChaCha20Poly1305,
             crate::kem::DhP256HkdfSha256
         );
     }
@@ -747,31 +780,45 @@ mod test {
         );
         test_overflow!(test_overflow_p384, crate::kem::DhP384HkdfSha384);
 
+        #[cfg(feature = "aes-gcm")]
         test_ctx_correctness!(
             test_ctx_correctness_aes128_p384,
-            AesGcm128,
+            crate::aead::AesGcm128,
             crate::kem::DhP384HkdfSha384
         );
+        #[cfg(feature = "aes-gcm")]
         test_ctx_correctness!(
             test_ctx_correctness_aes256_p384,
-            AesGcm256,
+            crate::aead::AesGcm256,
             crate::kem::DhP384HkdfSha384
         );
+        #[cfg(feature = "chacha20-poly1305")]
         test_ctx_correctness!(
             test_ctx_correctness_chacha_p384,
-            ChaCha20Poly1305,
+            crate::aead::ChaCha20Poly1305,
             crate::kem::DhP384HkdfSha384
         );
     }
 
-    /// Tests that Serialize::write_exact() panics when given a buffer of incorrect length
+    // Tests that Serialize::write_exact() panics when given a buffer of incorrect length
+    // Make an AES-GCM-128 / Chacha20Poly1305 tag (16 bytes) and try to serialize it to a buffer of 17 bytes. It
+    // shouldn't matter that this is sufficient room, since write_exact needs exactly the write
+    // size buffer
+
+    #[cfg(feature = "aes-gcm")]
     #[should_panic]
     #[test]
-    fn test_write_exact() {
-        // Make an AES-GCM-128 tag (16 bytes) and try to serialize it to a buffer of 17 bytes. It
-        // shouldn't matter that this is sufficient room, since write_exact needs exactly the write
-        // size buffer
-        let tag = AeadTag::<AesGcm128>::default();
+    fn test_write_exact_aes_gcm() {
+        let tag = AeadTag::<crate::aead::AesGcm128>::default();
+        let mut buf = [0u8; 17];
+        tag.write_exact(&mut buf);
+    }
+
+    #[cfg(feature = "chacha20-poly1305")]
+    #[should_panic]
+    #[test]
+    fn test_write_exact_chacha_poly1305() {
+        let tag = AeadTag::<crate::aead::ChaCha20Poly1305>::default();
         let mut buf = [0u8; 17];
         tag.write_exact(&mut buf);
     }

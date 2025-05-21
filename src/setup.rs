@@ -204,7 +204,7 @@ where
 mod test {
     use super::{setup_receiver, setup_sender};
     use crate::test_util::{aead_ctx_eq, gen_rand_buf, new_op_mode_pair, OpModeKind};
-    use crate::{aead::ChaCha20Poly1305, kdf::HkdfSha256, kem::Kem as KemTrait};
+    use crate::{kdf::HkdfSha256, kem::Kem as KemTrait};
 
     use rand::{rngs::StdRng, SeedableRng};
 
@@ -341,15 +341,31 @@ mod test {
     mod x25519_tests {
         use super::*;
 
+        #[cfg(feature = "chacha20-poly1305")]
         test_setup_correctness!(
-            test_setup_correctness_x25519,
-            ChaCha20Poly1305,
+            test_setup_correctness_x25519_chacha20poly1305,
+            crate::aead::ChaCha20Poly1305,
             HkdfSha256,
             crate::kem::x25519_hkdfsha256::X25519HkdfSha256
         );
+        #[cfg(feature = "aes-gcm")]
+        test_setup_correctness!(
+            test_setup_correctness_x25519_aes_gcm,
+            crate::aead::AesGcm128,
+            HkdfSha256,
+            crate::kem::x25519_hkdfsha256::X25519HkdfSha256
+        );
+        #[cfg(feature = "chacha20-poly1305")]
         test_setup_soundness!(
             test_setup_soundness_x25519,
-            ChaCha20Poly1305,
+            crate::aead::ChaCha20Poly1305,
+            HkdfSha256,
+            crate::kem::x25519_hkdfsha256::X25519HkdfSha256
+        );
+        #[cfg(feature = "aes-gcm")]
+        test_setup_soundness!(
+            test_setup_soundness_x25519_aes_gcm,
+            crate::aead::AesGcm128,
             HkdfSha256,
             crate::kem::x25519_hkdfsha256::X25519HkdfSha256
         );
@@ -359,15 +375,32 @@ mod test {
     mod p256_tests {
         use super::*;
 
+        #[cfg(feature = "chacha20-poly1305")]
         test_setup_correctness!(
-            test_setup_correctness_p256,
-            ChaCha20Poly1305,
+            test_setup_correctness_p256_chacha20poly1305,
+            crate::aead::ChaCha20Poly1305,
             HkdfSha256,
             crate::kem::dhp256_hkdfsha256::DhP256HkdfSha256
         );
+        #[cfg(feature = "aes-gcm")]
+        test_setup_correctness!(
+            test_setup_correctness_p256,
+            crate::aead::AesGcm128,
+            HkdfSha256,
+            crate::kem::dhp256_hkdfsha256::DhP256HkdfSha256
+        );
+        #[cfg(feature = "chacha20-poly1305")]
         test_setup_soundness!(
-            test_setup_soundness_p256,
-            ChaCha20Poly1305,
+            test_setup_soundness_p256_chacha20poly1305,
+            crate::aead::ChaCha20Poly1305,
+            HkdfSha256,
+            crate::kem::dhp256_hkdfsha256::DhP256HkdfSha256
+        );
+
+        #[cfg(feature = "aes-gcm")]
+        test_setup_soundness!(
+            test_setup_soundness_p256_aes_gcm,
+            crate::aead::AesGcm128,
             HkdfSha256,
             crate::kem::dhp256_hkdfsha256::DhP256HkdfSha256
         );
@@ -378,15 +411,31 @@ mod test {
         use super::*;
         use crate::kdf::HkdfSha384;
 
+        #[cfg(feature = "chacha20-poly1305")]
         test_setup_correctness!(
-            test_setup_correctness_p384,
-            ChaCha20Poly1305,
+            test_setup_correctness_p384_chacha20poly1305,
+            crate::aead::ChaCha20Poly1305,
             HkdfSha384,
             crate::kem::dhp384_hkdfsha384::DhP384HkdfSha384
         );
+        #[cfg(feature = "aes-gcm")]
+        test_setup_correctness!(
+            test_setup_correctness_p384_aes_gcm,
+            crate::aead::AesGcm128,
+            HkdfSha384,
+            crate::kem::dhp384_hkdfsha384::DhP384HkdfSha384
+        );
+        #[cfg(feature = "chacha20-poly1305")]
         test_setup_soundness!(
-            test_setup_soundness_p384,
-            ChaCha20Poly1305,
+            test_setup_soundness_p384_chacha20poly1305,
+            crate::aead::ChaCha20Poly1305,
+            HkdfSha384,
+            crate::kem::dhp384_hkdfsha384::DhP384HkdfSha384
+        );
+        #[cfg(feature = "aes-gcm")]
+        test_setup_soundness!(
+            test_setup_soundness_p384_aes_gcm,
+            crate::aead::AesGcm128,
             HkdfSha384,
             crate::kem::dhp384_hkdfsha384::DhP384HkdfSha384
         );
@@ -397,15 +446,31 @@ mod test {
         use super::*;
         use crate::kdf::HkdfSha512;
 
+        #[cfg(feature = "chacha20-poly1305")]
         test_setup_correctness!(
-            test_setup_correctness_p521,
-            ChaCha20Poly1305,
+            test_setup_correctness_p521_chacha20poly1305,
+            crate::aead::ChaCha20Poly1305,
             HkdfSha512,
             crate::kem::dhp521_hkdfsha512::DhP521HkdfSha512
         );
+        #[cfg(feature = "aes-gcm")]
+        test_setup_correctness!(
+            test_setup_correctness_p521_aes_gcm,
+            crate::aead::AesGcm128,
+            HkdfSha512,
+            crate::kem::dhp521_hkdfsha512::DhP521HkdfSha512
+        );
+        #[cfg(feature = "chacha20-poly1305")]
         test_setup_soundness!(
-            test_setup_soundness_p521,
-            ChaCha20Poly1305,
+            test_setup_soundness_p521_chacha20poly1305,
+            crate::aead::ChaCha20Poly1305,
+            HkdfSha512,
+            crate::kem::dhp521_hkdfsha512::DhP521HkdfSha512
+        );
+        #[cfg(feature = "aes-gcm")]
+        test_setup_soundness!(
+            test_setup_soundness_p521_aes_gcm,
+            crate::aead::AesGcm128,
             HkdfSha512,
             crate::kem::dhp521_hkdfsha512::DhP521HkdfSha512
         );

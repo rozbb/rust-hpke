@@ -23,67 +23,39 @@ jobs:
     runs-on: ${{ matrix.platform }}
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v1
+        uses: actions/checkout@v4
 
       - name: Install toolchain
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ matrix.toolchain }}
-          override: true
 
-      - name: Run cargo test with just X25519 enabled
-        env:
-          CARGO_INCREMENTAL: 0
-          RUSTFLAGS: -D warnings -A dead_code -A unused_imports
-        run: cargo test --no-default-features --features="x25519"
+      - name: Install Cargo Hack
+        run: cargo install cargo-hack --debug --locked
 
-      - name: Run cargo test with just P256 enabled
+      - name: Run cargo hack test
         env:
-          CARGO_INCREMENTAL: 0
-          RUSTFLAGS: -D warnings -A dead_code -A unused_imports
-        run: cargo test --no-default-features --features="p256"
-
-      - name: Run cargo test with just P384 enabled
-        env:
-          CARGO_INCREMENTAL: 0
-          RUSTFLAGS: -D warnings -A dead_code -A unused_imports
-        run: cargo test --no-default-features --features="p384"
-
-      - name: Run cargo test with just P521 enabled
-        env:
-          CARGO_INCREMENTAL: 0
-          RUSTFLAGS: -D warnings -A dead_code -A unused_imports
-        run: cargo test --no-default-features --features="p521"
-
-      - name: Run cargo test with all features enabled
-        env:
-          CARGO_INCREMENTAL: 0
-          RUSTFLAGS: -D warnings -A dead_code -A unused_imports
-        run: cargo test --all-features
+          RUSTFLAGS: -D warnings -A dead_code -A unused
+        run: cargo hack test --feature-powerset --features std,alloc # always enable std and alloc to reduce features explosion
 
       - name: Run cargo build with all features
         env:
-          CARGO_INCREMENTAL: 0
           RUSTFLAGS: -D warnings
         run: cargo build --all-features
+
   rustfmt:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v1
+        uses: actions/checkout@v4
 
-      - name: Install stable toolchain
-        uses: actions-rs/toolchain@v1
+      - name: Install toolchain
+        uses: dtolnay/rust-toolchain@stable
         with:
-          profile: minimal
-          toolchain: stable
           components: rustfmt
 
       - name: Run cargo fmt
-        uses: actions-rs/cargo@v1
-        with:
-          command: fmt
-          args: --all -- --check
+        run: cargo fmt --all -- --check
 
   # Enable this once x25519-dalek has another 2.0-pre.X release
   #msrv:
@@ -100,13 +72,41 @@ jobs:
   #  - uses: dtolnay/rust-toolchain@1.65.0
   #  - run: cargo build --all-features
 
-  clippy:
-    runs-on: ubuntu-latest
+  check:
+    strategy:
+      matrix:
+        platform:
+          - ubuntu-latest
+          - macos-latest
+          - windows-latest
+        toolchain:
+          - stable
+          - beta
+          - nightly
+    runs-on: ${{ matrix.platform }}
     steps:
-      - uses: actions/checkout@v1
-      - uses: actions-rs/toolchain@v1
+      - name: Checkout sources
+        uses: actions/checkout@v4
+
+      - name: Install toolchain
+        uses: dtolnay/rust-toolchain@master
         with:
-          profile: minimal
-          toolchain: stable
+          toolchain: ${{ matrix.toolchain }}
           components: clippy
-      - run: cargo clippy --all-features -- -D warnings
+
+      - name: Install Cargo Hack
+        run: cargo install cargo-hack --debug --locked
+
+      - name: Run cargo hack clippy
+        if: ${{ matrix.toolchain == 'stable' }}
+        run: cargo hack clippy --feature-powerset -- -D warnings -A dead_code -A unused
+
+      - name: Run cargo hack check
+        if: ${{ matrix.toolchain != 'stable' }}
+        env:
+          RUSTFLAGS: -D warnings -A dead_code -A unused
+        run: cargo hack check --feature-powerset
+
+      - name: Run cargo clippy with all features and warnings
+        if: ${{ matrix.toolchain == 'stable' }}
+        run: cargo clippy --all-features -- -D warnings

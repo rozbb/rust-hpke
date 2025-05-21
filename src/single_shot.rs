@@ -150,7 +150,6 @@ where
 mod test {
     use super::*;
     use crate::{
-        aead::ChaCha20Poly1305,
         kem::Kem as KemTrait,
         op_mode::{OpModeR, OpModeS, PskBundle},
         test_util::gen_rand_buf,
@@ -221,34 +220,65 @@ mod test {
         };
     }
 
-    #[cfg(feature = "x25519")]
+    #[cfg(all(feature = "x25519", feature = "chacha20-poly1305"))]
     test_single_shot_correctness!(
-        test_single_shot_correctness_x25519,
-        ChaCha20Poly1305,
+        test_single_shot_correctness_x25519_chacha20_poly1305,
+        crate::aead::ChaCha20Poly1305,
         crate::kdf::HkdfSha256,
         crate::kem::x25519_hkdfsha256::X25519HkdfSha256
     );
 
-    #[cfg(feature = "p256")]
+    #[cfg(all(feature = "x25519", feature = "aes-gcm"))]
     test_single_shot_correctness!(
-        test_single_shot_correctness_p256,
-        ChaCha20Poly1305,
+        test_single_shot_correctness_x25519_aes128_gcm,
+        crate::aead::AesGcm128,
+        crate::kdf::HkdfSha256,
+        crate::kem::x25519_hkdfsha256::X25519HkdfSha256
+    );
+
+    #[cfg(all(feature = "p256", feature = "chacha20-poly1305"))]
+    test_single_shot_correctness!(
+        test_single_shot_correctness_p256_chacha20_poly1305,
+        crate::aead::ChaCha20Poly1305,
         crate::kdf::HkdfSha256,
         crate::kem::dhp256_hkdfsha256::DhP256HkdfSha256
     );
 
-    #[cfg(feature = "p384")]
+    #[cfg(all(feature = "p256", feature = "aes-gcm"))]
     test_single_shot_correctness!(
-        test_single_shot_correctness_p384,
-        ChaCha20Poly1305,
+        test_single_shot_correctness_p256_aes128_gcm,
+        crate::aead::AesGcm128,
+        crate::kdf::HkdfSha256,
+        crate::kem::dhp256_hkdfsha256::DhP256HkdfSha256
+    );
+
+    #[cfg(all(feature = "p384", feature = "chacha20-poly1305"))]
+    test_single_shot_correctness!(
+        test_single_shot_correctness_p384_chacha20_poly1305,
+        crate::aead::ChaCha20Poly1305,
         crate::kdf::HkdfSha384,
         crate::kem::dhp384_hkdfsha384::DhP384HkdfSha384
     );
 
-    #[cfg(feature = "p521")]
+    #[cfg(all(feature = "p384", feature = "aes-gcm"))]
     test_single_shot_correctness!(
-        test_single_shot_correctness_p521,
-        ChaCha20Poly1305,
+        test_single_shot_correctness_p384_aes128_gcm,
+        crate::aead::AesGcm128,
+        crate::kdf::HkdfSha384,
+        crate::kem::dhp384_hkdfsha384::DhP384HkdfSha384
+    );
+
+    #[cfg(all(feature = "p521", feature = "chacha20-poly1305"))]
+    test_single_shot_correctness!(
+        test_single_shot_correctness_p521_chacha20_poly1305,
+        crate::aead::ChaCha20Poly1305,
+        crate::kdf::HkdfSha512,
+        crate::kem::dhp521_hkdfsha512::DhP521HkdfSha512
+    );
+    #[cfg(all(feature = "p521", feature = "aes-gcm"))]
+    test_single_shot_correctness!(
+        test_single_shot_correctness_p521_aes128_gcm,
+        crate::aead::AesGcm128,
         crate::kdf::HkdfSha512,
         crate::kem::dhp521_hkdfsha512::DhP521HkdfSha512
     );
