@@ -15,11 +15,13 @@ categories = ["cryptography", "no-std"]
 # "p256" enables the use of ECDH-NIST-P256 as a KEM
 # "p384" enables the use of ECDH-NIST-P384 as a KEM
 # "x25519" enables the use of the X25519 as a KEM
+# "xwing" enables the use of X-Wing hybrid post-quantum KEM
 default = ["alloc", "p256", "x25519"]
 x25519 = ["dep:x25519-dalek"]
 p384 = ["dep:p384"]
 p256 = ["dep:p256"]
 p521 = ["dep:p521"]
+xwing = ["dep:x-wing", "dep:kem", "dep:sha3"]
 # Include allocating methods like open() and seal()
 alloc = []
 # Includes an implementation of `std::error::Error` for `HpkeError`. Also does what `alloc` does.
@@ -33,7 +35,8 @@ generic-array = { version = "0.14", default-features = false }
 digest = "0.10"
 hkdf = "0.12"
 hmac = "0.12"
-rand_core = { version = "0.9", default-features = false }
+kem = { git = "https://github.com/RustCrypto/traits", optional = true }
+rand_core = { version = "0.9", default-features = false, features = ["os_rng"] }
 p256 = { version = "0.13", default-features = false, features = [
     "arithmetic",
     "ecdh",
@@ -47,10 +50,12 @@ p521 = { version = "0.13", default-features = false, features = [
     "ecdh",
 ], optional = true }
 sha2 = { version = "0.10", default-features = false }
+sha3 = { version = "0.10.8", optional = true }
 subtle = { version = "2.6", default-features = false }
 x25519-dalek = { version = "2", default-features = false, features = [
     "static_secrets",
 ], optional = true }
+x-wing = { git = "https://github.com/RustCrypto/KEMs", optional = true }
 zeroize = { version = "1", default-features = false, features = [
     "zeroize_derive",
 ] }
@@ -86,3 +91,9 @@ harness = false
 
 [lib]
 bench = false
+
+[patch.crates-io]
+// Needed because of version conflicts. This can be removed once RustCrypto releases newer stable versions.
+kem = { git = "https://github.com/RustCrypto/traits" }
+ml-kem = { git = "https://github.com/RustCrypto/KEMs" }
+x-wing = { git = "https://github.com/RustCrypto/KEMs" }

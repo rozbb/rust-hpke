@@ -10,6 +10,10 @@ use zeroize::Zeroize;
 
 mod dhkem;
 pub use dhkem::*;
+#[cfg(feature = "xwing")]
+pub mod xwing;
+#[cfg(feature = "xwing")]
+pub use xwing::*;
 
 /// Represents authenticated encryption functionality
 pub trait Kem: Sized {

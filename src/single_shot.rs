@@ -252,4 +252,12 @@ mod test {
         crate::kdf::HkdfSha512,
         crate::kem::dhp521_hkdfsha512::DhP521HkdfSha512
     );
+
+    #[cfg(feature = "xwing")]
+    test_single_shot_correctness!(
+        test_single_shot_correctness_xwing,
+        ChaCha20Poly1305,
+        crate::kdf::HkdfSha256,
+        crate::kem::xwing::XWing
+    );
 }
