@@ -10,7 +10,6 @@
 //! # #[cfg(any(feature = "alloc", feature = "std"))] {
 //! # #[cfg(feature = "x25519")]
 //! # {
-//! # use rand::{rngs::StdRng, SeedableRng};
 //! # use hpke::{
 //! #     aead::ChaCha20Poly1305,
 //! #     kdf::HkdfSha384,
@@ -22,7 +21,7 @@
 //! type Aead = ChaCha20Poly1305;
 //! type Kdf = HkdfSha384;
 //!
-//! let mut csprng = StdRng::from_os_rng();
+//! let mut csprng = rand::rng();
 //! # let (bob_sk, bob_pk) = Kem::gen_keypair(&mut csprng);
 //!
 //! // This is a description string for the session. Both Alice and Bob need to know this value.

@@ -155,8 +155,6 @@ mod test {
         test_util::gen_rand_buf,
     };
 
-    use rand::{rngs::StdRng, SeedableRng};
-
     macro_rules! test_single_shot_correctness {
         ($test_name:ident, $aead:ty, $kdf:ty, $kem:ty) => {
             /// Tests that `single_shot_open` can open a `single_shot_seal` ciphertext. This
@@ -171,7 +169,7 @@ mod test {
                 let msg = b"Good night, a-ding ding ding ding ding";
                 let aad = b"Five four three two one";
 
-                let mut csprng = StdRng::from_os_rng();
+                let mut csprng = rand::rng();
 
                 // Set up an arbitrary info string, a random PSK, and an arbitrary PSK ID
                 let info = b"why would you think in a million years that that would actually work";

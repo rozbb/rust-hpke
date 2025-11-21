@@ -10,11 +10,11 @@ use crate::{
 
 use aead::inout::InOutBuf;
 use hybrid_array::Array;
-use rand::{rngs::StdRng, CryptoRng, Rng, RngCore, SeedableRng};
+use rand::{CryptoRng, Rng, RngCore};
 
 /// Returns a random 32-byte buffer
 pub(crate) fn gen_rand_buf() -> [u8; 32] {
-    let mut csprng = StdRng::from_os_rng();
+    let mut csprng = rand::rng();
     let mut buf = [0u8; 32];
     csprng.fill_bytes(&mut buf);
     buf
@@ -39,7 +39,7 @@ where
     Kdf: KdfTrait,
     Kem: KemTrait,
 {
-    let mut csprng = StdRng::from_os_rng();
+    let mut csprng = rand::rng();
 
     // Initialize the key and nonce
     let key = {
@@ -78,7 +78,7 @@ pub(crate) fn new_op_mode_pair<'a, Kdf: KdfTrait, Kem: KemTrait>(
     psk: &'a [u8],
     psk_id: &'a [u8],
 ) -> (OpModeS<'a, Kem>, OpModeR<'a, Kem>) {
-    let mut csprng = StdRng::from_os_rng();
+    let mut csprng = rand::rng();
     let (sk_sender, pk_sender) = Kem::gen_keypair(&mut csprng);
     let psk_bundle = PskBundle::new(psk, psk_id).unwrap();
 
@@ -112,7 +112,7 @@ pub(crate) fn aead_ctx_eq<A: Aead, Kdf: KdfTrait, Kem: KemTrait>(
     sender: &mut AeadCtxS<A, Kdf, Kem>,
     receiver: &mut AeadCtxR<A, Kdf, Kem>,
 ) -> bool {
-    let mut csprng = StdRng::from_os_rng();
+    let mut csprng = rand::rng();
 
     // Some random input data
     let msg_len = csprng.random::<u8>() as usize;

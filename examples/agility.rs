@@ -23,7 +23,7 @@ use hpke::{
     Serializable,
 };
 
-use rand::{rngs::StdRng, CryptoRng, RngCore, SeedableRng};
+use rand::{CryptoRng, RngCore};
 
 trait AgileAeadCtxS {
     fn seal_inout_detached(
@@ -675,7 +675,7 @@ fn agile_setup_receiver(
 }
 
 fn main() {
-    let mut csprng = StdRng::from_os_rng();
+    let mut csprng = rand::rng();
 
     let supported_aead_algs = &[
         AeadAlg::AesGcm128,

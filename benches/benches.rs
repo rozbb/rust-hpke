@@ -7,7 +7,7 @@ use hpke::{
 };
 
 use criterion::{black_box, criterion_main, Criterion};
-use rand::{rngs::StdRng, RngCore, SeedableRng};
+use rand::RngCore;
 use std::time::Instant;
 
 // Length of AAD for all seal/open benchmarks
@@ -24,7 +24,7 @@ where
     Kdf: KdfTrait,
     Kem: KemTrait,
 {
-    let mut csprng = StdRng::from_os_rng();
+    let mut csprng = rand::rng();
 
     let mut group = c.benchmark_group(group_name);
 
@@ -163,7 +163,7 @@ where
     Kdf: KdfTrait,
     Kem: KemTrait,
 {
-    let mut csprng = StdRng::from_os_rng();
+    let mut csprng = rand::rng();
 
     // Make up the recipient's keypair and setup an encryption context
     let (sk_recip, pk_recip) = Kem::gen_keypair(&mut csprng);

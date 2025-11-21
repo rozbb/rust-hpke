@@ -282,7 +282,6 @@ mod tests {
     use super::p521::DhP521;
 
     use hex_literal::hex;
-    use rand::{rngs::StdRng, SeedableRng};
 
     //
     // Test vectors come from RFC 5903 §8.1, §8.2 and §8.3
@@ -422,7 +421,7 @@ mod tests {
     /// Tests that an deserialize-serialize round-trip ends up at the same pubkey
     #[allow(dead_code)]
     fn test_pubkey_serialize_correctness<Kex: DhKeyExchange>() {
-        let mut csprng = StdRng::from_os_rng();
+        let mut csprng = rand::rng();
 
         // We can't do the same thing as in the X25519 tests, since a completely random point
         // is not likely to lie on the curve. Instead, we just generate a random point,
@@ -459,7 +458,7 @@ mod tests {
     where
         Kex::PrivateKey: PartialEq,
     {
-        let mut csprng = StdRng::from_os_rng();
+        let mut csprng = rand::rng();
 
         // Make a random keypair and serialize it
         let (sk, pk) = dhkex_gen_keypair::<Kex, _>(&mut csprng);

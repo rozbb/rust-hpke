@@ -6,7 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
-* Updated aead, aes-gcm, chacha20poly1305, digest, hkdf, hmac
+* Updated RustCrypto crates `aead`, `aes-gcm`, `chacha20poly1305`, `digest`, `hkdf`, `hmac`
+* Updated `rand` and `rand_core`
 * Replaced `generic-array` with `hybrid-array`
 * Switched all `_in_place` algorithms to `_inout`, and replace `&mut [u8]` with `inout::InOut<'_, '_, u8>`
 

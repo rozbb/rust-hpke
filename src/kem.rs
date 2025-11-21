@@ -4,7 +4,7 @@ use crate::{Deserializable, HpkeError, Serializable};
 
 use core::fmt::Debug;
 
-use hybrid_array::{ArraySize, Array};
+use hybrid_array::{Array, ArraySize};
 use rand_core::{CryptoRng, RngCore};
 use zeroize::Zeroize;
 
@@ -46,8 +46,7 @@ pub trait Kem: Sized {
     /// Generates a random keypair using the given RNG
     fn gen_keypair<R: CryptoRng + RngCore>(csprng: &mut R) -> (Self::PrivateKey, Self::PublicKey) {
         // Make some keying material that's the size of a private key
-        let mut ikm: Array<u8, <Self::PrivateKey as Serializable>::OutputSize> =
-            Array::default();
+        let mut ikm: Array<u8, <Self::PrivateKey as Serializable>::OutputSize> = Array::default();
         // Fill it with randomness
         csprng.fill_bytes(&mut ikm);
         // Run derive_keypair using the KEM's KDF
@@ -114,8 +113,6 @@ impl<Kem: KemTrait> Drop for SharedSecret<Kem> {
 mod tests {
     use crate::{kem::Kem as KemTrait, Deserializable, Serializable};
 
-    use rand::{rngs::StdRng, SeedableRng};
-
     macro_rules! test_encap_correctness {
         ($test_name:ident, $kem_ty:ty) => {
             /// Tests that encap and decap produce the same shared secret when composed
@@ -123,7 +120,7 @@ mod tests {
             fn $test_name() {
                 type Kem = $kem_ty;
 
-                let mut csprng = StdRng::from_os_rng();
+                let mut csprng = rand::rng();
                 let (sk_recip, pk_recip) = Kem::gen_keypair(&mut csprng);
 
                 // Encapsulate a random shared secret
@@ -171,7 +168,7 @@ mod tests {
 
                 // Encapsulate a random shared secret
                 let encapped_key = {
-                    let mut csprng = StdRng::from_os_rng();
+                    let mut csprng = rand::rng();
                     let (_, pk_recip) = Kem::gen_keypair(&mut csprng);
                     Kem::encap(&pk_recip, None, &mut csprng).unwrap().1
                 };

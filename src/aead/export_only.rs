@@ -1,9 +1,8 @@
 use crate::aead::Aead;
 
 use aead::{
-    AeadCore as BaseAeadCore, TagPosition, AeadInOut as BaseAeadInOut, KeyInit as BaseKeyInit,
-    KeySizeUser as BaseKeySizeUser,
-    inout::InOutBuf,
+    inout::InOutBuf, AeadCore as BaseAeadCore, AeadInOut as BaseAeadInOut, KeyInit as BaseKeyInit,
+    KeySizeUser as BaseKeySizeUser, TagPosition,
 };
 use hybrid_array::typenum;
 

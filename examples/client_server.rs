@@ -23,8 +23,6 @@ use hpke::{
     Deserializable, Kem as KemTrait, OpModeR, OpModeS, Serializable,
 };
 
-use rand::{rngs::StdRng, SeedableRng};
-
 const INFO_STR: &[u8] = b"example session";
 
 // These are the only algorithms we're gonna use for this example
@@ -34,7 +32,7 @@ type Kdf = HkdfSha384;
 
 // Initializes the server with a fresh keypair
 fn server_init() -> (<Kem as KemTrait>::PrivateKey, <Kem as KemTrait>::PublicKey) {
-    let mut csprng = StdRng::from_os_rng();
+    let mut csprng = rand::rng();
     Kem::gen_keypair(&mut csprng)
 }
 
@@ -45,7 +43,7 @@ fn client_encrypt_msg(
     associated_data: &[u8],
     server_pk: &<Kem as KemTrait>::PublicKey,
 ) -> (<Kem as KemTrait>::EncappedKey, Vec<u8>, AeadTag<Aead>) {
-    let mut csprng = StdRng::from_os_rng();
+    let mut csprng = rand::rng();
 
     // Encapsulate a key and use the resulting shared secret to encrypt a message. The AEAD context
     // is what you use to encrypt.
