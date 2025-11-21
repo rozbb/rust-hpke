@@ -76,7 +76,7 @@ The `serde_impls` feature was removed. If you were using this and require backwa
 MSRV
 ----
 
-The current minimum supported Rust version (MSRV) is 1.65.0 (897e37553 2022-11-02).
+The current minimum supported Rust version (MSRV) is 1.85.0 (2025-02-20).
 
 Changelog
 ---------

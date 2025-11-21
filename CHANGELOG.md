@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * Updated `rand` and `rand_core`
 * Replaced `generic-array` with `hybrid-array`
 * Switched all `_in_place` algorithms to `_inout`, and replace `&mut [u8]` with `inout::InOut<'_, '_, u8>`
+* Bumped MSRV to 1.85.0 (2025-02-20)
 
 ## [0.13.0] - 2025-02-19
 
