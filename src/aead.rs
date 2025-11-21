@@ -312,8 +312,8 @@ impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AeadCtxR<A, Kdf, Kem> {
     /// Returns `Ok(())` on success. If this context has been used for so many encryptions that the
     /// sequence number overflowed, returns `Err(HpkeError::MessageLimitReached)`. If the tag fails
     /// to validate, returns `Err(HpkeError::OpenError)`.
-    #[cfg_attr(docsrs, doc(cfg(any(feature = "alloc", feature = "std"))))]
-    #[cfg(any(feature = "alloc", feature = "std"))]
+    #[cfg_attr(docsrs, doc(cfg(feature = "alloc")))]
+    #[cfg(feature = "alloc")]
     pub fn open(&mut self, ciphertext: &[u8], aad: &[u8]) -> Result<crate::Vec<u8>, HpkeError> {
         // Make sure the auth'd ciphertext is long enough to contain a tag. If it isn't, it's
         // certainly not valid.
@@ -426,8 +426,8 @@ impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AeadCtxS<A, Kdf, Kem> {
     /// Returns `Ok(ciphertext)` on success.  If this context has been used for so many encryptions
     /// that the sequence number overflowed, returns `Err(HpkeError::MessageLimitReached)`. If an
     /// error happened during encryption, returns `Err(HpkeError::SealError)`.
-    #[cfg_attr(docsrs, doc(cfg(any(feature = "alloc", feature = "std"))))]
-    #[cfg(any(feature = "alloc", feature = "std"))]
+    #[cfg_attr(docsrs, doc(cfg(feature = "alloc")))]
+    #[cfg(feature = "alloc")]
     pub fn seal(&mut self, plaintext: &[u8], aad: &[u8]) -> Result<crate::Vec<u8>, HpkeError> {
         let msg_len = plaintext.len();
         let tag_len = AeadTag::<A>::size();
@@ -497,7 +497,7 @@ mod test {
     /// Tests that encryption context secret export does not change behavior based on the
     /// underlying sequence number This logic is cipher-agnostic, so we don't make the test generic
     /// over ciphers.
-    #[cfg(any(feature = "alloc", feature = "std"))]
+    #[cfg(feature = "alloc")]
     macro_rules! test_export_idempotence {
         ($test_name:ident, $kem_ty:ty) => {
             #[test]
@@ -534,7 +534,7 @@ mod test {
 
     /// Tests that anything other than `export()` called on an `ExportOnly` context results in a
     /// panic
-    #[cfg(any(feature = "alloc", feature = "std"))]
+    #[cfg(feature = "alloc")]
     macro_rules! test_exportonly_panics {
         ($test_name1:ident, $test_name2:ident, $kem_ty:ty) => {
             #[should_panic]
@@ -568,7 +568,7 @@ mod test {
 
     /// Tests that sequence overflowing causes an error. This logic is cipher-agnostic, so we don't
     /// make the test generic over ciphers.
-    #[cfg(any(feature = "alloc", feature = "std"))]
+    #[cfg(feature = "alloc")]
     macro_rules! test_overflow {
         ($test_name:ident, $kem_ty:ty) => {
             #[test]
@@ -638,7 +638,7 @@ mod test {
     }
 
     /// Tests that `open()` can decrypt things properly encrypted with `seal()`
-    #[cfg(any(feature = "alloc", feature = "std"))]
+    #[cfg(feature = "alloc")]
     macro_rules! test_ctx_correctness {
         ($test_name:ident, $aead_ty:ty, $kem_ty:ty) => {
             #[test]
@@ -683,7 +683,7 @@ mod test {
     test_invalid_nonce!(test_invalid_nonce_aes256, AesGcm128);
     test_invalid_nonce!(test_invalid_nonce_chacha, ChaCha20Poly1305);
 
-    #[cfg(all(feature = "x25519", any(feature = "alloc", feature = "std")))]
+    #[cfg(all(feature = "x25519", feature = "alloc"))]
     mod x25519_tests {
         use super::*;
 
@@ -712,7 +712,7 @@ mod test {
         );
     }
 
-    #[cfg(all(feature = "p256", any(feature = "alloc", feature = "std")))]
+    #[cfg(all(feature = "p256", feature = "alloc"))]
     mod p256_tests {
         use super::*;
 
@@ -741,7 +741,7 @@ mod test {
         );
     }
 
-    #[cfg(all(feature = "p384", any(feature = "alloc", feature = "std")))]
+    #[cfg(all(feature = "p384", feature = "alloc"))]
     mod p384_tests {
         use super::*;
 

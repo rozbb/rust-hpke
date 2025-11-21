@@ -7,7 +7,7 @@
 //! public key they know. Here's an example of Alice and Bob, where Alice knows Bob's public key:
 //!
 //! ```
-//! # #[cfg(any(feature = "alloc", feature = "std"))] {
+//! # #[cfg(feature = "alloc")] {
 //! # #[cfg(feature = "x25519")]
 //! # {
 //! # use hpke::{
@@ -78,19 +78,15 @@
 #![no_std]
 
 #[cfg(feature = "std")]
-#[allow(unused_imports)]
 #[macro_use]
 extern crate std;
 
-#[cfg(feature = "std")]
-pub(crate) use std::vec::Vec;
-
-#[cfg(all(feature = "alloc", not(feature = "std")))]
+#[cfg(feature = "alloc")]
 #[allow(unused_imports)]
 #[macro_use]
 extern crate alloc;
 
-#[cfg(all(feature = "alloc", not(feature = "std")))]
+#[cfg(feature = "alloc")]
 pub(crate) use alloc::vec::Vec;
 
 //-------- Testing stuff --------//
@@ -139,7 +135,7 @@ pub use setup::{setup_receiver, setup_sender};
 pub use single_shot::{single_shot_open_inout_detached, single_shot_seal_inout_detached};
 
 #[doc(inline)]
-#[cfg(any(feature = "alloc", feature = "std"))]
+#[cfg(feature = "alloc")]
 pub use single_shot::{single_shot_open, single_shot_seal};
 
 //-------- Top-level types --------//
@@ -225,5 +221,4 @@ pub trait Deserializable: Serializable + Sized {
 }
 
 // An Error type is just something that's Debug and Display
-#[cfg(feature = "std")]
-impl std::error::Error for HpkeError {}
+impl core::error::Error for HpkeError {}

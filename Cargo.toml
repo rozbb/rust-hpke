@@ -23,8 +23,8 @@ p256 = ["dep:p256"]
 p521 = ["dep:p521"]
 # Include allocating methods like open() and seal()
 alloc = []
-# Includes an implementation of `std::error::Error` for `HpkeError`. Also does what `alloc` does.
-std = []
+# Used to enable KAT tests. Also implies alloc
+std = ["alloc"]
 
 [dependencies]
 aead = "0.6.0-rc.3"
