@@ -6,7 +6,7 @@ use hpke::{
     setup_receiver, setup_sender, OpModeR, OpModeS, PskBundle,
 };
 
-use criterion::{black_box, criterion_main, Criterion};
+use criterion::{criterion_main, Criterion};
 use rand::RngCore;
 use std::time::Instant;
 
@@ -139,7 +139,7 @@ where
             let start = Instant::now();
             for (mut ciphertext, aad, tag) in ciphertext_aad_tags.into_iter() {
                 // black_box makes sure the compiler doesn't optimize away this computation
-                black_box(
+                std::hint::black_box(
                     decryption_ctx
                         .open_inout_detached(InOutBuf::from(&mut ciphertext[..]), &aad, &tag)
                         .unwrap(),
