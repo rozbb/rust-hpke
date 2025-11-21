@@ -14,6 +14,7 @@
 
 use hpke::{
     aead::{Aead, AeadCtxR, AeadCtxS, AeadTag, AesGcm128, AesGcm256, ChaCha20Poly1305},
+    inout::InOutBuf,
     kdf::{HkdfSha256, HkdfSha384, HkdfSha512, Kdf as KdfTrait},
     kem::{
         DhP256HkdfSha256, DhP384HkdfSha384, DhP521HkdfSha512, Kem as KemTrait, X25519HkdfSha256,
@@ -25,18 +26,18 @@ use hpke::{
 use rand::{rngs::StdRng, CryptoRng, RngCore, SeedableRng};
 
 trait AgileAeadCtxS {
-    fn seal_in_place_detached(
+    fn seal_inout_detached(
         &mut self,
-        plaintext: &mut [u8],
+        buffer: InOutBuf<'_, '_, u8>,
         aad: &[u8],
     ) -> Result<AgileAeadTag, AgileHpkeError>;
     fn seal(&mut self, plaintext: &[u8], aad: &[u8]) -> Result<Vec<u8>, AgileHpkeError>;
 }
 
 trait AgileAeadCtxR {
-    fn open_in_place_detached(
+    fn open_inout_detached(
         &mut self,
-        ciphertext: &mut [u8],
+        buffer: InOutBuf<'_, '_, u8>,
         aad: &[u8],
         tag_bytes: &[u8],
     ) -> Result<(), AgileHpkeError>;
@@ -65,33 +66,32 @@ impl From<HpkeError> for AgileHpkeError {
 }
 
 impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AgileAeadCtxS for AeadCtxS<A, Kdf, Kem> {
-    fn seal_in_place_detached(
+    fn seal_inout_detached(
         &mut self,
-        plaintext: &mut [u8],
+        buffer: InOutBuf<'_, '_, u8>,
         aad: &[u8],
     ) -> Result<Vec<u8>, AgileHpkeError> {
-        self.seal_in_place_detached(plaintext, aad)
+        AeadCtxS::seal_inout_detached(self, buffer, aad)
             .map(|tag| tag.to_bytes().to_vec())
             .map_err(Into::into)
     }
     fn seal(&mut self, plaintext: &[u8], aad: &[u8]) -> Result<Vec<u8>, AgileHpkeError> {
-        self.seal(plaintext, aad).map_err(Into::into)
+        AeadCtxS::seal(self, plaintext, aad).map_err(Into::into)
     }
 }
 
 impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AgileAeadCtxR for AeadCtxR<A, Kdf, Kem> {
-    fn open_in_place_detached(
+    fn open_inout_detached(
         &mut self,
-        ciphertext: &mut [u8],
+        buffer: InOutBuf<'_, '_, u8>,
         aad: &[u8],
         tag_bytes: &[u8],
     ) -> Result<(), AgileHpkeError> {
         let tag = AeadTag::<A>::from_bytes(tag_bytes)?;
-        self.open_in_place_detached(ciphertext, aad, &tag)
-            .map_err(Into::into)
+        AeadCtxR::open_inout_detached(self, buffer, aad, &tag).map_err(Into::into)
     }
     fn open(&mut self, ciphertext: &[u8], aad: &[u8]) -> Result<Vec<u8>, AgileHpkeError> {
-        self.open(ciphertext, aad).map_err(Into::into)
+        AeadCtxR::open(self, ciphertext, aad).map_err(Into::into)
     }
 }
 
@@ -585,7 +585,7 @@ fn agile_setup_sender<R: CryptoRng + RngCore>(
     );
 
     if res.is_none() {
-        panic!("DHKEM({}) isn't impelmented yet!", kem_alg.name());
+        panic!("KEM {} isn't impelmented yet!", kem_alg.name());
     }
 
     res.unwrap()
@@ -668,7 +668,7 @@ fn agile_setup_receiver(
     );
 
     if res.is_none() {
-        panic!("DHKEM({}) isn't impelmented yet!", kem_alg.name());
+        panic!("KEM {} isn't impelmented yet!", kem_alg.name());
     }
 
     res.unwrap()

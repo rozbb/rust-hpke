@@ -21,7 +21,7 @@ macro_rules! nistp_dhkex {
 
             use ::$curve as curve_crate;
             use curve_crate::elliptic_curve::{ecdh::diffie_hellman, sec1::ToEncodedPoint};
-            use generic_array::{typenum::Unsigned, GenericArray};
+            use hybrid_array::{typenum::Unsigned, Array};
             use subtle::{Choice, ConstantTimeEq};
 
             #[doc = concat!(
@@ -203,7 +203,7 @@ macro_rules! nistp_dhkex {
                     // The buffer we hold the candidate scalar bytes in. This is the size of a
                     // private key.
                     let mut buf =
-                        GenericArray::<u8, <PrivateKey as Serializable>::OutputSize>::default();
+                        Array::<u8, <PrivateKey as Serializable>::OutputSize>::default();
 
                     // Try to generate a key 256 times. Practically, this will succeed and return
                     // early on the first iteration.
@@ -235,7 +235,7 @@ macro_rules! nistp_dhkex {
     };
 }
 
-use generic_array::typenum;
+use hybrid_array::typenum;
 
 #[cfg(feature = "p256")]
 nistp_dhkex!(

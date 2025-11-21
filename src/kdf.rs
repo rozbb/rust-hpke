@@ -2,9 +2,9 @@
 
 use crate::util::write_u16_be;
 
-use digest::{core_api::BlockSizeUser, Digest, OutputSizeUser};
-use generic_array::GenericArray;
-use hmac::SimpleHmac;
+use digest::{Digest, OutputSizeUser};
+use hmac::EagerHash;
+use hybrid_array::Array;
 use sha2::{Sha256, Sha384, Sha512};
 
 const VERSION_LABEL: &[u8] = b"HPKE-v1";
@@ -18,7 +18,7 @@ pub(crate) const MAX_DIGEST_SIZE: usize = 64;
 pub trait Kdf {
     /// The underlying hash function
     #[doc(hidden)]
-    type HashImpl: Clone + Digest + OutputSizeUser + BlockSizeUser;
+    type HashImpl: Clone + Digest + EagerHash;
 
     /// The algorithm identifier for a KDF implementation
     const KDF_ID: u16;
@@ -29,11 +29,9 @@ use Kdf as KdfTrait;
 
 // Convenience types for the functions below
 pub(crate) type DigestArray<Kdf> =
-    GenericArray<u8, <<Kdf as KdfTrait>::HashImpl as OutputSizeUser>::OutputSize>;
-pub(crate) type SimpleHkdf<Kdf> =
-    hkdf::Hkdf<<Kdf as KdfTrait>::HashImpl, SimpleHmac<<Kdf as KdfTrait>::HashImpl>>;
-type SimpleHkdfExtract<Kdf> =
-    hkdf::HkdfExtract<<Kdf as KdfTrait>::HashImpl, SimpleHmac<<Kdf as KdfTrait>::HashImpl>>;
+    Array<u8, <<<Kdf as KdfTrait>::HashImpl as EagerHash>::Core as OutputSizeUser>::OutputSize>;
+pub(crate) type SimpleHkdf<Kdf> = hkdf::Hkdf<<Kdf as KdfTrait>::HashImpl>;
+type SimpleHkdfExtract<Kdf> = hkdf::HkdfExtract<<Kdf as KdfTrait>::HashImpl>;
 
 /// The implementation of HKDF-SHA256
 pub struct HkdfSha256 {}
@@ -127,9 +125,9 @@ pub trait LabeledExpand {
     ) -> Result<(), hkdf::InvalidLength>;
 }
 
-impl<D> LabeledExpand for hkdf::Hkdf<D, SimpleHmac<D>>
+impl<D> LabeledExpand for hkdf::Hkdf<D>
 where
-    D: Clone + OutputSizeUser + Digest + BlockSizeUser,
+    D: Clone + EagerHash,
 {
     // RFC 9180 §4
     // def LabeledExpand(prk, label, info, L):

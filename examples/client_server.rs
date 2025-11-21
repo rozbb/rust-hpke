@@ -17,6 +17,7 @@
 
 use hpke::{
     aead::{AeadTag, ChaCha20Poly1305},
+    inout::InOutBuf,
     kdf::HkdfSha384,
     kem::X25519HkdfSha256,
     Deserializable, Kem as KemTrait, OpModeR, OpModeS, Serializable,
@@ -52,10 +53,10 @@ fn client_encrypt_msg(
         hpke::setup_sender::<Aead, Kdf, Kem, _>(&OpModeS::Base, server_pk, INFO_STR, &mut csprng)
             .expect("invalid server pubkey!");
 
-    // On success, seal_in_place_detached() will encrypt the plaintext in place
+    // On success, seal_inout_detached() will encrypt the plaintext in place
     let mut msg_copy = msg.to_vec();
     let tag = sender_ctx
-        .seal_in_place_detached(&mut msg_copy, associated_data)
+        .seal_inout_detached(InOutBuf::from(msg_copy.as_mut_slice()), associated_data)
         .expect("encryption failed!");
 
     // Rename for clarity
@@ -85,10 +86,14 @@ fn server_decrypt_msg(
         hpke::setup_receiver::<Aead, Kdf, Kem>(&OpModeR::Base, &server_sk, &encapped_key, INFO_STR)
             .expect("failed to set up receiver!");
 
-    // On success, open_in_place_detached() will decrypt the ciphertext in place
+    // On success, open_inout_detached() will decrypt the ciphertext in place
     let mut ciphertext_copy = ciphertext.to_vec();
     receiver_ctx
-        .open_in_place_detached(&mut ciphertext_copy, associated_data, &tag)
+        .open_inout_detached(
+            InOutBuf::from(ciphertext_copy.as_mut_slice()),
+            associated_data,
+            &tag,
+        )
         .expect("invalid ciphertext!");
 
     // Rename for clarity. Cargo clippy thinks it's unnecessary, but I disagree

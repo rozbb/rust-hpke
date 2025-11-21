@@ -5,7 +5,7 @@ use crate::{
     Deserializable, HpkeError, Serializable,
 };
 
-use generic_array::typenum::{self, Unsigned};
+use hybrid_array::typenum::{self, Unsigned};
 use subtle::{Choice, ConstantTimeEq};
 
 // We wrap the types in order to abstract away the dalek dep
@@ -178,7 +178,7 @@ mod tests {
         dhkex::{x25519::X25519, Deserializable, DhKeyExchange, Serializable},
         test_util::dhkex_gen_keypair,
     };
-    use generic_array::typenum::Unsigned;
+    use hybrid_array::typenum::Unsigned;
     use rand::{rngs::StdRng, RngCore, SeedableRng};
 
     /// Tests that an serialize-deserialize round-trip ends up at the same pubkey

@@ -10,15 +10,17 @@ use crate::{
 
 use core::{default::Default, marker::PhantomData};
 
-use aead::{AeadCore as BaseAeadCore, AeadInPlace as BaseAeadInPlace, KeyInit as BaseKeyInit};
-use generic_array::GenericArray;
+use aead::{
+    inout::InOutBuf, AeadCore as BaseAeadCore, AeadInOut as BaseAeadInOut, KeyInit as BaseKeyInit,
+};
+use hybrid_array::Array;
 use zeroize::Zeroize;
 
 /// Represents authenticated encryption functionality
 pub trait Aead {
     /// The underlying AEAD implementation
     #[doc(hidden)]
-    type AeadImpl: BaseAeadCore + BaseAeadInPlace + BaseKeyInit + Clone + Send + Sync;
+    type AeadImpl: BaseAeadCore + BaseAeadInOut + BaseKeyInit + Clone + Send + Sync;
 
     /// The algorithm identifier for an AEAD implementation
     const AEAD_ID: u16;
@@ -26,7 +28,7 @@ pub trait Aead {
 
 // A nonce is a bytestring you only use for encryption once
 pub(crate) struct AeadNonce<A: Aead>(
-    pub(crate) GenericArray<u8, <A::AeadImpl as BaseAeadCore>::NonceSize>,
+    pub(crate) Array<u8, <A::AeadImpl as BaseAeadCore>::NonceSize>,
 );
 
 // We need this for ease of testing
@@ -40,7 +42,7 @@ impl<A: Aead> Clone for AeadNonce<A> {
 // We use this to get an empty buffer we can read nonce material into
 impl<A: Aead> Default for AeadNonce<A> {
     fn default() -> AeadNonce<A> {
-        AeadNonce(GenericArray::<u8, <A::AeadImpl as BaseAeadCore>::NonceSize>::default())
+        AeadNonce(Array::<u8, <A::AeadImpl as BaseAeadCore>::NonceSize>::default())
     }
 }
 
@@ -52,16 +54,13 @@ impl<A: Aead> Drop for AeadNonce<A> {
 }
 
 pub(crate) struct AeadKey<A: Aead>(
-    pub(crate) GenericArray<u8, <A::AeadImpl as aead::KeySizeUser>::KeySize>,
+    pub(crate) Array<u8, <A::AeadImpl as aead::KeySizeUser>::KeySize>,
 );
 
 // We use this to get an empty buffer we can read key material into
 impl<A: Aead> Default for AeadKey<A> {
     fn default() -> AeadKey<A> {
-        AeadKey(GenericArray::<
-            u8,
-            <A::AeadImpl as aead::KeySizeUser>::KeySize,
-        >::default())
+        AeadKey(Array::<u8, <A::AeadImpl as aead::KeySizeUser>::KeySize>::default())
     }
 }
 
@@ -122,16 +121,16 @@ fn mix_nonce<A: Aead>(base_nonce: &AeadNonce<A>, seq: &Seq) -> AeadNonce<A> {
         .map(|(nonce_byte, seq_byte)| nonce_byte ^ seq_byte);
 
     // This cannot fail, as the length of AeadNonce<A> is precisely the length of Seq
-    AeadNonce(GenericArray::from_exact_iter(new_nonce_iter).unwrap())
+    AeadNonce(Array::try_from_iter(new_nonce_iter).unwrap())
 }
 
 /// An authenticated encryption tag
 #[derive(Clone)]
-pub struct AeadTag<A: Aead>(GenericArray<u8, <A::AeadImpl as BaseAeadCore>::TagSize>);
+pub struct AeadTag<A: Aead>(Array<u8, <A::AeadImpl as BaseAeadCore>::TagSize>);
 
 impl<A: Aead> Default for AeadTag<A> {
     fn default() -> AeadTag<A> {
-        AeadTag(GenericArray::<u8, <A::AeadImpl as BaseAeadCore>::TagSize>::default())
+        AeadTag(Array::<u8, <A::AeadImpl as BaseAeadCore>::TagSize>::default())
     }
 }
 
@@ -152,7 +151,7 @@ impl<A: Aead> Deserializable for AeadTag<A> {
         enforce_equal_len(Self::size(), encoded.len())?;
 
         // Copy to a fixed-size array
-        let mut arr = <GenericArray<u8, Self::OutputSize> as Default>::default();
+        let mut arr = <Array<u8, Self::OutputSize> as Default>::default();
         arr.copy_from_slice(encoded);
         Ok(AeadTag(arr))
     }
@@ -265,8 +264,7 @@ impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AeadCtxR<A, Kdf, Kem> {
     //   self.IncrementSeq()
     //   return pt
 
-    /// Does a "detached open in place", meaning it overwrites `ciphertext` with the resulting
-    /// plaintext, and takes the tag as a separate input.
+    /// Decrypts the data in `buffer`, taking the authentication tag as a separate input
     ///
     /// Return Value
     /// ============
@@ -274,9 +272,9 @@ impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AeadCtxR<A, Kdf, Kem> {
     /// sequence number overflowed, returns `Err(HpkeError::MessageLimitReached)`. If this happens,
     /// `ciphertext` will be unmodified. If the tag fails to validate, returns
     /// `Err(HpkeError::OpenError)`. If this happens, `ciphertext` is in an undefined state.
-    pub fn open_in_place_detached(
+    pub fn open_inout_detached(
         &mut self,
-        ciphertext: &mut [u8],
+        buffer: InOutBuf<'_, '_, u8>,
         aad: &[u8],
         tag: &AeadTag<A>,
     ) -> Result<(), HpkeError> {
@@ -289,7 +287,7 @@ impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AeadCtxR<A, Kdf, Kem> {
             let decrypt_res = self
                 .0
                 .encryptor
-                .decrypt_in_place_detached(&nonce.0, aad, ciphertext, &tag.0);
+                .decrypt_inout_detached(&nonce.0, aad, buffer, &tag.0);
 
             if decrypt_res.is_err() {
                 // Opening failed due to a bad tag
@@ -319,6 +317,7 @@ impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AeadCtxR<A, Kdf, Kem> {
     pub fn open(&mut self, ciphertext: &[u8], aad: &[u8]) -> Result<crate::Vec<u8>, HpkeError> {
         // Make sure the auth'd ciphertext is long enough to contain a tag. If it isn't, it's
         // certainly not valid.
+
         let tag_len = AeadTag::<A>::size();
         let msg_len = ciphertext
             .len()
@@ -327,7 +326,6 @@ impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AeadCtxR<A, Kdf, Kem> {
 
         // Now deconstruct the auth'd ciphertext
         let (ciphertext, tag_slice) = ciphertext.split_at(msg_len);
-        let mut buf = ciphertext.to_vec();
         let tag = {
             let mut t = <AeadTag<A> as Default>::default();
             t.0.copy_from_slice(tag_slice);
@@ -335,8 +333,14 @@ impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AeadCtxR<A, Kdf, Kem> {
         };
 
         // Decrypt and return the decrypted buffer
-        self.open_in_place_detached(&mut buf, aad, &tag)?;
-        Ok(buf)
+        let mut outbuf = vec![0u8; msg_len];
+        // We can unwrap the inout value because outbuf and ciphertext are exactly msg_len long
+        self.open_inout_detached(
+            InOutBuf::new(ciphertext, outbuf.as_mut_slice()).unwrap(),
+            aad,
+            &tag,
+        )?;
+        Ok(outbuf)
     }
 
     /// Fills a given buffer with secret bytes derived from this encryption context. This value
@@ -379,8 +383,7 @@ impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AeadCtxS<A, Kdf, Kem> {
     //   self.IncrementSeq()
     //   return ct
 
-    /// Does a "detached seal in place", meaning it overwrites `plaintext` with the resulting
-    /// ciphertext, and returns the resulting authentication tag
+    /// Encrypts the data in `buffer`, returning the resulting authentication tag
     ///
     /// Return Value
     /// ============
@@ -388,9 +391,9 @@ impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AeadCtxS<A, Kdf, Kem> {
     /// the sequence number overflowed, returns `Err(HpkeError::MessageLimitReached)`. If this
     /// happens, `plaintext` will be unmodified. If an error happened during encryption, returns
     /// `Err(HpkeError::SealError)`. If this happens, the contents of `plaintext` is undefined.
-    pub fn seal_in_place_detached(
+    pub fn seal_inout_detached(
         &mut self,
-        plaintext: &mut [u8],
+        buffer: InOutBuf<'_, '_, u8>,
         aad: &[u8],
     ) -> Result<AeadTag<A>, HpkeError> {
         if self.0.overflowed {
@@ -402,7 +405,7 @@ impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AeadCtxS<A, Kdf, Kem> {
             let tag = self
                 .0
                 .encryptor
-                .encrypt_in_place_detached(&nonce.0, aad, plaintext)
+                .encrypt_inout_detached(&nonce.0, aad, buffer)
                 .map_err(|_| HpkeError::SealError)?;
 
             // Try to increment the sequence counter. If it fails, this was our last encryption.
@@ -430,15 +433,18 @@ impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AeadCtxS<A, Kdf, Kem> {
         let tag_len = AeadTag::<A>::size();
 
         // Make a buffer that can hold a ciphertext + tag. Copy in the plaintext
-        let mut buf = vec![0u8; msg_len + tag_len];
-        buf[..msg_len].copy_from_slice(plaintext);
+        let mut outbuf = vec![0u8; msg_len + tag_len];
+        outbuf[..msg_len].copy_from_slice(plaintext);
 
         // Seal with a detached tag
-        let tag = self.seal_in_place_detached(&mut buf[..plaintext.len()], aad)?;
+        let tag = self.seal_inout_detached(
+            InOutBuf::new(plaintext, &mut outbuf[..plaintext.len()]).unwrap(),
+            aad,
+        )?;
         // Then append the tag to the end of the buffer. The buffer is now the auth'd ciphertext
-        buf[msg_len..msg_len + tag_len].copy_from_slice(&tag.0);
+        outbuf[msg_len..msg_len + tag_len].copy_from_slice(&tag.0);
 
-        Ok(buf)
+        Ok(outbuf)
     }
 
     /// Fills a given buffer with secret bytes derived from this encryption context. This value
