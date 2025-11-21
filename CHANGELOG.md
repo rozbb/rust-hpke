@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+* Updated aead, aes-gcm, chacha20poly1305, digest, hkdf, hmac
+* Replaced `generic-array` with `hybrid-array`
+* Switched all `_in_place` algorithms to `_inout`, and replace `&mut [u8]` with `inout::InOut<'_, '_, u8>`
+
 ## [0.13.0] - 2025-02-19
 
 ### Changes
