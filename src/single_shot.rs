@@ -16,9 +16,10 @@ use rand_core::{CryptoRng, RngCore};
 //   ct = ctx.Seal(aad, pt)
 //   return enc, ct
 
-/// Does a [`setup_sender`] and [`crate::aead::AeadCtxS::seal_inout_detached`] in one shot. That is,
-/// it does a key encapsulation to the specified recipient and encrypts the provided plaintext in
-/// place.
+/// Does a [`setup_sender`] and
+/// [`AeadCtxS::seal_inout_detached`](crate::aead::AeadCtxS::seal_inout_detached) in one shot. That
+/// is, it does a key encapsulation to the specified recipient and encrypts the provided plaintext
+/// in place.
 ///
 /// Return Value
 /// ============
@@ -48,8 +49,8 @@ where
     Ok((encapped_key, tag))
 }
 
-/// Does a [`setup_sender`] and [`crate::aead::AeadCtxS::seal`] in one shot. That is, it does a key
-/// encapsulation to the specified recipient and encrypts the provided plaintext.
+/// Does a [`setup_sender`] and [`AeadCtxS::seal`](crate::aead::AeadCtxS::seal) in one shot. That
+/// is, it does a key encapsulation to the specified recipient and encrypts the provided plaintext.
 ///
 /// Return Value
 /// ============
@@ -85,9 +86,10 @@ where
 //   ctx = SetupAuthPSKR(enc, skR, info, psk, psk_id, pkS)
 //   return ctx.Open(aad, ct)
 
-/// Does a [`setup_receiver`] and [`crate::aead::AeadCtxR::open_inout_detached`] in one shot. That
-/// is, it does a key decapsulation for the specified recipient and decrypts the provided ciphertext
-/// in place.
+/// Does a [`setup_receiver`] and
+/// [`AeadCtxR::open_inout_detached`](crate::aead::AeadCtxR::open_inout_detached) in one shot. That
+/// is, it does a key decapsulation for the specified recipient and decrypts the provided
+/// ciphertext in place.
 ///
 /// Return Value
 /// ============
@@ -114,8 +116,9 @@ where
     aead_ctx.open_inout_detached(buffer, aad, tag)
 }
 
-/// Does a [`setup_receiver`] and [`crate::aead::AeadCtxR::open`] in one shot. That is, it does a
-/// key decapsulation for the specified recipient and decrypts the provided ciphertext.
+/// Does a [`setup_receiver`] and [`AeadCtxR::open`](crate::aead::AeadCtxR::open) in one shot. That
+/// is, it does a key decapsulation for the specified recipient and decrypts the provided
+/// ciphertext.
 ///
 /// Return Value
 /// ============
