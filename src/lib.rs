@@ -72,7 +72,7 @@
 //! ```
 
 // Show necessary feature flag next to feature-gated items
-#![feature(doc_cfg)]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 
 //-------- no_std stuff --------//
 #![no_std]
