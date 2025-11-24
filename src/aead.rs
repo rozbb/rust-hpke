@@ -312,7 +312,6 @@ impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AeadCtxR<A, Kdf, Kem> {
     /// Returns `Ok(())` on success. If this context has been used for so many encryptions that the
     /// sequence number overflowed, returns `Err(HpkeError::MessageLimitReached)`. If the tag fails
     /// to validate, returns `Err(HpkeError::OpenError)`.
-    #[cfg_attr(docsrs, doc(cfg(feature = "alloc")))]
     #[cfg(feature = "alloc")]
     pub fn open(&mut self, ciphertext: &[u8], aad: &[u8]) -> Result<crate::Vec<u8>, HpkeError> {
         // Make sure the auth'd ciphertext is long enough to contain a tag. If it isn't, it's
@@ -426,7 +425,6 @@ impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AeadCtxS<A, Kdf, Kem> {
     /// Returns `Ok(ciphertext)` on success.  If this context has been used for so many encryptions
     /// that the sequence number overflowed, returns `Err(HpkeError::MessageLimitReached)`. If an
     /// error happened during encryption, returns `Err(HpkeError::SealError)`.
-    #[cfg_attr(docsrs, doc(cfg(feature = "alloc")))]
     #[cfg(feature = "alloc")]
     pub fn seal(&mut self, plaintext: &[u8], aad: &[u8]) -> Result<crate::Vec<u8>, HpkeError> {
         let msg_len = plaintext.len();

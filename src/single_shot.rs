@@ -56,7 +56,6 @@ where
 /// Returns `Ok((encapped_key, ciphertext))` on success. If an error happened during key
 /// encapsulation, returns `Err(HpkeError::EncapError)`. If an error happened during encryption,
 /// returns `Err(HpkeError::SealError)`.
-#[cfg_attr(docsrs, doc(cfg(feature = "alloc")))]
 #[cfg(feature = "alloc")]
 pub fn single_shot_seal<A, Kdf, Kem, R>(
     mode: &OpModeS<Kem>,
@@ -123,7 +122,6 @@ where
 /// Returns `Ok(plaintext)` on success. If an error happened during key decapsulation, returns
 /// `Err(HpkeError::DecapError)`. If an error happened during decryption, returns
 /// `Err(HpkeError::OpenError)`.
-#[cfg_attr(docsrs, doc(cfg(feature = "alloc")))]
 #[cfg(feature = "alloc")]
 pub fn single_shot_open<A, Kdf, Kem>(
     mode: &OpModeR<Kem>,

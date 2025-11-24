@@ -71,9 +71,9 @@
 //! # }
 //! ```
 
-// The doc_cfg feature is only available in nightly. It lets us mark items in documentation as
-// dependent on specific features.
-#![cfg_attr(docsrs, feature(doc_cfg))]
+// Show necessary feature flag next to feature-gated items
+#![feature(doc_cfg)]
+
 //-------- no_std stuff --------//
 #![no_std]
 
