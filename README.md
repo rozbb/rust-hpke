@@ -52,7 +52,7 @@ Feature flag list:
 * `p256` - Enables NIST P-256-based KEMs
 * `p384` - Enables NIST P-384-based KEMs
 * `p521` - Enables NIST P-521-based KEMs
-* `std` - Required for known-answer tests when running `cargo test`. Used only for testing.
+* `std` - Used only for testing (necessary for known-answer tests)
 
 For info on how to omit or include feature flags, see the [cargo docs on features](https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html#choosing-features).
 
@@ -63,6 +63,13 @@ See the [client-server](examples/client_server.rs) example for an idea of how to
 
 Breaking changes
 ----------------
+
+## Unreleased
+
+* Updated `rand` and `rand_core` dependencies
+* Replaced `generic-array` with `hybrid-array`
+* Renamed all `_in_place` symmetric encryption/decryption algorithms to `_inout`. Also replaced `&mut [u8]` inputs in these functions with `inout::InOut<'_, '_, u8>`.
+* Bumped MSRV to 1.85.0 (2025-02-20)
 
 ### Breaking changes in v0.13
 
