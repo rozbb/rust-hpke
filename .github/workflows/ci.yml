@@ -2,10 +2,10 @@ name: CI
 
 on:
   push:
-    branches: [ '**' ]
+    branches: ["**"]
     paths-ignore: ["README.md"]
   pull_request:
-    branches: [ '**' ]
+    branches: ["**"]
     paths-ignore: ["README.md"]
 
 jobs:
@@ -85,20 +85,16 @@ jobs:
           command: fmt
           args: --all -- --check
 
-  # Enable this once x25519-dalek has another 2.0-pre.X release
-  #msrv:
-  #  name: Current MSRV is 1.65.0
-  #  runs-on: ubuntu-latest
-  #  steps:
-  #  - uses: actions/checkout@v3
-  #  # First run `cargo +nightly -Z minimal-verisons check` in order to get a
-  #  # Cargo.lock with the oldest possible deps
-  #  - uses: dtolnay/rust-toolchain@nightly
-  #  - run: cargo -Z minimal-versions check --all-features
-  #  # Now check that `cargo build` works with respect to the oldest possible
-  #  # deps and the stated MSRV
-  #  - uses: dtolnay/rust-toolchain@1.65.0
-  #  - run: cargo build --all-features
+  msrv:
+    name: rust-version is MSRV
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo +nightly install cargo-msrv --no-default-features
+      - run: cargo +nightly msrv --version
+      - run: cargo +nightly msrv verify --all-features
 
   clippy:
     runs-on: ubuntu-latest

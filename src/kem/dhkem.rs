@@ -1,6 +1,7 @@
 /// Defines DHKEM(G, K) given a Diffie-Hellman group G and KDF K
 macro_rules! impl_dhkem {
     (
+        $feature_flag:literal,
         $mod_name:ident,
         $kem_name:ident,
         $dhkex:ty,
@@ -8,8 +9,10 @@ macro_rules! impl_dhkem {
         $kem_id:literal,
         $doc_str:expr
     ) => {
+        #[cfg(feature = $feature_flag)]
         pub use $mod_name::$kem_name;
 
+        #[cfg(feature = $feature_flag)]
         pub(crate) mod $mod_name {
             use crate::{
                 dhkex::{DhKeyExchange, MAX_PUBKEY_SIZE},
@@ -349,8 +352,8 @@ macro_rules! impl_dhkem {
 }
 
 // Implement DHKEM(X25519, HKDF-SHA256)
-#[cfg(feature = "x25519")]
 impl_dhkem!(
+    "x25519",
     x25519_hkdfsha256,
     X25519HkdfSha256,
     crate::dhkex::x25519::X25519,
@@ -360,8 +363,8 @@ impl_dhkem!(
 );
 
 // Implement DHKEM(P-256, HKDF-SHA256)
-#[cfg(feature = "p256")]
 impl_dhkem!(
+    "p256",
     dhp256_hkdfsha256,
     DhP256HkdfSha256,
     crate::dhkex::ecdh_nistp::p256::DhP256,
@@ -371,8 +374,8 @@ impl_dhkem!(
 );
 
 // Implement DHKEM(P-384, HKDF-SHA384)
-#[cfg(feature = "p384")]
 impl_dhkem!(
+    "p384",
     dhp384_hkdfsha384,
     DhP384HkdfSha384,
     crate::dhkex::ecdh_nistp::p384::DhP384,
@@ -382,8 +385,8 @@ impl_dhkem!(
 );
 
 // Implement DHKEM(P-521, HKDF-SHA512)
-#[cfg(feature = "p521")]
 impl_dhkem!(
+    "p521",
     dhp521_hkdfsha512,
     DhP521HkdfSha512,
     crate::dhkex::ecdh_nistp::p521::DhP521,

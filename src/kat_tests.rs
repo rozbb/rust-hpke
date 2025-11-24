@@ -10,7 +10,6 @@ use crate::{
     Deserializable, HpkeError, Serializable,
 };
 
-extern crate std;
 use std::{fs::File, string::String, vec::Vec};
 
 use hex;

@@ -21,7 +21,7 @@ macro_rules! nistp_dhkex {
 
             use ::$curve as curve_crate;
             use curve_crate::elliptic_curve::{ecdh::diffie_hellman, sec1::ToEncodedPoint};
-            use generic_array::{typenum::Unsigned, GenericArray};
+            use hybrid_array::{typenum::Unsigned, Array};
             use subtle::{Choice, ConstantTimeEq};
 
             #[doc = concat!(
@@ -203,7 +203,7 @@ macro_rules! nistp_dhkex {
                     // The buffer we hold the candidate scalar bytes in. This is the size of a
                     // private key.
                     let mut buf =
-                        GenericArray::<u8, <PrivateKey as Serializable>::OutputSize>::default();
+                        Array::<u8, <PrivateKey as Serializable>::OutputSize>::default();
 
                     // Try to generate a key 256 times. Practically, this will succeed and return
                     // early on the first iteration.
@@ -235,7 +235,7 @@ macro_rules! nistp_dhkex {
     };
 }
 
-use generic_array::typenum;
+use hybrid_array::typenum;
 
 #[cfg(feature = "p256")]
 nistp_dhkex!(
@@ -282,7 +282,6 @@ mod tests {
     use super::p521::DhP521;
 
     use hex_literal::hex;
-    use rand::{rngs::StdRng, SeedableRng};
 
     //
     // Test vectors come from RFC 5903 §8.1, §8.2 and §8.3
@@ -422,7 +421,7 @@ mod tests {
     /// Tests that an deserialize-serialize round-trip ends up at the same pubkey
     #[allow(dead_code)]
     fn test_pubkey_serialize_correctness<Kex: DhKeyExchange>() {
-        let mut csprng = StdRng::from_os_rng();
+        let mut csprng = rand::rng();
 
         // We can't do the same thing as in the X25519 tests, since a completely random point
         // is not likely to lie on the curve. Instead, we just generate a random point,
@@ -459,7 +458,7 @@ mod tests {
     where
         Kex::PrivateKey: PartialEq,
     {
-        let mut csprng = StdRng::from_os_rng();
+        let mut csprng = rand::rng();
 
         // Make a random keypair and serialize it
         let (sk, pk) = dhkex_gen_keypair::<Kex, _>(&mut csprng);

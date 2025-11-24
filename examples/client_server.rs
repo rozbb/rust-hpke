@@ -17,12 +17,11 @@
 
 use hpke::{
     aead::{AeadTag, ChaCha20Poly1305},
+    inout::InOutBuf,
     kdf::HkdfSha384,
     kem::X25519HkdfSha256,
     Deserializable, Kem as KemTrait, OpModeR, OpModeS, Serializable,
 };
-
-use rand::{rngs::StdRng, SeedableRng};
 
 const INFO_STR: &[u8] = b"example session";
 
@@ -33,7 +32,7 @@ type Kdf = HkdfSha384;
 
 // Initializes the server with a fresh keypair
 fn server_init() -> (<Kem as KemTrait>::PrivateKey, <Kem as KemTrait>::PublicKey) {
-    let mut csprng = StdRng::from_os_rng();
+    let mut csprng = rand::rng();
     Kem::gen_keypair(&mut csprng)
 }
 
@@ -44,7 +43,7 @@ fn client_encrypt_msg(
     associated_data: &[u8],
     server_pk: &<Kem as KemTrait>::PublicKey,
 ) -> (<Kem as KemTrait>::EncappedKey, Vec<u8>, AeadTag<Aead>) {
-    let mut csprng = StdRng::from_os_rng();
+    let mut csprng = rand::rng();
 
     // Encapsulate a key and use the resulting shared secret to encrypt a message. The AEAD context
     // is what you use to encrypt.
@@ -52,10 +51,10 @@ fn client_encrypt_msg(
         hpke::setup_sender::<Aead, Kdf, Kem, _>(&OpModeS::Base, server_pk, INFO_STR, &mut csprng)
             .expect("invalid server pubkey!");
 
-    // On success, seal_in_place_detached() will encrypt the plaintext in place
+    // On success, seal_inout_detached() will encrypt the plaintext in place
     let mut msg_copy = msg.to_vec();
     let tag = sender_ctx
-        .seal_in_place_detached(&mut msg_copy, associated_data)
+        .seal_inout_detached(InOutBuf::from(msg_copy.as_mut_slice()), associated_data)
         .expect("encryption failed!");
 
     // Rename for clarity
@@ -85,10 +84,14 @@ fn server_decrypt_msg(
         hpke::setup_receiver::<Aead, Kdf, Kem>(&OpModeR::Base, &server_sk, &encapped_key, INFO_STR)
             .expect("failed to set up receiver!");
 
-    // On success, open_in_place_detached() will decrypt the ciphertext in place
+    // On success, open_inout_detached() will decrypt the ciphertext in place
     let mut ciphertext_copy = ciphertext.to_vec();
     receiver_ctx
-        .open_in_place_detached(&mut ciphertext_copy, associated_data, &tag)
+        .open_inout_detached(
+            InOutBuf::from(ciphertext_copy.as_mut_slice()),
+            associated_data,
+            &tag,
+        )
         .expect("invalid ciphertext!");
 
     // Rename for clarity. Cargo clippy thinks it's unnecessary, but I disagree

@@ -206,8 +206,6 @@ mod test {
     use crate::test_util::{aead_ctx_eq, gen_rand_buf, new_op_mode_pair, OpModeKind};
     use crate::{aead::ChaCha20Poly1305, kdf::HkdfSha256, kem::Kem as KemTrait};
 
-    use rand::{rngs::StdRng, SeedableRng};
-
     /// This tests that `setup_sender` and `setup_receiver` derive the same context. We do this by
     /// testing that `gen_ctx_kem_pair` returns identical encryption contexts
     macro_rules! test_setup_correctness {
@@ -218,7 +216,7 @@ mod test {
                 type Kdf = $kdf_ty;
                 type Kem = $kem_ty;
 
-                let mut csprng = StdRng::from_os_rng();
+                let mut csprng = rand::rng();
 
                 let info = b"why would you think in a million years that that would actually work";
 
@@ -271,7 +269,7 @@ mod test {
                 type Kdf = $kdf;
                 type Kem = $kem;
 
-                let mut csprng = StdRng::from_os_rng();
+                let mut csprng = rand::rng();
 
                 let info = b"why would you think in a million years that that would actually work";
 

@@ -7,6 +7,7 @@ use crate::{
     HpkeError,
 };
 
+use aead::inout::InOutBuf;
 use rand_core::{CryptoRng, RngCore};
 
 // RFC 9180 §6.1
@@ -15,20 +16,21 @@ use rand_core::{CryptoRng, RngCore};
 //   ct = ctx.Seal(aad, pt)
 //   return enc, ct
 
-/// Does a `setup_sender` and `AeadCtxS::seal_in_place_detached` in one shot. That is, it does a
-/// key encapsulation to the specified recipient and encrypts the provided plaintext in place. See
-/// `setup::setup_sender` and `AeadCtxS::seal_in_place_detached` for more detail.
+/// Does a [`setup_sender`] and
+/// [`AeadCtxS::seal_inout_detached`](crate::aead::AeadCtxS::seal_inout_detached) in one shot. That
+/// is, it does a key encapsulation to the specified recipient and encrypts the provided plaintext
+/// in place.
 ///
 /// Return Value
 /// ============
 /// Returns `Ok((encapped_key, auth_tag))` on success. If an error happened during key
 /// encapsulation, returns `Err(HpkeError::EncapError)`. If an error happened during encryption,
 /// returns `Err(HpkeError::SealError)`. In this case, the contents of `plaintext` is undefined.
-pub fn single_shot_seal_in_place_detached<A, Kdf, Kem, R>(
+pub fn single_shot_seal_inout_detached<A, Kdf, Kem, R>(
     mode: &OpModeS<Kem>,
     pk_recip: &Kem::PublicKey,
     info: &[u8],
-    plaintext: &mut [u8],
+    buffer: InOutBuf<'_, '_, u8>,
     aad: &[u8],
     csprng: &mut R,
 ) -> Result<(Kem::EncappedKey, AeadTag<A>), HpkeError>
@@ -42,22 +44,20 @@ where
     let (encapped_key, mut aead_ctx) =
         setup_sender::<A, Kdf, Kem, R>(mode, pk_recip, info, csprng)?;
     // Encrypt
-    let tag = aead_ctx.seal_in_place_detached(plaintext, aad)?;
+    let tag = aead_ctx.seal_inout_detached(buffer, aad)?;
 
     Ok((encapped_key, tag))
 }
 
-/// Does a `setup_sender` and `AeadCtxS::seal` in one shot. That is, it does a key encapsulation to
-/// the specified recipient and encrypts the provided plaintext. See `setup::setup_sender` and
-/// `AeadCtxS::seal` for more detail.
+/// Does a [`setup_sender`] and [`AeadCtxS::seal`](crate::aead::AeadCtxS::seal) in one shot. That
+/// is, it does a key encapsulation to the specified recipient and encrypts the provided plaintext.
 ///
 /// Return Value
 /// ============
 /// Returns `Ok((encapped_key, ciphertext))` on success. If an error happened during key
 /// encapsulation, returns `Err(HpkeError::EncapError)`. If an error happened during encryption,
 /// returns `Err(HpkeError::SealError)`.
-#[cfg_attr(docsrs, doc(cfg(any(feature = "alloc", feature = "std"))))]
-#[cfg(any(feature = "alloc", feature = "std"))]
+#[cfg(feature = "alloc")]
 pub fn single_shot_seal<A, Kdf, Kem, R>(
     mode: &OpModeS<Kem>,
     pk_recip: &Kem::PublicKey,
@@ -86,21 +86,22 @@ where
 //   ctx = SetupAuthPSKR(enc, skR, info, psk, psk_id, pkS)
 //   return ctx.Open(aad, ct)
 
-/// Does a `setup_receiver` and `AeadCtxR::open_in_place_detached` in one shot. That is, it does a
-/// key decapsulation for the specified recipient and decrypts the provided ciphertext in place.
-/// See `setup::setup_reciever` and `AeadCtxR::open_in_place_detached` for more detail.
+/// Does a [`setup_receiver`] and
+/// [`AeadCtxR::open_inout_detached`](crate::aead::AeadCtxR::open_inout_detached) in one shot. That
+/// is, it does a key decapsulation for the specified recipient and decrypts the provided
+/// ciphertext in place.
 ///
 /// Return Value
 /// ============
 /// Returns `Ok()` on success. If an error happened during key decapsulation, returns
 /// `Err(HpkeError::DecapError)`. If an error happened during decryption, returns
 /// `Err(HpkeError::OpenError)`. In this case, the contents of `ciphertext` is undefined.
-pub fn single_shot_open_in_place_detached<A, Kdf, Kem>(
+pub fn single_shot_open_inout_detached<A, Kdf, Kem>(
     mode: &OpModeR<Kem>,
     sk_recip: &Kem::PrivateKey,
     encapped_key: &Kem::EncappedKey,
     info: &[u8],
-    ciphertext: &mut [u8],
+    buffer: InOutBuf<'_, '_, u8>,
     aad: &[u8],
     tag: &AeadTag<A>,
 ) -> Result<(), HpkeError>
@@ -112,20 +113,19 @@ where
     // Decap the key
     let mut aead_ctx = setup_receiver::<A, Kdf, Kem>(mode, sk_recip, encapped_key, info)?;
     // Decrypt
-    aead_ctx.open_in_place_detached(ciphertext, aad, tag)
+    aead_ctx.open_inout_detached(buffer, aad, tag)
 }
 
-/// Does a `setup_receiver` and `AeadCtxR::open` in one shot. That is, it does a key decapsulation
-/// for the specified recipient and decrypts the provided ciphertext. See `setup::setup_reciever`
-/// and `AeadCtxR::open` for more detail.
+/// Does a [`setup_receiver`] and [`AeadCtxR::open`](crate::aead::AeadCtxR::open) in one shot. That
+/// is, it does a key decapsulation for the specified recipient and decrypts the provided
+/// ciphertext.
 ///
 /// Return Value
 /// ============
 /// Returns `Ok(plaintext)` on success. If an error happened during key decapsulation, returns
 /// `Err(HpkeError::DecapError)`. If an error happened during decryption, returns
 /// `Err(HpkeError::OpenError)`.
-#[cfg_attr(docsrs, doc(cfg(any(feature = "alloc", feature = "std"))))]
-#[cfg(any(feature = "alloc", feature = "std"))]
+#[cfg(feature = "alloc")]
 pub fn single_shot_open<A, Kdf, Kem>(
     mode: &OpModeR<Kem>,
     sk_recip: &Kem::PrivateKey,
@@ -145,7 +145,7 @@ where
     aead_ctx.open(ciphertext, aad)
 }
 
-#[cfg(any(feature = "alloc", feature = "std"))]
+#[cfg(feature = "alloc")]
 #[cfg(test)]
 mod test {
     use super::*;
@@ -155,8 +155,6 @@ mod test {
         op_mode::{OpModeR, OpModeS, PskBundle},
         test_util::gen_rand_buf,
     };
-
-    use rand::{rngs::StdRng, SeedableRng};
 
     macro_rules! test_single_shot_correctness {
         ($test_name:ident, $aead:ty, $kdf:ty, $kem:ty) => {
@@ -172,7 +170,7 @@ mod test {
                 let msg = b"Good night, a-ding ding ding ding ding";
                 let aad = b"Five four three two one";
 
-                let mut csprng = StdRng::from_os_rng();
+                let mut csprng = rand::rng();
 
                 // Set up an arbitrary info string, a random PSK, and an arbitrary PSK ID
                 let info = b"why would you think in a million years that that would actually work";

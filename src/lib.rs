@@ -7,10 +7,9 @@
 //! public key they know. Here's an example of Alice and Bob, where Alice knows Bob's public key:
 //!
 //! ```
-//! # #[cfg(any(feature = "alloc", feature = "std"))] {
+//! # #[cfg(feature = "alloc")] {
 //! # #[cfg(feature = "x25519")]
 //! # {
-//! # use rand::{rngs::StdRng, SeedableRng};
 //! # use hpke::{
 //! #     aead::ChaCha20Poly1305,
 //! #     kdf::HkdfSha384,
@@ -22,7 +21,7 @@
 //! type Aead = ChaCha20Poly1305;
 //! type Kdf = HkdfSha384;
 //!
-//! let mut csprng = StdRng::from_os_rng();
+//! let mut csprng = rand::rng();
 //! # let (bob_sk, bob_pk) = Kem::gen_keypair(&mut csprng);
 //!
 //! // This is a description string for the session. Both Alice and Bob need to know this value.
@@ -42,7 +41,8 @@
 //! let msg = b"fronthand or backhand?";
 //! let aad = b"a gentleman's game";
 //! // To seal without allocating:
-//! //     let auth_tag = encryption_context.seal_in_place_detached(&mut msg, aad)?;
+//! //   use hpke::inout::InOutBuf;
+//! //   let auth_tag = encryption_context.seal_inout_detached(InOutBuf::from(&mut msg), aad)?;
 //! // To seal with allocating:
 //! let ciphertext = encryption_context.seal(msg, aad).expect("encryption failed!");
 //!
@@ -61,7 +61,8 @@
 //!         info_str,
 //!     ).expect("failed to set up receiver!");
 //! // To open without allocating:
-//! //     decryption_context.open_in_place_detached(&mut ciphertext, aad, &auth_tag)
+//! //   use hpke::inout::InOutBuf;
+//! //   decryption_context.open_inout_detached(InOutBuf::from(&mut ciphertext), aad, &auth_tag)
 //! // To open with allocating:
 //! let plaintext = decryption_context.open(&ciphertext, aad).expect("invalid ciphertext!");
 //!
@@ -70,26 +71,21 @@
 //! # }
 //! ```
 
-// The doc_cfg feature is only available in nightly. It lets us mark items in documentation as
-// dependent on specific features.
+// Show necessary feature flag next to feature-gated items
 #![cfg_attr(docsrs, feature(doc_cfg))]
 //-------- no_std stuff --------//
 #![no_std]
 
 #[cfg(feature = "std")]
-#[allow(unused_imports)]
 #[macro_use]
 extern crate std;
 
-#[cfg(feature = "std")]
-pub(crate) use std::vec::Vec;
-
-#[cfg(all(feature = "alloc", not(feature = "std")))]
+#[cfg(feature = "alloc")]
 #[allow(unused_imports)]
 #[macro_use]
 extern crate alloc;
 
-#[cfg(all(feature = "alloc", not(feature = "std")))]
+#[cfg(feature = "alloc")]
 pub(crate) use alloc::vec::Vec;
 
 //-------- Testing stuff --------//
@@ -111,9 +107,10 @@ mod test_util;
 
 //-------- Modules and exports--------//
 
-// Re-export our versions of generic_array and rand_core, since their traits and types are exposed
-// in this crate
-pub use generic_array;
+// Re-export our versions of hybrid_array, rand_core, and inout, since their traits and types are
+// exposed in this crate
+pub use ::aead::inout;
+pub use hybrid_array;
 pub use rand_core;
 
 #[macro_use]
@@ -134,15 +131,15 @@ pub use op_mode::{OpModeR, OpModeS, PskBundle};
 #[doc(inline)]
 pub use setup::{setup_receiver, setup_sender};
 #[doc(inline)]
-pub use single_shot::{single_shot_open_in_place_detached, single_shot_seal_in_place_detached};
+pub use single_shot::{single_shot_open_inout_detached, single_shot_seal_inout_detached};
 
 #[doc(inline)]
-#[cfg(any(feature = "alloc", feature = "std"))]
+#[cfg(feature = "alloc")]
 pub use single_shot::{single_shot_open, single_shot_seal};
 
 //-------- Top-level types --------//
 
-use generic_array::{typenum::marker_traits::Unsigned, ArrayLength, GenericArray};
+use hybrid_array::{typenum::marker_traits::Unsigned, Array, ArraySize};
 
 /// Describes things that can go wrong in the HPKE protocol
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -193,7 +190,7 @@ impl core::fmt::Display for HpkeError {
 /// Implemented by types that have a fixed-length byte representation
 pub trait Serializable {
     /// Serialized size in bytes
-    type OutputSize: ArrayLength<u8>;
+    type OutputSize: ArraySize;
 
     /// Serializes `self` to the given slice. `buf` MUST have length equal to `Self::size()`.
     ///
@@ -203,9 +200,9 @@ pub trait Serializable {
     fn write_exact(&self, buf: &mut [u8]);
 
     /// Serializes `self` to a new array
-    fn to_bytes(&self) -> GenericArray<u8, Self::OutputSize> {
+    fn to_bytes(&self) -> Array<u8, Self::OutputSize> {
         // Make a buffer of the correct size and write to it
-        let mut buf = GenericArray::default();
+        let mut buf = Array::default();
         self.write_exact(&mut buf);
         // Return the buffer
         buf
@@ -223,5 +220,4 @@ pub trait Deserializable: Serializable + Sized {
 }
 
 // An Error type is just something that's Debug and Display
-#[cfg(feature = "std")]
-impl std::error::Error for HpkeError {}
+impl core::error::Error for HpkeError {}

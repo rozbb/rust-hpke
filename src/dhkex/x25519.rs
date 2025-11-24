@@ -5,7 +5,7 @@ use crate::{
     Deserializable, HpkeError, Serializable,
 };
 
-use generic_array::typenum::{self, Unsigned};
+use hybrid_array::typenum::{self, Unsigned};
 use subtle::{Choice, ConstantTimeEq};
 
 // We wrap the types in order to abstract away the dalek dep
@@ -178,15 +178,15 @@ mod tests {
         dhkex::{x25519::X25519, Deserializable, DhKeyExchange, Serializable},
         test_util::dhkex_gen_keypair,
     };
-    use generic_array::typenum::Unsigned;
-    use rand::{rngs::StdRng, RngCore, SeedableRng};
+    use hybrid_array::typenum::Unsigned;
+    use rand::RngCore;
 
     /// Tests that an serialize-deserialize round-trip ends up at the same pubkey
     #[test]
     fn test_pubkey_serialize_correctness() {
         type Kex = X25519;
 
-        let mut csprng = StdRng::from_os_rng();
+        let mut csprng = rand::rng();
 
         // Fill a buffer with randomness
         let orig_bytes = {
@@ -210,7 +210,7 @@ mod tests {
     fn test_dh_serialize_correctness() {
         type Kex = X25519;
 
-        let mut csprng = StdRng::from_os_rng();
+        let mut csprng = rand::rng();
 
         // Make a random keypair and serialize it
         let (sk, pk) = dhkex_gen_keypair::<Kex, _>(&mut csprng);

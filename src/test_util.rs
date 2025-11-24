@@ -8,12 +8,13 @@ use crate::{
     Serializable,
 };
 
-use generic_array::GenericArray;
-use rand::{rngs::StdRng, CryptoRng, Rng, RngCore, SeedableRng};
+use aead::inout::InOutBuf;
+use hybrid_array::Array;
+use rand::{CryptoRng, Rng, RngCore};
 
 /// Returns a random 32-byte buffer
 pub(crate) fn gen_rand_buf() -> [u8; 32] {
-    let mut csprng = StdRng::from_os_rng();
+    let mut csprng = rand::rng();
     let mut buf = [0u8; 32];
     csprng.fill_bytes(&mut buf);
     buf
@@ -24,8 +25,7 @@ pub(crate) fn dhkex_gen_keypair<Kex: DhKeyExchange, R: CryptoRng + RngCore>(
     csprng: &mut R,
 ) -> (Kex::PrivateKey, Kex::PublicKey) {
     // Make some keying material that's the size of a private key
-    let mut ikm: GenericArray<u8, <Kex::PrivateKey as Serializable>::OutputSize> =
-        GenericArray::default();
+    let mut ikm: Array<u8, <Kex::PrivateKey as Serializable>::OutputSize> = Array::default();
     // Fill it with randomness
     csprng.fill_bytes(&mut ikm);
     // Run derive_keypair with a nonsense ciphersuite. We use SHA-512 to satisfy any security level
@@ -39,7 +39,7 @@ where
     Kdf: KdfTrait,
     Kem: KemTrait,
 {
-    let mut csprng = StdRng::from_os_rng();
+    let mut csprng = rand::rng();
 
     // Initialize the key and nonce
     let key = {
@@ -78,7 +78,7 @@ pub(crate) fn new_op_mode_pair<'a, Kdf: KdfTrait, Kem: KemTrait>(
     psk: &'a [u8],
     psk_id: &'a [u8],
 ) -> (OpModeS<'a, Kem>, OpModeR<'a, Kem>) {
-    let mut csprng = StdRng::from_os_rng();
+    let mut csprng = rand::rng();
     let (sk_sender, pk_sender) = Kem::gen_keypair(&mut csprng);
     let psk_bundle = PskBundle::new(psk, psk_id).unwrap();
 
@@ -112,15 +112,17 @@ pub(crate) fn aead_ctx_eq<A: Aead, Kdf: KdfTrait, Kem: KemTrait>(
     sender: &mut AeadCtxS<A, Kdf, Kem>,
     receiver: &mut AeadCtxR<A, Kdf, Kem>,
 ) -> bool {
-    let mut csprng = StdRng::from_os_rng();
+    let mut csprng = rand::rng();
 
     // Some random input data
     let msg_len = csprng.random::<u8>() as usize;
-    let msg_buf = {
+    let msg_backing_arr = {
         let mut buf = [0u8; 255];
         csprng.fill_bytes(&mut buf);
         buf
     };
+    let msg = &msg_backing_arr[..msg_len];
+
     let aad_len = csprng.random::<u8>() as usize;
     let aad_buf = {
         let mut buf = [0u8; 255];
@@ -132,28 +134,27 @@ pub(crate) fn aead_ctx_eq<A: Aead, Kdf: KdfTrait, Kem: KemTrait>(
     // Do 1000 iterations of encryption-decryption. The underlying sequence number increments
     // each time.
     for i in 0..1000 {
-        let plaintext = &mut msg_buf.clone()[..msg_len];
+        // Clone the backing array, and make a slice into it that's msg_len long. This is the message
+        let mut tmp_backing_arr = msg_backing_arr.clone();
+        let buf = &mut tmp_backing_arr[..msg_len];
+
         // Encrypt the plaintext
         let tag = sender
-            .seal_in_place_detached(&mut plaintext[..], &aad)
+            .seal_inout_detached(InOutBuf::new(&msg, buf).unwrap(), &aad)
             .unwrap_or_else(|_| panic!("seal() #{} failed", i));
-        // Rename for clarity
-        let ciphertext = plaintext;
 
         // Now to decrypt on the other side
         if receiver
-            .open_in_place_detached(&mut ciphertext[..], &aad, &tag)
+            .open_inout_detached(InOutBuf::from(&mut *buf), &aad, &tag)
             .is_err()
         {
             // An error occurred in decryption. These encryption contexts are not identical.
             return false;
         }
-        // Rename for clarity
-        let roundtrip_plaintext = ciphertext;
 
         // Make sure the output message was the same as the input message. If it doesn't match,
         // early return
-        if &msg_buf[..msg_len] != roundtrip_plaintext {
+        if &msg_backing_arr[..msg_len] != buf {
             return false;
         }
     }
