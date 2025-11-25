@@ -64,7 +64,7 @@ See the [client-server](examples/client_server.rs) example for an idea of how to
 Breaking changes
 ----------------
 
-## Unreleased
+## Breaking changes in v0.14.0-pre.1
 
 * Updated `rand` and `rand_core` dependencies
 * Replaced `generic-array` with `hybrid-array`
