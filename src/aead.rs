@@ -959,6 +959,55 @@ mod test {
         };
     }
 
+    /// Tests that `open()` can decrypt things properly encrypted with `seal()`
+    #[cfg(feature = "alloc")]
+    macro_rules! test_response_ctx_correctness {
+        ($test_name:ident, $aead_ty:ty, $kem_ty:ty) => {
+            #[test]
+            fn $test_name() {
+                type A = $aead_ty;
+                type Kdf = HkdfSha256;
+                type Kem = $kem_ty;
+
+                let (sender_ctx, receiver_ctx) = gen_ctx_simple_pair::<A, Kdf, Kem>();
+
+                let mut sender_response_ctx = sender_ctx.response_context();
+                let mut receiver_response_ctx = receiver_ctx.response_context();
+
+                let msg = b"What they be serving is cevapi.";
+                let aad = b"It's just words, Detective. They just happen to be in a dope order.";
+
+                // Encrypt an initial message in the receiver response context.
+                let ciphertext = receiver_response_ctx.seal(msg, aad).expect("seal() failed");
+
+                // Make sure seal() isn't a no-op
+                assert_ne!(&ciphertext, msg);
+
+                // Decrypt with the sender response context
+                let decrypted = sender_response_ctx
+                    .open(&ciphertext, aad)
+                    .expect("open() failed");
+                assert_eq!(&decrypted, msg);
+
+                // Now try sending an invalid message followed by a valid message. The valid
+                // message should decrypt correctly
+                let invalid_ciphertext = [0x00; 32];
+                assert!(sender_response_ctx.open(&invalid_ciphertext, aad).is_err());
+
+                // Now make sure a round trip succeeds
+                let ciphertext = receiver_response_ctx
+                    .seal(msg, aad)
+                    .expect("second seal() failed");
+
+                // Decrypt with the receiver context
+                let decrypted = sender_response_ctx
+                    .open(&ciphertext, aad)
+                    .expect("second open() failed");
+                assert_eq!(&decrypted, msg);
+            }
+        };
+    }
+
     test_invalid_nonce!(test_invalid_nonce_aes128, AesGcm128);
     test_invalid_nonce!(test_invalid_nonce_aes256, AesGcm128);
     test_invalid_nonce!(test_invalid_nonce_chacha, ChaCha20Poly1305);
@@ -987,6 +1036,22 @@ mod test {
         );
         test_ctx_correctness!(
             test_ctx_correctness_chacha_x25519,
+            ChaCha20Poly1305,
+            crate::kem::X25519HkdfSha256
+        );
+
+        test_response_ctx_correctness!(
+            test_response_ctx_correctness_aes128_x25519,
+            AesGcm128,
+            crate::kem::X25519HkdfSha256
+        );
+        test_response_ctx_correctness!(
+            test_response_ctx_correctness_aes256_x25519,
+            AesGcm256,
+            crate::kem::X25519HkdfSha256
+        );
+        test_response_ctx_correctness!(
+            test_response_ctx_correctness_chacha_x25519,
             ChaCha20Poly1305,
             crate::kem::X25519HkdfSha256
         );
@@ -1019,6 +1084,22 @@ mod test {
             ChaCha20Poly1305,
             crate::kem::DhP256HkdfSha256
         );
+
+        test_response_ctx_correctness!(
+            test_response_ctx_correctness_aes128_p256,
+            AesGcm128,
+            crate::kem::DhP256HkdfSha256
+        );
+        test_response_ctx_correctness!(
+            test_response_ctx_correctness_aes256_p256,
+            AesGcm256,
+            crate::kem::DhP256HkdfSha256
+        );
+        test_response_ctx_correctness!(
+            test_response_ctx_correctness_chacha_p256,
+            ChaCha20Poly1305,
+            crate::kem::DhP256HkdfSha256
+        );
     }
 
     #[cfg(all(feature = "p384", feature = "alloc"))]
@@ -1045,6 +1126,22 @@ mod test {
         );
         test_ctx_correctness!(
             test_ctx_correctness_chacha_p384,
+            ChaCha20Poly1305,
+            crate::kem::DhP384HkdfSha384
+        );
+
+        test_response_ctx_correctness!(
+            test_response_ctx_correctness_aes128_p384,
+            AesGcm128,
+            crate::kem::DhP384HkdfSha384
+        );
+        test_response_ctx_correctness!(
+            test_response_ctx_correctness_aes256_p384,
+            AesGcm256,
+            crate::kem::DhP384HkdfSha384
+        );
+        test_response_ctx_correctness!(
+            test_response_ctx_correctness_chacha_p384,
             ChaCha20Poly1305,
             crate::kem::DhP384HkdfSha384
         );
