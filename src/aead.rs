@@ -237,6 +237,105 @@ impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AeadCtx<A, Kdf, Kem> {
     }
 }
 
+// RFC 9180 §5.2
+// def ContextR.Open(aad, ct):
+//   pt = Open(self.key, self.ComputeNonce(self.seq), aad, ct)
+//   if pt == OpenError:
+//     raise OpenError
+//   self.IncrementSeq()
+//   return pt
+
+/// Decrypts the data in `buffer`, taking the encryptor, nonce, overflowed flag, sequence number
+/// and tag as separate inputs.
+///
+/// Return Value
+/// ============
+/// Returns `Ok(())` on success. If this context has been used for so many encryptions that the
+/// sequence number overflowed, returns `Err(HpkeError::MessageLimitReached)`. If this happens,
+/// `ciphertext` will be unmodified. If the tag fails to validate, returns
+/// `Err(HpkeError::OpenError)`. If this happens, `ciphertext` is in an undefined state.
+fn open_inout_detached<A: Aead>(
+    encryptor: &A::AeadImpl,
+    base_nonce: &AeadNonce<A>,
+    overflowed: &mut bool,
+    sequence: &mut Seq,
+    buffer: InOutBuf<'_, '_, u8>,
+    aad: &[u8],
+    tag: &AeadTag<A>,
+) -> Result<(), HpkeError> {
+    if *overflowed {
+        // If the sequence counter overflowed, we've been used for too long. Shut down.
+        Err(HpkeError::MessageLimitReached)
+    } else {
+        // Compute the nonce and do the encryption in place
+        let nonce = mix_nonce::<A>(base_nonce, sequence);
+        let decrypt_res = encryptor.decrypt_inout_detached(&nonce.0, aad, buffer, &tag.0);
+
+        if decrypt_res.is_err() {
+            // Opening failed due to a bad tag
+            return Err(HpkeError::OpenError);
+        }
+
+        // Opening was a success. Try to increment the sequence counter. If it fails, this was
+        // our last decryption.
+        match increment_seq(sequence) {
+            Some(new_seq) => *sequence = new_seq,
+            None => *overflowed = true,
+        }
+
+        Ok(())
+    }
+}
+
+/// Opens the given ciphertext and returns a plaintext, taking the encryptor, nonce, overflowed
+/// flag, sequence number and tag as separate inputs.
+///
+/// Return Value
+/// ============
+/// Returns `Ok(())` on success. If this context has been used for so many encryptions that the
+/// sequence number overflowed, returns `Err(HpkeError::MessageLimitReached)`. If the tag fails
+/// to validate, returns `Err(HpkeError::OpenError)`.
+#[cfg(feature = "alloc")]
+fn open<A: Aead>(
+    encryptor: &A::AeadImpl,
+    base_nonce: &AeadNonce<A>,
+    overflowed: &mut bool,
+    sequence: &mut Seq,
+    ciphertext: &[u8],
+    aad: &[u8],
+) -> Result<crate::Vec<u8>, HpkeError> {
+    // Make sure the auth'd ciphertext is long enough to contain a tag. If it isn't, it's
+    // certainly not valid.
+
+    let tag_len = AeadTag::<A>::size();
+    let msg_len = ciphertext
+        .len()
+        .checked_sub(tag_len)
+        .ok_or(HpkeError::OpenError)?;
+
+    // Now deconstruct the auth'd ciphertext
+    let (ciphertext, tag_slice) = ciphertext.split_at(msg_len);
+    let tag = {
+        let mut t = <AeadTag<A> as Default>::default();
+        t.0.copy_from_slice(tag_slice);
+        t
+    };
+
+    // Decrypt and return the decrypted buffer
+    let mut outbuf = vec![0u8; msg_len];
+    // We can unwrap the inout value because outbuf and ciphertext are exactly msg_len long
+    open_inout_detached(
+        encryptor,
+        base_nonce,
+        overflowed,
+        sequence,
+        InOutBuf::new(ciphertext, outbuf.as_mut_slice()).unwrap(),
+        aad,
+        &tag,
+    )?;
+    Ok(outbuf)
+}
+
 /// The HPKE receiver's context. This is what you use to `open` ciphertexts and `export` secrets.
 pub struct AeadCtxR<A: Aead, Kdf: KdfTrait, Kem: KemTrait>(AeadCtx<A, Kdf, Kem>);
 
@@ -256,14 +355,6 @@ impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> Clone for AeadCtxR<A, Kdf, Kem> {
 }
 
 impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AeadCtxR<A, Kdf, Kem> {
-    // RFC 9180 §5.2
-    // def ContextR.Open(aad, ct):
-    //   pt = Open(self.key, self.ComputeNonce(self.seq), aad, ct)
-    //   if pt == OpenError:
-    //     raise OpenError
-    //   self.IncrementSeq()
-    //   return pt
-
     /// Decrypts the data in `buffer`, taking the authentication tag as a separate input
     ///
     /// Return Value
@@ -278,31 +369,15 @@ impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AeadCtxR<A, Kdf, Kem> {
         aad: &[u8],
         tag: &AeadTag<A>,
     ) -> Result<(), HpkeError> {
-        if self.0.overflowed {
-            // If the sequence counter overflowed, we've been used for too long. Shut down.
-            Err(HpkeError::MessageLimitReached)
-        } else {
-            // Compute the nonce and do the encryption in place
-            let nonce = mix_nonce::<A>(&self.0.base_nonce, &self.0.seq);
-            let decrypt_res = self
-                .0
-                .encryptor
-                .decrypt_inout_detached(&nonce.0, aad, buffer, &tag.0);
-
-            if decrypt_res.is_err() {
-                // Opening failed due to a bad tag
-                return Err(HpkeError::OpenError);
-            }
-
-            // Opening was a success. Try to increment the sequence counter. If it fails, this was
-            // our last decryption.
-            match increment_seq(&self.0.seq) {
-                Some(new_seq) => self.0.seq = new_seq,
-                None => self.0.overflowed = true,
-            }
-
-            Ok(())
-        }
+        open_inout_detached(
+            &self.0.encryptor,
+            &self.0.base_nonce,
+            &mut self.0.overflowed,
+            &mut self.0.seq,
+            buffer,
+            aad,
+            tag,
+        )
     }
 
     /// Opens the given ciphertext and returns a plaintext
@@ -314,32 +389,14 @@ impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AeadCtxR<A, Kdf, Kem> {
     /// to validate, returns `Err(HpkeError::OpenError)`.
     #[cfg(feature = "alloc")]
     pub fn open(&mut self, ciphertext: &[u8], aad: &[u8]) -> Result<crate::Vec<u8>, HpkeError> {
-        // Make sure the auth'd ciphertext is long enough to contain a tag. If it isn't, it's
-        // certainly not valid.
-
-        let tag_len = AeadTag::<A>::size();
-        let msg_len = ciphertext
-            .len()
-            .checked_sub(tag_len)
-            .ok_or(HpkeError::OpenError)?;
-
-        // Now deconstruct the auth'd ciphertext
-        let (ciphertext, tag_slice) = ciphertext.split_at(msg_len);
-        let tag = {
-            let mut t = <AeadTag<A> as Default>::default();
-            t.0.copy_from_slice(tag_slice);
-            t
-        };
-
-        // Decrypt and return the decrypted buffer
-        let mut outbuf = vec![0u8; msg_len];
-        // We can unwrap the inout value because outbuf and ciphertext are exactly msg_len long
-        self.open_inout_detached(
-            InOutBuf::new(ciphertext, outbuf.as_mut_slice()).unwrap(),
+        open(
+            &self.0.encryptor,
+            &self.0.base_nonce,
+            &mut self.0.overflowed,
+            &mut self.0.seq,
+            ciphertext,
             aad,
-            &tag,
-        )?;
-        Ok(outbuf)
+        )
     }
 
     /// Fills a given buffer with secret bytes derived from this encryption context. This value
