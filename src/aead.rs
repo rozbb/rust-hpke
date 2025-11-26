@@ -175,6 +175,24 @@ pub(crate) struct AeadCtx<A: Aead, Kdf: KdfTrait, Kem: KemTrait> {
     suite_id: FullSuiteId,
 }
 
+/// The HPKE response context.
+///
+/// This is derived from the [`AeadCtx`] using the [`AeadCtx::export()`] function. This enables
+/// bidirectional encryption support. Meaning the recipient can encrypt messages the sender will be
+/// able to decrypt.
+struct AeadResponseCtx<A: Aead, Kem: KemTrait> {
+    /// Records whether the nonce sequence counter has overflowed.
+    overflowed: bool,
+    /// The underlying AEAD instance. This also does decryption.
+    encryptor: A::AeadImpl,
+    /// The base nonce which we XOR with sequence numbers.
+    base_nonce: AeadNonce<A>,
+    /// The running sequence number.
+    seq: Seq,
+    /// This binds the `AeadCtx` to the KEM that made it.
+    src_kem: PhantomData<Kem>,
+}
+
 // Necessary for test_setup_soundness
 #[cfg(test)]
 impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> Clone for AeadCtx<A, Kdf, Kem> {
@@ -234,6 +252,29 @@ impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AeadCtx<A, Kdf, Kem> {
         hkdf_ctx
             .labeled_expand(&self.suite_id, b"sec", exporter_ctx, out_buf)
             .map_err(|_| HpkeError::KdfOutputTooLong)
+    }
+
+    // RFC 9180 §9.8
+    // key = context.Export("response key", Nk)
+    // nonce = context.Export("response nonce", Nn)
+
+    /// Create an [`AeadResponseCtx`] from this [`AeadCtx`].
+    fn export_response_context(&self) -> AeadResponseCtx<A, Kem> {
+        let mut key = AeadKey::<A>::default();
+        self.export(b"response key", key.0.as_mut_slice())
+            .expect("The response key is always smaller than 255x the digest size");
+
+        let mut base_nonce = AeadNonce::<A>::default();
+        self.export(b"response nonce", base_nonce.0.as_mut_slice())
+            .expect("The response nonce is always smaller than 255x the digest size");
+
+        AeadResponseCtx {
+            overflowed: false,
+            encryptor: <A::AeadImpl as aead::KeyInit>::new(&key.0),
+            base_nonce,
+            seq: <Seq as Default>::default(),
+            src_kem: PhantomData,
+        }
     }
 }
 
@@ -412,6 +453,69 @@ impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AeadCtxR<A, Kdf, Kem> {
         // Pass to AeadCtx
         self.0.export(info, out_buf)
     }
+
+    /// Create a [`AeadResponseCtxS`] from this [`AeadCtxS`].
+    ///
+    /// The response context allows the recipient to encrypt messages for the sender.
+    ///
+    /// *Warn*: Each time this method is called the response context is created anew. This means
+    /// that the sequence counter for the nonce is created anwe as well.
+    ///
+    /// You should call this method once and keep the response context alive for as long as needed.
+    /// Otherwise nonce reuse will occur.
+    pub fn response_context(&self) -> AeadResponseCtxR<A, Kem> {
+        AeadResponseCtxR(self.0.export_response_context())
+    }
+}
+
+/// The HPKE receiver's response context.
+///
+/// This can be used to exchange messages in the other direction.
+/// It allows the receiver to `seal` ciphertexts only the sender will be able to open.
+pub struct AeadResponseCtxR<A: Aead, Kem: KemTrait>(AeadResponseCtx<A, Kem>);
+
+impl<A: Aead, Kem: KemTrait> AeadResponseCtxR<A, Kem> {
+    /// Encrypts the data in `buffer`, returning the resulting authentication tag
+    ///
+    /// Return Value
+    /// ============
+    /// Returns `Ok(tag)` on success.  If this context has been used for so many encryptions that
+    /// the sequence number overflowed, returns `Err(HpkeError::MessageLimitReached)`. If this
+    /// happens, `plaintext` will be unmodified. If an error happened during encryption, returns
+    /// `Err(HpkeError::SealError)`. If this happens, the contents of `plaintext` is undefined.
+    pub fn seal_inout_detached(
+        &mut self,
+        buffer: InOutBuf<'_, '_, u8>,
+        aad: &[u8],
+    ) -> Result<AeadTag<A>, HpkeError> {
+        seal_inout_detached(
+            &self.0.encryptor,
+            &self.0.base_nonce,
+            &mut self.0.overflowed,
+            &mut self.0.seq,
+            buffer,
+            aad,
+        )
+    }
+
+    /// Seals the given plaintext and returns the ciphertext.
+    ///
+    /// Return Value
+    /// ============
+    /// Returns `Ok(ciphertext)` on success.  If this context has been used for so many encryptions
+    /// that the sequence number overflowed, returns `Err(HpkeError::MessageLimitReached)`. If an
+    /// error happened during encryption, returns `Err(HpkeError::SealError)`.
+    #[cfg(feature = "alloc")]
+    pub fn seal(&mut self, plaintext: &[u8], aad: &[u8]) -> Result<crate::Vec<u8>, HpkeError> {
+        seal(
+            &self.0.encryptor,
+            &self.0.base_nonce,
+            &mut self.0.overflowed,
+            &mut self.0.seq,
+            plaintext,
+            aad,
+        )
+    }
 }
 
 // RFC 9180 §5.2
@@ -569,6 +673,71 @@ impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AeadCtxS<A, Kdf, Kem> {
     pub fn export(&self, info: &[u8], out_buf: &mut [u8]) -> Result<(), HpkeError> {
         // Pass to AeadCtx
         self.0.export(info, out_buf)
+    }
+
+    /// Create a [`AeadResponseCtxS`] from this [`AeadCtxS`].
+    ///
+    /// The response context allows the sender to decrypt messages the recipient has encrypted.
+    ///
+    /// *Warn*: Each time this method is called the response context is created anew. This means
+    /// that the sequence counter for the nonce is created anwe as well.
+    ///
+    /// You should call this method once and keep the response context alive for as long as needed.
+    /// Otherwise opening a sealed ciphertext might fail due to the nonce not matching.
+    pub fn response_context(&self) -> AeadResponseCtxS<A, Kem> {
+        AeadResponseCtxS(self.0.export_response_context())
+    }
+}
+
+/// The HPKE sender's response context.
+///
+/// This can be used to exchange messages in the other direction.
+/// It allows the sender to `open` ciphertexts the receiver has `seal`ed.
+pub struct AeadResponseCtxS<A: Aead, Kem: KemTrait>(AeadResponseCtx<A, Kem>);
+
+impl<A: Aead, Kem: KemTrait> AeadResponseCtxS<A, Kem> {
+    /// Decrypts the data in `buffer`, taking the authentication tag as a separate input
+    ///
+    /// Return Value
+    /// ============
+    /// Returns `Ok(())` on success. If this context has been used for so many encryptions that the
+    /// sequence number overflowed, returns `Err(HpkeError::MessageLimitReached)`. If this happens,
+    /// `ciphertext` will be unmodified. If the tag fails to validate, returns
+    /// `Err(HpkeError::OpenError)`. If this happens, `ciphertext` is in an undefined state.
+    pub fn open_inout_detached(
+        &mut self,
+        buffer: InOutBuf<'_, '_, u8>,
+        aad: &[u8],
+        tag: &AeadTag<A>,
+    ) -> Result<(), HpkeError> {
+        open_inout_detached(
+            &self.0.encryptor,
+            &self.0.base_nonce,
+            &mut self.0.overflowed,
+            &mut self.0.seq,
+            buffer,
+            aad,
+            tag,
+        )
+    }
+
+    /// Opens the given ciphertext and returns a plaintext
+    ///
+    /// Return Value
+    /// ============
+    /// Returns `Ok(())` on success. If this context has been used for so many encryptions that the
+    /// sequence number overflowed, returns `Err(HpkeError::MessageLimitReached)`. If the tag fails
+    /// to validate, returns `Err(HpkeError::OpenError)`.
+    #[cfg(feature = "alloc")]
+    pub fn open(&mut self, ciphertext: &[u8], aad: &[u8]) -> Result<crate::Vec<u8>, HpkeError> {
+        open(
+            &self.0.encryptor,
+            &self.0.base_nonce,
+            &mut self.0.overflowed,
+            &mut self.0.seq,
+            ciphertext,
+            aad,
+        )
     }
 }
 
