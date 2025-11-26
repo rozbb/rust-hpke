@@ -585,7 +585,7 @@ fn agile_setup_sender<R: CryptoRng + RngCore>(
     );
 
     if res.is_none() {
-        panic!("KEM {} isn't impelmented yet!", kem_alg.name());
+        panic!("KEM {} isn't implemented yet!", kem_alg.name());
     }
 
     res.unwrap()
@@ -668,7 +668,7 @@ fn agile_setup_receiver(
     );
 
     if res.is_none() {
-        panic!("KEM {} isn't impelmented yet!", kem_alg.name());
+        panic!("KEM {} isn't implemented yet!", kem_alg.name());
     }
 
     res.unwrap()

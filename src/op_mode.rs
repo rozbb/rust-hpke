@@ -122,7 +122,7 @@ impl<Kem: KemTrait> OpMode<Kem> for OpModeR<'_, Kem> {
         }
     }
 
-    // Returns the preshared key ID if it's set in the mode, otherwise returns the emtpy string
+    // Returns the preshared key ID if it's set in the mode, otherwise returns the empty string
     fn get_psk_id(&self) -> &[u8] {
         // RFC 9180 §5.1: default_psk_id = ""
         match self {
@@ -157,7 +157,7 @@ impl<Kem: KemTrait> OpMode<Kem> for OpModeS<'_, Kem> {
         }
     }
 
-    // Returns the preshared key ID if it's set in the mode, otherwise returns the emtpy string
+    // Returns the preshared key ID if it's set in the mode, otherwise returns the empty string
     fn get_psk_id(&self) -> &[u8] {
         // RFC 9180 §5.1: default_psk_id = ""
         match self {

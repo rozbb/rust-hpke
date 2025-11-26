@@ -187,7 +187,7 @@ mod test {
                     psk_bundle.clone(),
                 );
 
-                // Use the encapped key to derive the reciever's encryption context
+                // Use the encapped key to derive the receiver's encryption context
                 let receiver_mode = OpModeR::<Kem>::AuthPsk(pk_sender_id, psk_bundle);
 
                 // Encrypt with the first context

@@ -76,7 +76,7 @@ macro_rules! count {
 }
 
 /// Given a length L and a sequence of n bytestrings with length at most L, this does a
-/// non-allocating concatentation of the bytestrings. It constructs a big buffer of n*L many bytes
+/// non-allocating concatenation of the bytestrings. It constructs a big buffer of n*L many bytes
 /// writes everything into there, and keeps track of how many bytes it wrote. The macro returns
 /// `(buf, num_bytes_written)`.
 macro_rules! concat_with_known_maxlen {
