@@ -414,6 +414,89 @@ impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AeadCtxR<A, Kdf, Kem> {
     }
 }
 
+// RFC 9180 §5.2
+// def ContextS.Seal(aad, pt):
+//   ct = Seal(self.key, self.ComputeNonce(self.seq), aad, pt)
+//   self.IncrementSeq()
+//   return ct
+
+/// Encrypts the data in `buffer`, returning the resulting authentication tag, and taking the
+/// encryptor, nonce, overflowed flag, sequence number as separate inputs.
+///
+/// Return Value
+/// ============
+/// Returns `Ok(tag)` on success.  If this context has been used for so many encryptions that
+/// the sequence number overflowed, returns `Err(HpkeError::MessageLimitReached)`. If this
+/// happens, `plaintext` will be unmodified. If an error happened during encryption, returns
+/// `Err(HpkeError::SealError)`. If this happens, the contents of `plaintext` is undefined.
+fn seal_inout_detached<A: Aead>(
+    encryptor: &A::AeadImpl,
+    base_nonce: &AeadNonce<A>,
+    overflowed: &mut bool,
+    sequence: &mut Seq,
+    buffer: InOutBuf<'_, '_, u8>,
+    aad: &[u8],
+) -> Result<AeadTag<A>, HpkeError> {
+    if *overflowed {
+        // If the sequence counter overflowed, we've been used for far too long. Shut down.
+        Err(HpkeError::MessageLimitReached)
+    } else {
+        // Compute the nonce and do the encryption in place
+        let nonce = mix_nonce::<A>(base_nonce, sequence);
+        let tag = encryptor
+            .encrypt_inout_detached(&nonce.0, aad, buffer)
+            .map_err(|_| HpkeError::SealError)?;
+
+        // Try to increment the sequence counter. If it fails, this was our last encryption.
+        match increment_seq(sequence) {
+            Some(new_seq) => *sequence = new_seq,
+            None => *overflowed = true,
+        }
+
+        // Return the tag
+        Ok(AeadTag(tag))
+    }
+}
+
+/// Seals the given plaintext and returns the ciphertext, taking the encryptor, nonce,
+/// overflowed flag, sequence number as separate inputs.
+///
+/// Return Value
+/// ============
+/// Returns `Ok(ciphertext)` on success.  If this context has been used for so many encryptions
+/// that the sequence number overflowed, returns `Err(HpkeError::MessageLimitReached)`. If an
+/// error happened during encryption, returns `Err(HpkeError::SealError)`.
+#[cfg(feature = "alloc")]
+fn seal<A: Aead>(
+    encryptor: &A::AeadImpl,
+    base_nonce: &AeadNonce<A>,
+    overflowed: &mut bool,
+    sequence: &mut Seq,
+    plaintext: &[u8],
+    aad: &[u8],
+) -> Result<crate::Vec<u8>, HpkeError> {
+    let msg_len = plaintext.len();
+    let tag_len = AeadTag::<A>::size();
+
+    // Make a buffer that can hold a ciphertext + tag. Copy in the plaintext
+    let mut outbuf = vec![0u8; msg_len + tag_len];
+    outbuf[..msg_len].copy_from_slice(plaintext);
+
+    // Seal with a detached tag
+    let tag = seal_inout_detached(
+        encryptor,
+        base_nonce,
+        overflowed,
+        sequence,
+        InOutBuf::new(plaintext, &mut outbuf[..plaintext.len()]).unwrap(),
+        aad,
+    )?;
+    // Then append the tag to the end of the buffer. The buffer is now the auth'd ciphertext
+    outbuf[msg_len..msg_len + tag_len].copy_from_slice(&tag.0);
+
+    Ok(outbuf)
+}
+
 /// The HPKE senders's context. This is what you use to `seal` plaintexts and `export` secrets.
 pub struct AeadCtxS<A: Aead, Kdf: KdfTrait, Kem: KemTrait>(AeadCtx<A, Kdf, Kem>);
 
@@ -433,12 +516,6 @@ impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> Clone for AeadCtxS<A, Kdf, Kem> {
 }
 
 impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AeadCtxS<A, Kdf, Kem> {
-    // RFC 9180 §5.2
-    // def ContextS.Seal(aad, pt):
-    //   ct = Seal(self.key, self.ComputeNonce(self.seq), aad, pt)
-    //   self.IncrementSeq()
-    //   return ct
-
     /// Encrypts the data in `buffer`, returning the resulting authentication tag
     ///
     /// Return Value
@@ -452,27 +529,14 @@ impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AeadCtxS<A, Kdf, Kem> {
         buffer: InOutBuf<'_, '_, u8>,
         aad: &[u8],
     ) -> Result<AeadTag<A>, HpkeError> {
-        if self.0.overflowed {
-            // If the sequence counter overflowed, we've been used for far too long. Shut down.
-            Err(HpkeError::MessageLimitReached)
-        } else {
-            // Compute the nonce and do the encryption in place
-            let nonce = mix_nonce::<A>(&self.0.base_nonce, &self.0.seq);
-            let tag = self
-                .0
-                .encryptor
-                .encrypt_inout_detached(&nonce.0, aad, buffer)
-                .map_err(|_| HpkeError::SealError)?;
-
-            // Try to increment the sequence counter. If it fails, this was our last encryption.
-            match increment_seq(&self.0.seq) {
-                Some(new_seq) => self.0.seq = new_seq,
-                None => self.0.overflowed = true,
-            }
-
-            // Return the tag
-            Ok(AeadTag(tag))
-        }
+        seal_inout_detached(
+            &self.0.encryptor,
+            &self.0.base_nonce,
+            &mut self.0.overflowed,
+            &mut self.0.seq,
+            buffer,
+            aad,
+        )
     }
 
     /// Seals the given plaintext and returns the ciphertext
@@ -484,22 +548,14 @@ impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AeadCtxS<A, Kdf, Kem> {
     /// error happened during encryption, returns `Err(HpkeError::SealError)`.
     #[cfg(feature = "alloc")]
     pub fn seal(&mut self, plaintext: &[u8], aad: &[u8]) -> Result<crate::Vec<u8>, HpkeError> {
-        let msg_len = plaintext.len();
-        let tag_len = AeadTag::<A>::size();
-
-        // Make a buffer that can hold a ciphertext + tag. Copy in the plaintext
-        let mut outbuf = vec![0u8; msg_len + tag_len];
-        outbuf[..msg_len].copy_from_slice(plaintext);
-
-        // Seal with a detached tag
-        let tag = self.seal_inout_detached(
-            InOutBuf::new(plaintext, &mut outbuf[..plaintext.len()]).unwrap(),
+        seal(
+            &self.0.encryptor,
+            &self.0.base_nonce,
+            &mut self.0.overflowed,
+            &mut self.0.seq,
+            plaintext,
             aad,
-        )?;
-        // Then append the tag to the end of the buffer. The buffer is now the auth'd ciphertext
-        outbuf[msg_len..msg_len + tag_len].copy_from_slice(&tag.0);
-
-        Ok(outbuf)
+        )
     }
 
     /// Fills a given buffer with secret bytes derived from this encryption context. This value
