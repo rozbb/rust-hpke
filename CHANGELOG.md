@@ -35,7 +35,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removals
 
-* Removed all impls of `serde::{Serialize, Deserailize}` from crate. See [wiki](https://github.com/rozbb/rust-hpke/wiki/Migrating-away-from-the-serde_impls-feature) for migration instructions.
+* Removed all impls of `serde::{Serialize, Deserialize}` from crate. See [wiki](https://github.com/rozbb/rust-hpke/wiki/Migrating-away-from-the-serde_impls-feature) for migration instructions.
 
 ## [0.11.0] - 2023-10-11
 

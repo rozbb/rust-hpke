@@ -148,7 +148,7 @@ pub enum HpkeError {
     MessageLimitReached,
     /// An error occurred while opening a ciphertext
     OpenError,
-    /// An error occured while sealing a plaintext
+    /// An error occurred while sealing a plaintext
     SealError,
     /// The KDF was asked to output too many bytes
     KdfOutputTooLong,

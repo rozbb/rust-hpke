@@ -244,7 +244,7 @@ mod test {
                     )
                     .unwrap();
 
-                    // Use the encapped key to derive the reciever's encryption context
+                    // Use the encapped key to derive the receiver's encryption context
                     let mut aead_ctx2 = setup_receiver::<A, Kdf, Kem>(
                         &receiver_mode,
                         &sk_recip,
