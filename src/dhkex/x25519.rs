@@ -21,8 +21,8 @@ pub struct PrivateKey(x25519_dalek::StaticSecret);
 
 impl ConstantTimeEq for PrivateKey {
     fn ct_eq(&self, other: &Self) -> Choice {
-        // We can use to_bytes because StaticSecret is only ever constructed from a clamped scalar
-        self.0.to_bytes().ct_eq(&other.0.to_bytes())
+        // We can use as_bytes because StaticSecret is only ever constructed from a clamped scalar
+        self.0.as_bytes().ct_eq(other.0.as_bytes())
     }
 }
 
