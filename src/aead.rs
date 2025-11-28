@@ -161,6 +161,8 @@ impl<A: Aead> Deserializable for AeadTag<A> {
 pub(crate) struct AeadCtx<A: Aead, Kdf: KdfTrait, Kem: KemTrait> {
     /// Records whether the nonce sequence counter has overflowed
     overflowed: bool,
+    /// Records whether the response nonce sequence counter has overflowed.
+    response_overflowed: bool,
     /// The underlying AEAD instance. This also does decryption.
     encryptor: A::AeadImpl,
     /// The base nonce which we XOR with sequence numbers
@@ -169,6 +171,8 @@ pub(crate) struct AeadCtx<A: Aead, Kdf: KdfTrait, Kem: KemTrait> {
     exporter_secret: ExporterSecret<Kdf>,
     /// The running sequence number
     seq: Seq,
+    /// The running sequence number for the response context.
+    response_seq: Seq,
     /// This binds the `AeadCtx` to the KEM that made it. Used to generate `suite_id`.
     src_kem: PhantomData<Kem>,
     /// The full ID of the ciphersuite that created this `AeadCtx`. Used for context binding.
@@ -180,15 +184,15 @@ pub(crate) struct AeadCtx<A: Aead, Kdf: KdfTrait, Kem: KemTrait> {
 /// This is derived from the [`AeadCtx`] using the [`AeadCtx::export()`] function. This enables
 /// bidirectional encryption support. Meaning the recipient can encrypt messages the sender will be
 /// able to decrypt.
-struct AeadResponseCtx<A: Aead, Kem: KemTrait> {
+struct AeadResponseCtx<'a, A: Aead, Kem: KemTrait> {
     /// Records whether the nonce sequence counter has overflowed.
-    overflowed: bool,
+    overflowed: &'a mut bool,
     /// The underlying AEAD instance. This also does decryption.
     encryptor: A::AeadImpl,
     /// The base nonce which we XOR with sequence numbers.
     base_nonce: AeadNonce<A>,
     /// The running sequence number.
-    seq: Seq,
+    seq: &'a mut Seq,
     /// This binds the `AeadCtx` to the KEM that made it.
     src_kem: PhantomData<Kem>,
 }
@@ -199,10 +203,12 @@ impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> Clone for AeadCtx<A, Kdf, Kem> {
     fn clone(&self) -> AeadCtx<A, Kdf, Kem> {
         AeadCtx {
             overflowed: self.overflowed,
+            response_overflowed: self.response_overflowed,
             encryptor: self.encryptor.clone(),
             base_nonce: self.base_nonce.clone(),
             exporter_secret: self.exporter_secret.clone(),
             seq: self.seq.clone(),
+            response_seq: self.response_seq.clone(),
             src_kem: PhantomData,
             suite_id: self.suite_id,
         }
@@ -219,10 +225,12 @@ impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AeadCtx<A, Kdf, Kem> {
         let suite_id = full_suite_id::<A, Kdf, Kem>();
         AeadCtx {
             overflowed: false,
+            response_overflowed: false,
             encryptor: <A::AeadImpl as aead::KeyInit>::new(&key.0),
             base_nonce,
             exporter_secret,
             seq: <Seq as Default>::default(),
+            response_seq: <Seq as Default>::default(),
             src_kem: PhantomData,
             suite_id,
         }
@@ -259,7 +267,7 @@ impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AeadCtx<A, Kdf, Kem> {
     // nonce = context.Export("response nonce", Nn)
 
     /// Create an [`AeadResponseCtx`] from this [`AeadCtx`].
-    fn export_response_context(&self) -> AeadResponseCtx<A, Kem> {
+    fn export_response_context(&mut self) -> AeadResponseCtx<'_, A, Kem> {
         let mut key = AeadKey::<A>::default();
         self.export(b"response key", key.0.as_mut_slice())
             .expect("The response key is always smaller than 255x the digest size");
@@ -269,10 +277,10 @@ impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AeadCtx<A, Kdf, Kem> {
             .expect("The response nonce is always smaller than 255x the digest size");
 
         AeadResponseCtx {
-            overflowed: false,
+            overflowed: &mut self.response_overflowed,
             encryptor: <A::AeadImpl as aead::KeyInit>::new(&key.0),
             base_nonce,
-            seq: <Seq as Default>::default(),
+            seq: &mut self.response_seq,
             src_kem: PhantomData,
         }
     }
@@ -457,13 +465,7 @@ impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AeadCtxR<A, Kdf, Kem> {
     /// Create a [`AeadResponseCtxS`] from this [`AeadCtxS`].
     ///
     /// The response context allows the recipient to encrypt messages for the sender.
-    ///
-    /// *Warn*: Each time this method is called the response context is created anew. This means
-    /// that the sequence counter for the nonce is created anwe as well.
-    ///
-    /// You should call this method once and keep the response context alive for as long as needed.
-    /// Otherwise nonce reuse will occur.
-    pub fn response_context(&self) -> AeadResponseCtxR<A, Kem> {
+    pub fn response_context(&mut self) -> AeadResponseCtxR<'_, A, Kem> {
         AeadResponseCtxR(self.0.export_response_context())
     }
 }
@@ -472,9 +474,9 @@ impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AeadCtxR<A, Kdf, Kem> {
 ///
 /// This can be used to exchange messages in the other direction.
 /// It allows the receiver to `seal` ciphertexts only the sender will be able to open.
-pub struct AeadResponseCtxR<A: Aead, Kem: KemTrait>(AeadResponseCtx<A, Kem>);
+pub struct AeadResponseCtxR<'a, A: Aead, Kem: KemTrait>(AeadResponseCtx<'a, A, Kem>);
 
-impl<A: Aead, Kem: KemTrait> AeadResponseCtxR<A, Kem> {
+impl<A: Aead, Kem: KemTrait> AeadResponseCtxR<'_, A, Kem> {
     /// Encrypts the data in `buffer`, returning the resulting authentication tag
     ///
     /// Return Value
@@ -491,8 +493,8 @@ impl<A: Aead, Kem: KemTrait> AeadResponseCtxR<A, Kem> {
         seal_inout_detached(
             &self.0.encryptor,
             &self.0.base_nonce,
-            &mut self.0.overflowed,
-            &mut self.0.seq,
+            self.0.overflowed,
+            self.0.seq,
             buffer,
             aad,
         )
@@ -510,8 +512,8 @@ impl<A: Aead, Kem: KemTrait> AeadResponseCtxR<A, Kem> {
         seal(
             &self.0.encryptor,
             &self.0.base_nonce,
-            &mut self.0.overflowed,
-            &mut self.0.seq,
+            self.0.overflowed,
+            self.0.seq,
             plaintext,
             aad,
         )
@@ -678,13 +680,7 @@ impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AeadCtxS<A, Kdf, Kem> {
     /// Create a [`AeadResponseCtxS`] from this [`AeadCtxS`].
     ///
     /// The response context allows the sender to decrypt messages the recipient has encrypted.
-    ///
-    /// *Warn*: Each time this method is called the response context is created anew. This means
-    /// that the sequence counter for the nonce is created anwe as well.
-    ///
-    /// You should call this method once and keep the response context alive for as long as needed.
-    /// Otherwise opening a sealed ciphertext might fail due to the nonce not matching.
-    pub fn response_context(&self) -> AeadResponseCtxS<A, Kem> {
+    pub fn response_context(&mut self) -> AeadResponseCtxS<'_, A, Kem> {
         AeadResponseCtxS(self.0.export_response_context())
     }
 }
@@ -693,9 +689,9 @@ impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AeadCtxS<A, Kdf, Kem> {
 ///
 /// This can be used to exchange messages in the other direction.
 /// It allows the sender to `open` ciphertexts the receiver has `seal`ed.
-pub struct AeadResponseCtxS<A: Aead, Kem: KemTrait>(AeadResponseCtx<A, Kem>);
+pub struct AeadResponseCtxS<'a, A: Aead, Kem: KemTrait>(AeadResponseCtx<'a, A, Kem>);
 
-impl<A: Aead, Kem: KemTrait> AeadResponseCtxS<A, Kem> {
+impl<A: Aead, Kem: KemTrait> AeadResponseCtxS<'_, A, Kem> {
     /// Decrypts the data in `buffer`, taking the authentication tag as a separate input
     ///
     /// Return Value
@@ -713,8 +709,8 @@ impl<A: Aead, Kem: KemTrait> AeadResponseCtxS<A, Kem> {
         open_inout_detached(
             &self.0.encryptor,
             &self.0.base_nonce,
-            &mut self.0.overflowed,
-            &mut self.0.seq,
+            self.0.overflowed,
+            self.0.seq,
             buffer,
             aad,
             tag,
@@ -733,8 +729,8 @@ impl<A: Aead, Kem: KemTrait> AeadResponseCtxS<A, Kem> {
         open(
             &self.0.encryptor,
             &self.0.base_nonce,
-            &mut self.0.overflowed,
-            &mut self.0.seq,
+            self.0.overflowed,
+            self.0.seq,
             ciphertext,
             aad,
         )
@@ -1046,7 +1042,7 @@ mod test {
                 type Kdf = HkdfSha256;
                 type Kem = $kem_ty;
 
-                let (sender_ctx, receiver_ctx) = gen_ctx_simple_pair::<A, Kdf, Kem>();
+                let (mut sender_ctx, mut receiver_ctx) = gen_ctx_simple_pair::<A, Kdf, Kem>();
 
                 let mut sender_response_ctx = sender_ctx.response_context();
                 let mut receiver_response_ctx = receiver_ctx.response_context();
