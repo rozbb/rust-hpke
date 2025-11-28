@@ -959,6 +959,83 @@ mod test {
         };
     }
 
+    /// Tests that sequence overflowing on the response context causes an error. This logic is
+    /// cipher-agnostic, so we don't make the test generic over ciphers.
+    #[cfg(feature = "alloc")]
+    macro_rules! test_response_overflow {
+        ($test_name:ident, $kem_ty:ty) => {
+            #[test]
+            fn $test_name() {
+                type Kem = $kem_ty;
+                type Kdf = HkdfSha256;
+                // Again, this test is cipher-agnostic
+                type A = ChaCha20Poly1305;
+
+                // Make a sequence number that's at the max
+                let big_seq = {
+                    let mut seq = <Seq as Default>::default();
+                    seq.0 = u64::MAX;
+                    seq
+                };
+
+                let (mut sender_ctx, mut receiver_ctx) = gen_ctx_simple_pair::<A, Kdf, Kem>();
+                sender_ctx.0.response_seq = big_seq.clone();
+                receiver_ctx.0.response_seq = big_seq.clone();
+
+                let mut sender_response_ctx = sender_ctx.response_context();
+                let mut receiver_response_ctx = receiver_ctx.response_context();
+
+                // These should support precisely one more encryption before it registers an
+                // overflow
+
+                let msg = b"What they be serving is cevapi.";
+                let aad = b"It's just words, Detective. They just happen to be in a dope order.";
+
+                // Do one round trip and ensure it works
+                {
+                    let mut buf = msg.clone();
+
+                    // Encrypt the plaintext
+                    let ciphertext = receiver_response_ctx
+                        .seal(&mut buf, aad)
+                        .expect("seal() failed");
+
+                    // Now to decrypt on the other side
+                    let roundtrip_plaintext = sender_response_ctx
+                        .open(&ciphertext, aad)
+                        .expect("open() failed");
+
+                    // Make sure the output message was the same as the input message
+                    assert_eq!(msg, roundtrip_plaintext.as_slice());
+                }
+
+                // Try another round trip and ensure that we've overflowed
+                {
+                    // Try to encrypt the plaintext
+                    match receiver_response_ctx.seal(msg, aad) {
+                        Err(HpkeError::MessageLimitReached) => {
+                            // Good, this should have overflowed
+                        }
+                        Err(e) => panic!("seal() should have overflowed. Instead got {}", e),
+                        _ => panic!("seal() should have overflowed. Instead it succeeded"),
+                    }
+
+                    // Now try to decrypt something. This isn't a valid ciphertext or tag, but the
+                    // overflow should fail before the tag check fails.
+                    let placeholder_ciphertext = [0u8; 32];
+
+                    match sender_response_ctx.open(&placeholder_ciphertext, aad) {
+                        Err(HpkeError::MessageLimitReached) => {
+                            // Good, this should have overflowed
+                        }
+                        Err(e) => panic!("open() should have overflowed. Instead got {}", e),
+                        _ => panic!("open() should have overflowed. Instead it succeeded"),
+                    }
+                }
+            }
+        };
+    }
+
     /// Tests that `open()` can decrypt things properly encrypted with `seal()`
     #[cfg(feature = "alloc")]
     macro_rules! test_response_ctx_correctness {
@@ -1023,6 +1100,7 @@ mod test {
             crate::kem::X25519HkdfSha256
         );
         test_overflow!(test_overflow_x25519, crate::kem::X25519HkdfSha256);
+        test_response_overflow!(test_response_overflow_x25519, crate::kem::X25519HkdfSha256);
 
         test_ctx_correctness!(
             test_ctx_correctness_aes128_x25519,
@@ -1068,6 +1146,7 @@ mod test {
             crate::kem::DhP256HkdfSha256
         );
         test_overflow!(test_overflow_p256, crate::kem::DhP256HkdfSha256);
+        test_response_overflow!(test_response_overflow_p256, crate::kem::DhP256HkdfSha256);
 
         test_ctx_correctness!(
             test_ctx_correctness_aes128_p256,
@@ -1113,6 +1192,7 @@ mod test {
             crate::kem::DhP384HkdfSha384
         );
         test_overflow!(test_overflow_p384, crate::kem::DhP384HkdfSha384);
+        test_response_overflow!(test_response_overflow_p384, crate::kem::DhP384HkdfSha384);
 
         test_ctx_correctness!(
             test_ctx_correctness_aes128_p384,
