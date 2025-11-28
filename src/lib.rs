@@ -32,7 +32,7 @@
 //! // herself at all. If she had a public key herself, or a pre-shared secret that Bob also
 //! // knew, she'd be able to authenticate herself. See the OpModeS and OpModeR types for more
 //! // detail.
-//! let (encapsulated_key, mut encryption_context) =
+//! let (encapsulated_key, mut alice_context) =
 //!     hpke::setup_sender::<Aead, Kdf, Kem, _>(&OpModeS::Base, &bob_pk, info_str, &mut csprng)
 //!         .expect("invalid server pubkey!");
 //!
@@ -42,9 +42,9 @@
 //! let aad = b"a gentleman's game";
 //! // To seal without allocating:
 //! //   use hpke::inout::InOutBuf;
-//! //   let auth_tag = encryption_context.seal_inout_detached(InOutBuf::from(&mut msg), aad)?;
+//! //   let auth_tag = alice_context.seal_inout_detached(InOutBuf::from(&mut msg), aad)?;
 //! // To seal with allocating:
-//! let ciphertext = encryption_context.seal(msg, aad).expect("encryption failed!");
+//! let ciphertext = alice_context.seal(msg, aad).expect("encryption failed!");
 //!
 //! // ~~~
 //! // Alice sends the encapsulated key, message ciphertext, AAD, and auth tag to Bob over the
@@ -53,7 +53,7 @@
 //! // ~~~
 //!
 //! // Somewhere far away, Bob receives the data and makes a decryption session
-//! let mut decryption_context =
+//! let mut bob_context =
 //!     hpke::setup_receiver::<Aead, Kdf, Kem>(
 //!         &OpModeR::Base,
 //!         &bob_sk,
@@ -62,11 +62,21 @@
 //!     ).expect("failed to set up receiver!");
 //! // To open without allocating:
 //! //   use hpke::inout::InOutBuf;
-//! //   decryption_context.open_inout_detached(InOutBuf::from(&mut ciphertext), aad, &auth_tag)
+//! //   bob_context.open_inout_detached(InOutBuf::from(&mut ciphertext), aad, &auth_tag)
 //! // To open with allocating:
-//! let plaintext = decryption_context.open(&ciphertext, aad).expect("invalid ciphertext!");
+//! let plaintext = bob_context.open(&ciphertext, aad).expect("invalid ciphertext!");
 //!
 //! assert_eq!(&plaintext, b"fronthand or backhand?");
+//!
+//! // If you need bidirectional encryption support, meaning if Bob should send a reply to Alice
+//! // you can do so as follows:
+//! let reply_plaintxt = b"aight, fronthand";
+//! let aad = b"a gentleman's reply";
+//!
+//! let ciphertext = bob_context.response_context().seal(reply_plaintxt, aad).expect("bob should be able to reply");
+//! let plaintext = alice_context.response_context().open(&ciphertext, aad).expect("alice should be able to decrypt");
+//!
+//! assert_eq!(plaintext, reply_plaintxt);
 //! # }
 //! # }
 //! ```
