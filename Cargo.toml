@@ -25,6 +25,7 @@ p521 = ["dep:p521"]
 alloc = []
 # Used to enable KAT tests. Also implies alloc
 std = ["alloc"]
+hazmat-streaming-enc = []
 
 [dependencies]
 aead = "0.6.0-rc.3"

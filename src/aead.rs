@@ -1,9 +1,11 @@
 //! Traits and structs for authenticated encryption schemes
 
+#[doc(inline)]
+#[cfg_attr(not(feature = "hazmat-streaming-enc"), doc(hidden))]
+pub use crate::setup::ExporterSecret;
 use crate::{
     kdf::{Kdf as KdfTrait, LabeledExpand, SimpleHkdf},
     kem::Kem as KemTrait,
-    setup::ExporterSecret,
     util::{enforce_equal_len, enforce_outbuf_len, full_suite_id, write_u64_be, FullSuiteId},
     Deserializable, HpkeError, Serializable,
 };
@@ -26,10 +28,22 @@ pub trait Aead {
     const AEAD_ID: u16;
 }
 
-// A nonce is a bytestring you only use for encryption once
-pub(crate) struct AeadNonce<A: Aead>(
-    pub(crate) Array<u8, <A::AeadImpl as BaseAeadCore>::NonceSize>,
-);
+/// A nonce is a bytestring you only use for encryption once
+#[cfg_attr(not(feature = "hazmat-streaming-enc"), doc(hidden))]
+pub struct AeadNonce<A: Aead>(pub(crate) Array<u8, <A::AeadImpl as BaseAeadCore>::NonceSize>);
+
+#[cfg(feature = "hazmat-streaming-enc")]
+impl<A: Aead> AeadNonce<A> {
+    /// Return the raw byes of the [`AeadNonce`] as a byte slice.
+    pub fn as_slice(&self) -> &[u8] {
+        self.0.as_slice()
+    }
+
+    /// Return the raw byes of the [`AeadNonce`] as a mutable byte slice.
+    pub fn as_mut_slice(&mut self) -> &mut [u8] {
+        self.0.as_mut_slice()
+    }
+}
 
 // We need this for ease of testing
 #[cfg(test)]
@@ -39,7 +53,7 @@ impl<A: Aead> Clone for AeadNonce<A> {
     }
 }
 
-// We use this to get an empty buffer we can read nonce material into
+// We use this to get an empty buffer we can write nonce material into
 impl<A: Aead> Default for AeadNonce<A> {
     fn default() -> AeadNonce<A> {
         AeadNonce(Array::<u8, <A::AeadImpl as BaseAeadCore>::NonceSize>::default())
@@ -53,9 +67,22 @@ impl<A: Aead> Drop for AeadNonce<A> {
     }
 }
 
-pub(crate) struct AeadKey<A: Aead>(
-    pub(crate) Array<u8, <A::AeadImpl as aead::KeySizeUser>::KeySize>,
-);
+/// A struct representing a generic key for an AEAD cipher.
+#[cfg_attr(not(feature = "hazmat-streaming-enc"), doc(hidden))]
+pub struct AeadKey<A: Aead>(pub(crate) Array<u8, <A::AeadImpl as aead::KeySizeUser>::KeySize>);
+
+#[cfg(feature = "hazmat-streaming-enc")]
+impl<A: Aead> AeadKey<A> {
+    /// Return the raw byes of the [`AeadKey`] as a byte slice.
+    pub fn as_slice(&self) -> &[u8] {
+        self.0.as_slice()
+    }
+
+    /// Return the raw byes of the [`AeadKey`] as a mutable byte slice.
+    pub fn as_mut_slice(&mut self) -> &mut [u8] {
+        self.0.as_mut_slice()
+    }
+}
 
 // We use this to get an empty buffer we can read key material into
 impl<A: Aead> Default for AeadKey<A> {
@@ -457,6 +484,44 @@ impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AeadCtxS<A, Kdf, Kem> {
         // Pass to AeadCtx
         self.0.export(info, out_buf)
     }
+}
+
+/// Create a [`AeadCtxS`] from an key, nonce, and exporter secret tripplet.
+///
+/// ⚠️ Warning: Hazmat!
+///
+/// This is a low level API. Only use this if you know what you are doing.
+///
+/// This method is used after the key encapsulation mechanism has created a shared secret.
+/// Usually this doesn't need to be done manually, the [`create_sender_context()`] will create the
+/// shared secret, the [`AeadKey`] and the [`AeadCtxS`] for you.
+///
+/// The method can also be used to create a response context like described in [section
+/// 9.8](https://www.ietf.org/archive/id/draft-ietf-hpke-hpke-02.html#name-bidirectional-encryption)
+/// of the HPKE RFC.
+#[cfg(feature = "hazmat-streaming-enc")]
+pub fn create_sender_context<A: Aead, Kdf: KdfTrait, Kem: KemTrait>(
+    key: &AeadKey<A>,
+    base_nonce: AeadNonce<A>,
+    exporter_secret: ExporterSecret<Kdf>,
+) -> AeadCtxS<A, Kdf, Kem> {
+    AeadCtx::new(key, base_nonce, exporter_secret).into()
+}
+
+/// Create a [`AeadCtxR`] from an key, nonce, and exporter secret tripplet.
+///
+/// ⚠️ Warning: Hazmat!
+///
+/// This is a low level API. Only use this if you know what you are doing.
+///
+/// See the documentation for [`create_sender_context()`] for more info.
+#[cfg(feature = "hazmat-streaming-enc")]
+pub fn create_receiver_context<A: Aead, Kdf: KdfTrait, Kem: KemTrait>(
+    key: &AeadKey<A>,
+    base_nonce: AeadNonce<A>,
+    exporter_secret: ExporterSecret<Kdf>,
+) -> AeadCtxR<A, Kdf, Kem> {
+    AeadCtx::new(key, base_nonce, exporter_secret).into()
 }
 
 // Export all the AEAD implementations
