@@ -539,6 +539,9 @@ mod test {
         kdf::HkdfSha256, test_util::gen_ctx_simple_pair, Deserializable, HpkeError, Serializable,
     };
 
+    #[cfg(feature = "hazmat-streaming-enc")]
+    use rand::Rng;
+
     /// Tests that AeadKey::from_bytes fails on inputs of incorrect length
     macro_rules! test_invalid_nonce {
         ($test_name:ident, $aead_ty:ty) => {
@@ -742,6 +745,68 @@ mod test {
         };
     }
 
+    /// Tests that `open()` can decrypt things properly encrypted with `seal()`
+    #[cfg(all(feature = "alloc", feature = "hazmat-streaming-enc"))]
+    macro_rules! test_create_ctx_correctness {
+        ($test_name:ident, $aead_ty:ty, $kem_ty:ty) => {
+            #[test]
+            fn $test_name() {
+                type A = $aead_ty;
+                type Kdf = HkdfSha256;
+                type Kem = $kem_ty;
+
+                let mut rng = rand::rng();
+
+                let mut key = crate::aead::AeadKey::<A>::default();
+                let mut base_nonce = crate::aead::AeadNonce::default();
+                let mut exporter_secret = crate::aead::ExporterSecret::<Kdf>::default();
+
+                rng.fill(key.as_mut_slice());
+                rng.fill(base_nonce.as_mut_slice());
+                rng.fill(exporter_secret.as_mut_slice());
+
+                let mut sender_ctx = crate::aead::create_sender_context::<_, _, Kem>(&key, base_nonce.clone(), exporter_secret.clone());
+                let mut receiver_ctx = crate::aead::create_receiver_context::<_, _, Kem>(&key, base_nonce, exporter_secret);
+
+                let msg = b"Love it or leave it, you better gain way";
+                let aad = b"You better hit bull's eye, the kid don't play";
+
+                // Encrypt in place with the sender context
+                let ciphertext = sender_ctx.seal(msg, aad).expect("seal() failed");
+
+                // Make sure seal() isn't a no-op
+                assert_ne!(&ciphertext, msg);
+
+                // Decrypt with the receiver context
+                let decrypted = receiver_ctx.open(&ciphertext, aad).expect("open() failed");
+                assert_eq!(&decrypted, msg);
+
+                // Now try sending an invalid message followed by a valid message. The valid
+                // message should decrypt correctly
+                let invalid_ciphertext = [0x00; 32];
+                assert!(receiver_ctx.open(&invalid_ciphertext, aad).is_err());
+
+                // Now make sure a round trip succeeds
+                let ciphertext = sender_ctx.seal(msg, aad).expect("second seal() failed");
+
+                // Decrypt with the receiver context
+                let decrypted = receiver_ctx
+                    .open(&ciphertext, aad)
+                    .expect("second open() failed");
+                assert_eq!(&decrypted, msg);
+
+                let mut shared_sender = [0u8; 32];
+                let mut shared_receiver = [0u8; 32];
+
+                sender_ctx.export(b"test", &mut shared_sender).unwrap();
+                receiver_ctx.export(b"test", &mut shared_receiver).unwrap();
+
+                assert_eq!(shared_sender, shared_receiver, "The exported shared secret should be the same between the sender and the receiver");
+                assert_ne!(shared_sender, [0u8; 32]);
+            }
+        };
+    }
+
     test_invalid_nonce!(test_invalid_nonce_aes128, AesGcm128);
     test_invalid_nonce!(test_invalid_nonce_aes256, AesGcm128);
     test_invalid_nonce!(test_invalid_nonce_chacha, ChaCha20Poly1305);
@@ -770,6 +835,25 @@ mod test {
         );
         test_ctx_correctness!(
             test_ctx_correctness_chacha_x25519,
+            ChaCha20Poly1305,
+            crate::kem::X25519HkdfSha256
+        );
+
+        #[cfg(feature = "hazmat-streaming-enc")]
+        test_create_ctx_correctness!(
+            test_create_ctx_correctness_aes128_x25519,
+            AesGcm128,
+            crate::kem::X25519HkdfSha256
+        );
+        #[cfg(feature = "hazmat-streaming-enc")]
+        test_create_ctx_correctness!(
+            test_create_ctx_correctness_aes256_x25519,
+            AesGcm256,
+            crate::kem::X25519HkdfSha256
+        );
+        #[cfg(feature = "hazmat-streaming-enc")]
+        test_create_ctx_correctness!(
+            test_create_ctx_correctness_chacha_x25519,
             ChaCha20Poly1305,
             crate::kem::X25519HkdfSha256
         );
@@ -802,6 +886,25 @@ mod test {
             ChaCha20Poly1305,
             crate::kem::DhP256HkdfSha256
         );
+
+        #[cfg(feature = "hazmat-streaming-enc")]
+        test_create_ctx_correctness!(
+            test_create_ctx_correctness_aes128_p256,
+            AesGcm128,
+            crate::kem::DhP256HkdfSha256
+        );
+        #[cfg(feature = "hazmat-streaming-enc")]
+        test_create_ctx_correctness!(
+            test_create_ctx_correctness_aes256_p256,
+            AesGcm256,
+            crate::kem::DhP256HkdfSha256
+        );
+        #[cfg(feature = "hazmat-streaming-enc")]
+        test_create_ctx_correctness!(
+            test_create_ctx_correctness_chacha_p256,
+            ChaCha20Poly1305,
+            crate::kem::DhP256HkdfSha256
+        );
     }
 
     #[cfg(all(feature = "p384", feature = "alloc"))]
@@ -828,6 +931,25 @@ mod test {
         );
         test_ctx_correctness!(
             test_ctx_correctness_chacha_p384,
+            ChaCha20Poly1305,
+            crate::kem::DhP384HkdfSha384
+        );
+
+        #[cfg(feature = "hazmat-streaming-enc")]
+        test_create_ctx_correctness!(
+            test_create_ctx_correctness_aes128_p384,
+            AesGcm128,
+            crate::kem::DhP384HkdfSha384
+        );
+        #[cfg(feature = "hazmat-streaming-enc")]
+        test_create_ctx_correctness!(
+            test_create_ctx_correctness_aes256_p384,
+            AesGcm256,
+            crate::kem::DhP384HkdfSha384
+        );
+        #[cfg(feature = "hazmat-streaming-enc")]
+        test_create_ctx_correctness!(
+            test_create_ctx_correctness_chacha_p384,
             ChaCha20Poly1305,
             crate::kem::DhP384HkdfSha384
         );
