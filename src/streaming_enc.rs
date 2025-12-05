@@ -100,7 +100,7 @@ pub fn create_sender_context<A: Aead, Kdf: KdfTrait, Kem: KemTrait>(
 ///
 /// ⚠️ Warning: Hazmat!
 ///
-/// This is a low level API. Only use this if you know what you are doing.
+/// This is a low-level API. Only use this if you know what you are doing.
 ///
 /// See the documentation for [`create_sender_context`] for more info.
 pub fn create_receiver_context<A: Aead, Kdf: KdfTrait, Kem: KemTrait>(
