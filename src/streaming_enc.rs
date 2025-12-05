@@ -1,6 +1,6 @@
 //! ⚠️ Hazmat:
-//! This file exposes the underlying streaming encryption primitive defined in the HPKE spec. Do NOT
-//! use this unless you really know what you're doing.
+//! This file exposes the underlying streaming/online encryption primitive defined in the HPKE spec.
+//! Do NOT use this unless you really know what you're doing.
 //!
 //! Example use:
 //! ```rust
@@ -75,19 +75,19 @@ pub use crate::aead::{AeadKey, AeadNonce};
 #[doc(inline)]
 pub use crate::setup::ExporterSecret;
 
-/// Create a [`AeadCtxS`] from an key, nonce, and exporter secret triplet.
+/// Creates a streaming encryption sender context from a key, nonce, and exporter secret.
 ///
 /// ⚠️ Warning: Hazmat!
 ///
-/// This is a low level API. Only use this if you know what you are doing.
+/// This is a low-level API. Only use this if you know what you are doing.
 ///
-/// This method is used after the key encapsulation mechanism has created a shared secret.
-/// Usually this doesn't need to be done manually, the [`create_sender_context`] will create the
-/// shared secret, the [`AeadKey`] and the [`AeadCtxS`] for you.
+/// Use this method to set up an online/streaming encryption channel with shared secrets derived via
+/// some key exchange. This is what's done in the HPKE spec, using (hashes of) the KEM shared
+/// secret.
 ///
-/// The method can also be used to create a response context like described in [section
-/// 9.8](https://www.ietf.org/archive/id/draft-ietf-hpke-hpke-02.html#name-bidirectional-encryption)
-/// of the HPKE RFC.
+/// In particular, this method can also be used to create a response context like described in
+/// [section 9.8](https://www.rfc-editor.org/rfc/rfc9180#name-bidirectional-encryption) of the HPKE
+/// spec.
 pub fn create_sender_context<A: Aead, Kdf: KdfTrait, Kem: KemTrait>(
     key: &AeadKey<A>,
     base_nonce: AeadNonce<A>,
@@ -96,7 +96,7 @@ pub fn create_sender_context<A: Aead, Kdf: KdfTrait, Kem: KemTrait>(
     AeadCtx::new(key, base_nonce, exporter_secret).into()
 }
 
-/// Create a [`AeadCtxR`] from an key, nonce, and exporter secret triplet.
+/// Creates a streaming encryption receiver context from a key, nonce, and exporter secret.
 ///
 /// ⚠️ Warning: Hazmat!
 ///
