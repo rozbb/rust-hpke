@@ -14,7 +14,7 @@ use aead::{
     inout::InOutBuf, AeadCore as BaseAeadCore, AeadInOut as BaseAeadInOut, KeyInit as BaseKeyInit,
 };
 use hybrid_array::Array;
-use zeroize::Zeroize;
+use zeroize::{Zeroize, ZeroizeOnDrop};
 
 /// Represents authenticated encryption functionality
 pub trait Aead {
@@ -26,10 +26,10 @@ pub trait Aead {
     const AEAD_ID: u16;
 }
 
-// A nonce is a bytestring you only use for encryption once
-pub(crate) struct AeadNonce<A: Aead>(
-    pub(crate) Array<u8, <A::AeadImpl as BaseAeadCore>::NonceSize>,
-);
+/// A nonce is a bytestring you only use for encryption once.
+/// Implements `Default` and `Zeroize`, and zeroizes on drop.
+#[doc(hidden)]
+pub struct AeadNonce<A: Aead>(pub Array<u8, <A::AeadImpl as BaseAeadCore>::NonceSize>);
 
 // We need this for ease of testing
 #[cfg(test)]
@@ -39,10 +39,16 @@ impl<A: Aead> Clone for AeadNonce<A> {
     }
 }
 
-// We use this to get an empty buffer we can read nonce material into
+// We use this to get an empty buffer we can write nonce material into
 impl<A: Aead> Default for AeadNonce<A> {
     fn default() -> AeadNonce<A> {
         AeadNonce(Array::<u8, <A::AeadImpl as BaseAeadCore>::NonceSize>::default())
+    }
+}
+
+impl<A: Aead> Zeroize for AeadNonce<A> {
+    fn zeroize(&mut self) {
+        self.0.zeroize();
     }
 }
 
@@ -53,14 +59,21 @@ impl<A: Aead> Drop for AeadNonce<A> {
     }
 }
 
-pub(crate) struct AeadKey<A: Aead>(
-    pub(crate) Array<u8, <A::AeadImpl as aead::KeySizeUser>::KeySize>,
-);
+/// A struct representing a generic key for an AEAD cipher.
+/// Implements `Default` and `Zeroize`, and zeroizes on drop.
+#[doc(hidden)]
+pub struct AeadKey<A: Aead>(pub Array<u8, <A::AeadImpl as aead::KeySizeUser>::KeySize>);
 
 // We use this to get an empty buffer we can read key material into
 impl<A: Aead> Default for AeadKey<A> {
     fn default() -> AeadKey<A> {
         AeadKey(Array::<u8, <A::AeadImpl as aead::KeySizeUser>::KeySize>::default())
+    }
+}
+
+impl<A: Aead> Zeroize for AeadKey<A> {
+    fn zeroize(&mut self) {
+        self.0.zeroize();
     }
 }
 
@@ -80,8 +93,7 @@ impl<A: Aead> Drop for AeadKey<A> {
 ///    Notably, unlike randomized nonces, counting in sequence doesn't parallelize, so we don't
 ///    have to imagine amortizing this computation across multiple computers. In conclusion, 64
 ///    bits should be enough for anybody.
-#[derive(Clone, Default, Zeroize)]
-#[zeroize(drop)]
+#[derive(Clone, Default, Zeroize, ZeroizeOnDrop)]
 struct Seq(u64);
 
 // RFC 9180 §5.2
