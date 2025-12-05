@@ -1,11 +1,9 @@
 //! Traits and structs for authenticated encryption schemes
 
-#[doc(inline)]
-#[cfg_attr(not(feature = "hazmat-streaming-enc"), doc(hidden))]
-pub use crate::setup::ExporterSecret;
 use crate::{
     kdf::{Kdf as KdfTrait, LabeledExpand, SimpleHkdf},
     kem::Kem as KemTrait,
+    setup::ExporterSecret,
     util::{enforce_equal_len, enforce_outbuf_len, full_suite_id, write_u64_be, FullSuiteId},
     Deserializable, HpkeError, Serializable,
 };
@@ -16,7 +14,7 @@ use aead::{
     inout::InOutBuf, AeadCore as BaseAeadCore, AeadInOut as BaseAeadInOut, KeyInit as BaseKeyInit,
 };
 use hybrid_array::Array;
-use zeroize::Zeroize;
+use zeroize::{Zeroize, ZeroizeOnDrop};
 
 /// Represents authenticated encryption functionality
 pub trait Aead {
@@ -28,22 +26,10 @@ pub trait Aead {
     const AEAD_ID: u16;
 }
 
-/// A nonce is a bytestring you only use for encryption once
-#[cfg_attr(not(feature = "hazmat-streaming-enc"), doc(hidden))]
-pub struct AeadNonce<A: Aead>(pub(crate) Array<u8, <A::AeadImpl as BaseAeadCore>::NonceSize>);
-
-#[cfg(feature = "hazmat-streaming-enc")]
-impl<A: Aead> AeadNonce<A> {
-    /// Return the raw byes of the [`AeadNonce`] as a byte slice.
-    pub fn as_slice(&self) -> &[u8] {
-        self.0.as_slice()
-    }
-
-    /// Return the raw byes of the [`AeadNonce`] as a mutable byte slice.
-    pub fn as_mut_slice(&mut self) -> &mut [u8] {
-        self.0.as_mut_slice()
-    }
-}
+/// A nonce is a bytestring you only use for encryption once.
+/// Implements `Default` and `Zeroize`, and zeroizes on drop.
+#[doc(hidden)]
+pub struct AeadNonce<A: Aead>(pub Array<u8, <A::AeadImpl as BaseAeadCore>::NonceSize>);
 
 // We need this for ease of testing
 #[cfg(test)]
@@ -60,6 +46,12 @@ impl<A: Aead> Default for AeadNonce<A> {
     }
 }
 
+impl<A: Aead> Zeroize for AeadNonce<A> {
+    fn zeroize(&mut self) {
+        self.0.zeroize();
+    }
+}
+
 // Zero out nonces on drop
 impl<A: Aead> Drop for AeadNonce<A> {
     fn drop(&mut self) {
@@ -68,26 +60,20 @@ impl<A: Aead> Drop for AeadNonce<A> {
 }
 
 /// A struct representing a generic key for an AEAD cipher.
-#[cfg_attr(not(feature = "hazmat-streaming-enc"), doc(hidden))]
-pub struct AeadKey<A: Aead>(pub(crate) Array<u8, <A::AeadImpl as aead::KeySizeUser>::KeySize>);
-
-#[cfg(feature = "hazmat-streaming-enc")]
-impl<A: Aead> AeadKey<A> {
-    /// Return the raw byes of the [`AeadKey`] as a byte slice.
-    pub fn as_slice(&self) -> &[u8] {
-        self.0.as_slice()
-    }
-
-    /// Return the raw byes of the [`AeadKey`] as a mutable byte slice.
-    pub fn as_mut_slice(&mut self) -> &mut [u8] {
-        self.0.as_mut_slice()
-    }
-}
+/// Implements `Default` and `Zeroize`, and zeroizes on drop.
+#[doc(hidden)]
+pub struct AeadKey<A: Aead>(pub Array<u8, <A::AeadImpl as aead::KeySizeUser>::KeySize>);
 
 // We use this to get an empty buffer we can read key material into
 impl<A: Aead> Default for AeadKey<A> {
     fn default() -> AeadKey<A> {
         AeadKey(Array::<u8, <A::AeadImpl as aead::KeySizeUser>::KeySize>::default())
+    }
+}
+
+impl<A: Aead> Zeroize for AeadKey<A> {
+    fn zeroize(&mut self) {
+        self.0.zeroize();
     }
 }
 
@@ -107,8 +93,7 @@ impl<A: Aead> Drop for AeadKey<A> {
 ///    Notably, unlike randomized nonces, counting in sequence doesn't parallelize, so we don't
 ///    have to imagine amortizing this computation across multiple computers. In conclusion, 64
 ///    bits should be enough for anybody.
-#[derive(Clone, Default, Zeroize)]
-#[zeroize(drop)]
+#[derive(Clone, Default, Zeroize, ZeroizeOnDrop)]
 struct Seq(u64);
 
 // RFC 9180 §5.2
@@ -486,44 +471,6 @@ impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AeadCtxS<A, Kdf, Kem> {
     }
 }
 
-/// Create a [`AeadCtxS`] from an key, nonce, and exporter secret tripplet.
-///
-/// ⚠️ Warning: Hazmat!
-///
-/// This is a low level API. Only use this if you know what you are doing.
-///
-/// This method is used after the key encapsulation mechanism has created a shared secret.
-/// Usually this doesn't need to be done manually, the [`create_sender_context()`] will create the
-/// shared secret, the [`AeadKey`] and the [`AeadCtxS`] for you.
-///
-/// The method can also be used to create a response context like described in [section
-/// 9.8](https://www.ietf.org/archive/id/draft-ietf-hpke-hpke-02.html#name-bidirectional-encryption)
-/// of the HPKE RFC.
-#[cfg(feature = "hazmat-streaming-enc")]
-pub fn create_sender_context<A: Aead, Kdf: KdfTrait, Kem: KemTrait>(
-    key: &AeadKey<A>,
-    base_nonce: AeadNonce<A>,
-    exporter_secret: ExporterSecret<Kdf>,
-) -> AeadCtxS<A, Kdf, Kem> {
-    AeadCtx::new(key, base_nonce, exporter_secret).into()
-}
-
-/// Create a [`AeadCtxR`] from an key, nonce, and exporter secret tripplet.
-///
-/// ⚠️ Warning: Hazmat!
-///
-/// This is a low level API. Only use this if you know what you are doing.
-///
-/// See the documentation for [`create_sender_context()`] for more info.
-#[cfg(feature = "hazmat-streaming-enc")]
-pub fn create_receiver_context<A: Aead, Kdf: KdfTrait, Kem: KemTrait>(
-    key: &AeadKey<A>,
-    base_nonce: AeadNonce<A>,
-    exporter_secret: ExporterSecret<Kdf>,
-) -> AeadCtxR<A, Kdf, Kem> {
-    AeadCtx::new(key, base_nonce, exporter_secret).into()
-}
-
 // Export all the AEAD implementations
 mod aes_gcm;
 mod chacha20_poly1305;
@@ -538,9 +485,6 @@ mod test {
     use crate::{
         kdf::HkdfSha256, test_util::gen_ctx_simple_pair, Deserializable, HpkeError, Serializable,
     };
-
-    #[cfg(feature = "hazmat-streaming-enc")]
-    use rand::Rng;
 
     /// Tests that AeadKey::from_bytes fails on inputs of incorrect length
     macro_rules! test_invalid_nonce {
@@ -745,68 +689,6 @@ mod test {
         };
     }
 
-    /// Tests that `open()` can decrypt things properly encrypted with `seal()`
-    #[cfg(all(feature = "alloc", feature = "hazmat-streaming-enc"))]
-    macro_rules! test_create_ctx_correctness {
-        ($test_name:ident, $aead_ty:ty, $kem_ty:ty) => {
-            #[test]
-            fn $test_name() {
-                type A = $aead_ty;
-                type Kdf = HkdfSha256;
-                type Kem = $kem_ty;
-
-                let mut rng = rand::rng();
-
-                let mut key = crate::aead::AeadKey::<A>::default();
-                let mut base_nonce = crate::aead::AeadNonce::default();
-                let mut exporter_secret = crate::aead::ExporterSecret::<Kdf>::default();
-
-                rng.fill(key.as_mut_slice());
-                rng.fill(base_nonce.as_mut_slice());
-                rng.fill(exporter_secret.as_mut_slice());
-
-                let mut sender_ctx = crate::aead::create_sender_context::<_, _, Kem>(&key, base_nonce.clone(), exporter_secret.clone());
-                let mut receiver_ctx = crate::aead::create_receiver_context::<_, _, Kem>(&key, base_nonce, exporter_secret);
-
-                let msg = b"Love it or leave it, you better gain way";
-                let aad = b"You better hit bull's eye, the kid don't play";
-
-                // Encrypt in place with the sender context
-                let ciphertext = sender_ctx.seal(msg, aad).expect("seal() failed");
-
-                // Make sure seal() isn't a no-op
-                assert_ne!(&ciphertext, msg);
-
-                // Decrypt with the receiver context
-                let decrypted = receiver_ctx.open(&ciphertext, aad).expect("open() failed");
-                assert_eq!(&decrypted, msg);
-
-                // Now try sending an invalid message followed by a valid message. The valid
-                // message should decrypt correctly
-                let invalid_ciphertext = [0x00; 32];
-                assert!(receiver_ctx.open(&invalid_ciphertext, aad).is_err());
-
-                // Now make sure a round trip succeeds
-                let ciphertext = sender_ctx.seal(msg, aad).expect("second seal() failed");
-
-                // Decrypt with the receiver context
-                let decrypted = receiver_ctx
-                    .open(&ciphertext, aad)
-                    .expect("second open() failed");
-                assert_eq!(&decrypted, msg);
-
-                let mut shared_sender = [0u8; 32];
-                let mut shared_receiver = [0u8; 32];
-
-                sender_ctx.export(b"test", &mut shared_sender).unwrap();
-                receiver_ctx.export(b"test", &mut shared_receiver).unwrap();
-
-                assert_eq!(shared_sender, shared_receiver, "The exported shared secret should be the same between the sender and the receiver");
-                assert_ne!(shared_sender, [0u8; 32]);
-            }
-        };
-    }
-
     test_invalid_nonce!(test_invalid_nonce_aes128, AesGcm128);
     test_invalid_nonce!(test_invalid_nonce_aes256, AesGcm128);
     test_invalid_nonce!(test_invalid_nonce_chacha, ChaCha20Poly1305);
@@ -835,25 +717,6 @@ mod test {
         );
         test_ctx_correctness!(
             test_ctx_correctness_chacha_x25519,
-            ChaCha20Poly1305,
-            crate::kem::X25519HkdfSha256
-        );
-
-        #[cfg(feature = "hazmat-streaming-enc")]
-        test_create_ctx_correctness!(
-            test_create_ctx_correctness_aes128_x25519,
-            AesGcm128,
-            crate::kem::X25519HkdfSha256
-        );
-        #[cfg(feature = "hazmat-streaming-enc")]
-        test_create_ctx_correctness!(
-            test_create_ctx_correctness_aes256_x25519,
-            AesGcm256,
-            crate::kem::X25519HkdfSha256
-        );
-        #[cfg(feature = "hazmat-streaming-enc")]
-        test_create_ctx_correctness!(
-            test_create_ctx_correctness_chacha_x25519,
             ChaCha20Poly1305,
             crate::kem::X25519HkdfSha256
         );
@@ -886,25 +749,6 @@ mod test {
             ChaCha20Poly1305,
             crate::kem::DhP256HkdfSha256
         );
-
-        #[cfg(feature = "hazmat-streaming-enc")]
-        test_create_ctx_correctness!(
-            test_create_ctx_correctness_aes128_p256,
-            AesGcm128,
-            crate::kem::DhP256HkdfSha256
-        );
-        #[cfg(feature = "hazmat-streaming-enc")]
-        test_create_ctx_correctness!(
-            test_create_ctx_correctness_aes256_p256,
-            AesGcm256,
-            crate::kem::DhP256HkdfSha256
-        );
-        #[cfg(feature = "hazmat-streaming-enc")]
-        test_create_ctx_correctness!(
-            test_create_ctx_correctness_chacha_p256,
-            ChaCha20Poly1305,
-            crate::kem::DhP256HkdfSha256
-        );
     }
 
     #[cfg(all(feature = "p384", feature = "alloc"))]
@@ -931,25 +775,6 @@ mod test {
         );
         test_ctx_correctness!(
             test_ctx_correctness_chacha_p384,
-            ChaCha20Poly1305,
-            crate::kem::DhP384HkdfSha384
-        );
-
-        #[cfg(feature = "hazmat-streaming-enc")]
-        test_create_ctx_correctness!(
-            test_create_ctx_correctness_aes128_p384,
-            AesGcm128,
-            crate::kem::DhP384HkdfSha384
-        );
-        #[cfg(feature = "hazmat-streaming-enc")]
-        test_create_ctx_correctness!(
-            test_create_ctx_correctness_aes256_p384,
-            AesGcm256,
-            crate::kem::DhP384HkdfSha384
-        );
-        #[cfg(feature = "hazmat-streaming-enc")]
-        test_create_ctx_correctness!(
-            test_create_ctx_correctness_chacha_p384,
             ChaCha20Poly1305,
             crate::kem::DhP384HkdfSha384
         );

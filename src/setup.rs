@@ -10,21 +10,10 @@ use crate::{
 use rand_core::{CryptoRng, RngCore};
 use zeroize::Zeroize;
 
-/// Secret generated in `derive_enc_ctx` and stored in `AeadCtx`
-pub struct ExporterSecret<K: KdfTrait>(pub(crate) DigestArray<K>);
-
-#[cfg(feature = "hazmat-streaming-enc")]
-impl<K: KdfTrait> ExporterSecret<K> {
-    /// Return the raw byes of the [`ExporterSecret`] as a byte slice.
-    pub fn as_slice(&self) -> &[u8] {
-        self.0.as_slice()
-    }
-
-    /// Return the raw byes of the [`ExporterSecret`] as a mutable byte slice.
-    pub fn as_mut_slice(&mut self) -> &mut [u8] {
-        self.0.as_mut_slice()
-    }
-}
+/// Secret generated in `derive_enc_ctx` and stored in `AeadCtx`.
+/// Implements `Default` and `Zeroize`, and zeroizes on drop.
+#[doc(hidden)]
+pub struct ExporterSecret<K: KdfTrait>(pub DigestArray<K>);
 
 // We use this to get an empty buffer we can read secret bytes into
 impl<K: KdfTrait> Default for ExporterSecret<K> {
@@ -33,9 +22,16 @@ impl<K: KdfTrait> Default for ExporterSecret<K> {
     }
 }
 
+#[cfg(test)]
 impl<K: KdfTrait> Clone for ExporterSecret<K> {
     fn clone(&self) -> ExporterSecret<K> {
         ExporterSecret(self.0.clone())
+    }
+}
+
+impl<K: KdfTrait> Zeroize for ExporterSecret<K> {
+    fn zeroize(&mut self) {
+        self.0.zeroize();
     }
 }
 
