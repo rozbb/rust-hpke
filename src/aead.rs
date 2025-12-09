@@ -493,11 +493,16 @@ pub use crate::aead::{aes_gcm::*, chacha20_poly1305::*, export_only::*};
 
 #[cfg(test)]
 mod test {
-    use super::{AeadTag, AesGcm128, AesGcm256, ChaCha20Poly1305, ExportOnlyAead, Seq};
+    use super::{
+        Aead as AeadTrait, AeadTag, AesGcm128, AesGcm256, BaseAeadCore, ChaCha20Poly1305,
+        ExportOnlyAead, Seq,
+    };
 
     use crate::{
         kdf::HkdfSha256, test_util::gen_ctx_simple_pair, Deserializable, HpkeError, Serializable,
     };
+
+    use hybrid_array::typenum::Unsigned;
 
     /// Tests that AeadKey::from_bytes fails on inputs of incorrect length
     macro_rules! test_invalid_nonce {
@@ -505,6 +510,10 @@ mod test {
             #[test]
             fn $test_name() {
                 type A = $aead_ty;
+
+                // We rely on the fact that every HPKE nonce type is at least 64 bits (hence why Seq
+                // is a u64). Make sure this is true.
+                assert!(<<A as AeadTrait>::AeadImpl as BaseAeadCore>::NonceSize::USIZE >= 8);
 
                 // No AEAD tag is 5 bytes long. This should give an IncorrectInputLength error
                 let tag_res = AeadTag::<A>::from_bytes(&[0; 5]);
