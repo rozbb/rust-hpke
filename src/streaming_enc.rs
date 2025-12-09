@@ -2,6 +2,10 @@
 //! This file exposes the underlying streaming/online encryption primitive defined in the HPKE spec.
 //! Do NOT use this unless you really know what you're doing.
 //!
+//! Also, DO NOT use the same key for two sender contexts or two receiver contexts. Doing this can
+//! lead to reflection attacks, i.e., replaying Alice's message to Alice herself, pretending it came
+//! from Bob.
+//!
 //! Example use:
 //! ```rust
 //! # #[cfg(feature = "alloc")] {
@@ -82,12 +86,11 @@ pub use crate::setup::ExporterSecret;
 /// This is a low-level API. Only use this if you know what you are doing.
 ///
 /// Use this method to set up an online/streaming encryption channel with shared secrets derived via
-/// some key exchange. This is what's done in the HPKE spec, using (hashes of) the KEM shared
-/// secret.
+/// some key exchange. This is what the HPKE spec does when it instantiates a `ContextS` using (a
+/// hash of) the KEM shared secret.
 ///
-/// In particular, this method can also be used to create a response context like described in
-/// [section 9.8](https://www.rfc-editor.org/rfc/rfc9180#name-bidirectional-encryption) of the HPKE
-/// spec.
+/// This method can also be used to create a response context like described in [section
+/// 9.8](https://www.rfc-editor.org/rfc/rfc9180#name-bidirectional-encryption) of the HPKE spec.
 pub fn create_sender_context<A: Aead, Kdf: KdfTrait, Kem: KemTrait>(
     key: &AeadKey<A>,
     base_nonce: AeadNonce<A>,
@@ -144,8 +147,10 @@ mod test {
                 let base_nonce_copy = AeadNonce::<A>(base_nonce.0);
                 let exporter_secret_copy = ExporterSecret::<Kdf>(exporter_secret.0);
 
-                let mut sender_ctx = create_sender_context::<_, _, Kem>(&key, base_nonce_copy, exporter_secret_copy);
-                let mut receiver_ctx = create_receiver_context::<_, _, Kem>(&key, base_nonce, exporter_secret);
+                let mut sender_ctx =
+                    create_sender_context::<_, _, Kem>(&key, base_nonce_copy, exporter_secret_copy);
+                let mut receiver_ctx =
+                    create_receiver_context::<_, _, Kem>(&key, base_nonce, exporter_secret);
 
                 let msg = b"Love it or leave it, you better gain way";
                 let aad = b"You better hit bull's eye, the kid don't play";
@@ -180,7 +185,10 @@ mod test {
                 sender_ctx.export(b"test", &mut shared_sender).unwrap();
                 receiver_ctx.export(b"test", &mut shared_receiver).unwrap();
 
-                assert_eq!(shared_sender, shared_receiver, "The exported shared secret should be the same between the sender and the receiver");
+                assert_eq!(
+                    shared_sender, shared_receiver,
+                    "Sender and receiver don't have the same exported secret"
+                );
                 assert_ne!(shared_sender, [0u8; 32]);
             }
         };

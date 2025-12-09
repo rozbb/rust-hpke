@@ -12,8 +12,12 @@ use zeroize::Zeroize;
 
 /// Secret generated in `derive_enc_ctx` and stored in `AeadCtx`.
 /// Implements `Default` and `Zeroize`, and zeroizes on drop.
+// Only public if we're exposing streaming encryption
+#[cfg(feature = "hazmat-streaming-enc")]
 #[doc(hidden)]
 pub struct ExporterSecret<K: KdfTrait>(pub DigestArray<K>);
+#[cfg(not(feature = "hazmat-streaming-enc"))]
+pub(crate) struct ExporterSecret<K: KdfTrait>(pub(crate) DigestArray<K>);
 
 // We use this to get an empty buffer we can read secret bytes into
 impl<K: KdfTrait> Default for ExporterSecret<K> {

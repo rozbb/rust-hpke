@@ -28,8 +28,14 @@ pub trait Aead {
 
 /// A nonce is a bytestring you only use for encryption once.
 /// Implements `Default` and `Zeroize`, and zeroizes on drop.
+// Only public if we're exposing streaming encryption
+#[cfg(feature = "hazmat-streaming-enc")]
 #[doc(hidden)]
 pub struct AeadNonce<A: Aead>(pub Array<u8, <A::AeadImpl as BaseAeadCore>::NonceSize>);
+#[cfg(not(feature = "hazmat-streaming-enc"))]
+pub(crate) struct AeadNonce<A: Aead>(
+    pub(crate) Array<u8, <A::AeadImpl as BaseAeadCore>::NonceSize>,
+);
 
 // We need this for ease of testing
 #[cfg(test)]
@@ -61,8 +67,14 @@ impl<A: Aead> Drop for AeadNonce<A> {
 
 /// A struct representing a generic key for an AEAD cipher.
 /// Implements `Default` and `Zeroize`, and zeroizes on drop.
+// Only public if we're exposing streaming encryption
+#[cfg(feature = "hazmat-streaming-enc")]
 #[doc(hidden)]
 pub struct AeadKey<A: Aead>(pub Array<u8, <A::AeadImpl as aead::KeySizeUser>::KeySize>);
+#[cfg(not(feature = "hazmat-streaming-enc"))]
+pub(crate) struct AeadKey<A: Aead>(
+    pub(crate) Array<u8, <A::AeadImpl as aead::KeySizeUser>::KeySize>,
+);
 
 // We use this to get an empty buffer we can read key material into
 impl<A: Aead> Default for AeadKey<A> {
@@ -132,7 +144,8 @@ fn mix_nonce<A: Aead>(base_nonce: &AeadNonce<A>, seq: &Seq) -> AeadNonce<A> {
         .zip(seq_buf.0.iter())
         .map(|(nonce_byte, seq_byte)| nonce_byte ^ seq_byte);
 
-    // This cannot fail, as the length of AeadNonce<A> is precisely the length of Seq
+    // This cannot fail, as new_nonce_iter is exactly the length of base_nonce, which is itself an
+    // AeadNonce<A>
     AeadNonce(Array::try_from_iter(new_nonce_iter).unwrap())
 }
 
