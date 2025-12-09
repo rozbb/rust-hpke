@@ -14,7 +14,7 @@ use aead::{
     inout::InOutBuf, AeadCore as BaseAeadCore, AeadInOut as BaseAeadInOut, KeyInit as BaseKeyInit,
 };
 use hybrid_array::Array;
-use zeroize::Zeroize;
+use zeroize::{Zeroize, ZeroizeOnDrop};
 
 /// Represents authenticated encryption functionality
 pub trait Aead {
@@ -26,7 +26,13 @@ pub trait Aead {
     const AEAD_ID: u16;
 }
 
-// A nonce is a bytestring you only use for encryption once
+/// A nonce is a bytestring you only use for encryption once.
+/// Implements `Default` and `Zeroize`, and zeroizes on drop.
+// Only public if we're exposing streaming encryption
+#[cfg(feature = "hazmat-streaming-enc")]
+#[doc(hidden)]
+pub struct AeadNonce<A: Aead>(pub Array<u8, <A::AeadImpl as BaseAeadCore>::NonceSize>);
+#[cfg(not(feature = "hazmat-streaming-enc"))]
 pub(crate) struct AeadNonce<A: Aead>(
     pub(crate) Array<u8, <A::AeadImpl as BaseAeadCore>::NonceSize>,
 );
@@ -39,10 +45,16 @@ impl<A: Aead> Clone for AeadNonce<A> {
     }
 }
 
-// We use this to get an empty buffer we can read nonce material into
+// We use this to get an empty buffer we can write nonce material into
 impl<A: Aead> Default for AeadNonce<A> {
     fn default() -> AeadNonce<A> {
         AeadNonce(Array::<u8, <A::AeadImpl as BaseAeadCore>::NonceSize>::default())
+    }
+}
+
+impl<A: Aead> Zeroize for AeadNonce<A> {
+    fn zeroize(&mut self) {
+        self.0.zeroize();
     }
 }
 
@@ -53,6 +65,13 @@ impl<A: Aead> Drop for AeadNonce<A> {
     }
 }
 
+/// A struct representing a generic key for an AEAD cipher.
+/// Implements `Default` and `Zeroize`, and zeroizes on drop.
+// Only public if we're exposing streaming encryption
+#[cfg(feature = "hazmat-streaming-enc")]
+#[doc(hidden)]
+pub struct AeadKey<A: Aead>(pub Array<u8, <A::AeadImpl as aead::KeySizeUser>::KeySize>);
+#[cfg(not(feature = "hazmat-streaming-enc"))]
 pub(crate) struct AeadKey<A: Aead>(
     pub(crate) Array<u8, <A::AeadImpl as aead::KeySizeUser>::KeySize>,
 );
@@ -61,6 +80,12 @@ pub(crate) struct AeadKey<A: Aead>(
 impl<A: Aead> Default for AeadKey<A> {
     fn default() -> AeadKey<A> {
         AeadKey(Array::<u8, <A::AeadImpl as aead::KeySizeUser>::KeySize>::default())
+    }
+}
+
+impl<A: Aead> Zeroize for AeadKey<A> {
+    fn zeroize(&mut self) {
+        self.0.zeroize();
     }
 }
 
@@ -80,8 +105,7 @@ impl<A: Aead> Drop for AeadKey<A> {
 ///    Notably, unlike randomized nonces, counting in sequence doesn't parallelize, so we don't
 ///    have to imagine amortizing this computation across multiple computers. In conclusion, 64
 ///    bits should be enough for anybody.
-#[derive(Clone, Default, Zeroize)]
-#[zeroize(drop)]
+#[derive(Clone, Default, Zeroize, ZeroizeOnDrop)]
 struct Seq(u64);
 
 // RFC 9180 §5.2
@@ -120,7 +144,8 @@ fn mix_nonce<A: Aead>(base_nonce: &AeadNonce<A>, seq: &Seq) -> AeadNonce<A> {
         .zip(seq_buf.0.iter())
         .map(|(nonce_byte, seq_byte)| nonce_byte ^ seq_byte);
 
-    // This cannot fail, as the length of AeadNonce<A> is precisely the length of Seq
+    // This cannot fail, as new_nonce_iter is exactly the length of base_nonce, which is itself an
+    // AeadNonce<A>
     AeadNonce(Array::try_from_iter(new_nonce_iter).unwrap())
 }
 
@@ -468,11 +493,16 @@ pub use crate::aead::{aes_gcm::*, chacha20_poly1305::*, export_only::*};
 
 #[cfg(test)]
 mod test {
-    use super::{AeadTag, AesGcm128, AesGcm256, ChaCha20Poly1305, ExportOnlyAead, Seq};
+    use super::{
+        Aead as AeadTrait, AeadTag, AesGcm128, AesGcm256, BaseAeadCore, ChaCha20Poly1305,
+        ExportOnlyAead, Seq,
+    };
 
     use crate::{
         kdf::HkdfSha256, test_util::gen_ctx_simple_pair, Deserializable, HpkeError, Serializable,
     };
+
+    use hybrid_array::typenum::Unsigned;
 
     /// Tests that AeadKey::from_bytes fails on inputs of incorrect length
     macro_rules! test_invalid_nonce {
@@ -480,6 +510,10 @@ mod test {
             #[test]
             fn $test_name() {
                 type A = $aead_ty;
+
+                // We rely on the fact that every HPKE nonce type is at least 64 bits (hence why Seq
+                // is a u64). Make sure this is true.
+                assert!(<<A as AeadTrait>::AeadImpl as BaseAeadCore>::NonceSize::USIZE >= 8);
 
                 // No AEAD tag is 5 bytes long. This should give an IncorrectInputLength error
                 let tag_res = AeadTag::<A>::from_bytes(&[0; 5]);
