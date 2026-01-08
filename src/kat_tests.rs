@@ -87,6 +87,19 @@ impl TestableKem for DhP521HkdfSha512 {
     }
 }
 
+// Dummy impl. We don't support encap-with-seed yet
+impl TestableKem for XWing {
+    type EphemeralKey = <X25519HkdfSha256 as KemTrait>::PrivateKey;
+
+    fn encap_with_eph(
+        pk_recip: &Self::PublicKey,
+        sender_id_keypair: Option<(&Self::PrivateKey, &Self::PublicKey)>,
+        sk_eph: Self::EphemeralKey,
+    ) -> Result<(SharedSecret<Self>, Self::EncappedKey), HpkeError> {
+        unimplemented!()
+    }
+}
+
 /// Asserts that the given serializable values are equal
 macro_rules! assert_serializable_eq {
     ($a:expr, $b:expr, $args:tt) => {
@@ -395,6 +408,7 @@ fn kat_test() {
             && tv.kem_id != DhP256HkdfSha256::KEM_ID
             && tv.kem_id != DhP384HkdfSha384::KEM_ID
             && tv.kem_id != DhP521HkdfSha512::KEM_ID
+            && tv.kem_id != XWing::KEM_ID
         {
             continue;
         }
@@ -408,7 +422,8 @@ fn kat_test() {
                 X25519HkdfSha256,
                 DhP256HkdfSha256,
                 DhP384HkdfSha384,
-                DhP521HkdfSha512
+                DhP521HkdfSha512,
+                XWing
             )
         );
 
