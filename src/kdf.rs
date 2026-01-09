@@ -7,7 +7,7 @@ use hmac::EagerHash;
 use hybrid_array::Array;
 use sha2::{Sha256, Sha384, Sha512};
 
-const VERSION_LABEL: &[u8] = b"HPKE-v1";
+pub(crate) const VERSION_LABEL: &[u8] = b"HPKE-v1";
 
 // This is the maximum value of Nh. It is achieved by HKDF-SHA512 in RFC 9180 §7.2.
 pub(crate) const MAX_DIGEST_SIZE: usize = 64;

@@ -402,8 +402,8 @@ fn kat_test() {
     };
 
     for tv in ref_tvs.into_iter().chain(pq_tvs.into_iter()) {
-        // Ignore everything that doesn't use X25519, P256, P384 or P521, since that's all we support
-        // right now
+        // Ignore everything that doesn't use X25519, P256, P384, P521, or XWing, since that's all
+        // we support right now
         if tv.kem_id != X25519HkdfSha256::KEM_ID
             && tv.kem_id != DhP256HkdfSha256::KEM_ID
             && tv.kem_id != DhP384HkdfSha384::KEM_ID

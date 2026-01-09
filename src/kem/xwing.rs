@@ -1,11 +1,18 @@
-//! Implemented as per https://datatracker.ietf.org/doc/draft-connolly-cfrg-xwing-kem/
+//! Implemented as per https://filippo.io/hpke-pq, which itself derives from
+//! https://datatracker.ietf.org/doc/html/draft-ietf-hpke-pq-03
 
-use alloc::borrow::ToOwned;
 use digest::{ExtendableOutput, Update, XofReader};
 use rand_core::{CryptoRng, RngCore};
+use sha3::Shake256;
+use x_wing::DECAPSULATION_KEY_SIZE;
 
-use crate::{kem::KemTrait, Deserializable, Serializable};
-use hybrid_array::typenum::{self, Prod, Sum, U1024, U3, U32, U64};
+use crate::{
+    kdf::VERSION_LABEL,
+    kem::KemTrait,
+    util::{kem_suite_id, write_u16_be, KemSuiteId},
+    Deserializable, Serializable,
+};
+use hybrid_array::typenum::{Prod, Sum, U1024, U3, U32, U64};
 use kem::Encapsulate;
 
 // Type-level size constants for X-Wing
@@ -117,18 +124,18 @@ impl KemTrait for XWing {
         )
     }
 
-    // Draft-connolly-cfrg-xwing-kem Section 5.6
+    /// DeriveKeyPair from
+    /// https://github.com/FiloSottile/hpke/blob/8aa8a04dacd2fb6d7c40e16c3d57037d4eb5e659/hpke-pq.md#kem-functions
     //
     // def DeriveKeyPair(ikm):
-    //   # Extract 32-byte seed from variable-length ikm using SHAKE.
-    //   sk = SHAKE256(ikm, 32*8)
-    //   return GenerateKeyPairDerand(sk)
+    //     seed = SHAKE256.LabeledDerive(ikm, "DeriveKeyPair", "", Nsk)
+    //     ek_PQ, ek_T, _, _ = expandKey(seed)
+    //     ek = ek_PQ || ek_T
+    //     return (seed, ek)
     fn derive_keypair(ikm: &[u8]) -> (Self::PrivateKey, Self::PublicKey) {
-        let mut hasher = sha3::Shake256::default();
-        hasher.update(ikm);
-        let mut reader = hasher.finalize_xof();
-        let mut sk = [0u8; x_wing::DECAPSULATION_KEY_SIZE];
-        reader.read(&mut sk);
+        let suite_id = kem_suite_id::<Self>();
+        let mut sk = [0u8; DECAPSULATION_KEY_SIZE];
+        shake256_labeled_derive(suite_id, ikm, b"DeriveKeyPair", b"", &mut sk);
 
         let sk = x_wing::DecapsulationKey::from(sk);
         (
@@ -165,6 +172,48 @@ impl KemTrait for XWing {
         let (ct, ss) = pk.encapsulate_with_rng(csprng).expect("infallible");
         Ok((super::SharedSecret(ss.into()), EncappedKey(ct.to_bytes())))
     }
+}
+
+/// SHAKE256.LabeledDerive function from
+/// https://github.com/FiloSottile/hpke/blob/8aa8a04dacd2fb6d7c40e16c3d57037d4eb5e659/hpke-pq.md#shake256labeledderive
+///
+/// Does some domain separation, hashes in all the data, and writes to `out` until `out` is filled
+/// with new bytes.
+//
+// def SHAKE256.LabeledDerive(ikm, label, context, L):
+//   suite_id = concat("KEM", I2OSP(kem_id, 2))
+//   prefixed_label = I2OSP(len(label), 2) || label
+//   labeled_ikm = ikm || "HPKE-v1" || suite_id || prefixed_label || I2OSP(L, 2) || context
+//   return SHAKE256(labeled_ikm, L)
+fn shake256_labeled_derive(
+    suite_id: KemSuiteId,
+    ikm: &[u8],
+    label: &[u8],
+    context: &[u8],
+    out: &mut [u8],
+) {
+    // Encode the label and output buffer lengths
+    let label_len = {
+        let mut buf = [0u8; 2];
+        write_u16_be(&mut buf, label.len() as u16);
+        buf
+    };
+    let out_len = {
+        let mut buf = [0u8; 2];
+        write_u16_be(&mut buf, out.len() as u16);
+        buf
+    };
+
+    Shake256::default()
+        .chain(ikm)
+        .chain(VERSION_LABEL)
+        .chain(suite_id)
+        .chain(label_len)
+        .chain(label)
+        .chain(out_len)
+        .chain(context)
+        .finalize_xof()
+        .read(out)
 }
 
 #[cfg(test)]
