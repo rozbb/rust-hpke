@@ -16,7 +16,7 @@ macro_rules! impl_dhkem {
         pub(crate) mod $mod_name {
             use crate::{
                 dhkex::{DhKeyExchange, MAX_PUBKEY_SIZE},
-                kdf::{extract_and_expand, Kdf as KdfTrait},
+                kdf::Kdf as KdfTrait,
                 kem::{Kem as KemTrait, SharedSecret},
                 util::{enforce_outbuf_len, kem_suite_id},
                 Deserializable, HpkeError, Serializable,
@@ -155,7 +155,7 @@ macro_rules! impl_dhkem {
                     // 255x the digest size of the hash function. Since these values are fixed at
                     // compile time, we don't worry about it.
                     let mut buf = <SharedSecret<$kem_name> as Default>::default();
-                    extract_and_expand::<$kdf>(concatted_secrets, &suite_id, kem_context, &mut buf.0)
+                    <$kdf>::extract_and_expand(concatted_secrets, &suite_id, kem_context, &mut buf.0)
                         .expect("shared secret is way too big");
                     buf
                 } else {
@@ -174,7 +174,7 @@ macro_rules! impl_dhkem {
                     // output values are 255x the digest size of the hash function. Since these
                     // values are fixed at compile time, we don't worry about it.
                     let mut buf = <SharedSecret<$kem_name> as Default>::default();
-                    extract_and_expand::<$kdf>(
+                    <$kdf>::extract_and_expand(
                         &kex_res_eph.to_bytes(),
                         &suite_id,
                         kem_context,
@@ -312,7 +312,7 @@ macro_rules! impl_dhkem {
                         // 255x the digest size of the hash function. Since these values are fixed at
                         // compile time, we don't worry about it.
                         let mut shared_secret = <SharedSecret<Self> as Default>::default();
-                        extract_and_expand::<$kdf>(
+                        <$kdf>::extract_and_expand(
                             concatted_secrets,
                             &suite_id,
                             kem_context,
@@ -336,7 +336,7 @@ macro_rules! impl_dhkem {
                         // output values are 255x the digest size of the hash function. Since these
                         // values are fixed at compile time, we don't worry about it.
                         let mut shared_secret = <SharedSecret<Self> as Default>::default();
-                        extract_and_expand::<$kdf>(
+                        <$kdf>::extract_and_expand(
                             &kex_res_eph.to_bytes(),
                             &suite_id,
                             kem_context,

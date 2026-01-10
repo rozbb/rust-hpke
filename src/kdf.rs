@@ -1,18 +1,20 @@
 //! Traits and structs for key derivation functions
 
 use crate::{
-    aead::{Aead, AeadCtx, AeadKey},
+    aead::{Aead, AeadCtx},
     kem::{Kem as KemTrait, SharedSecret},
     op_mode::OpMode,
     setup::ExporterSecret,
     util::{full_suite_id, write_u16_be, FullSuiteId, KemSuiteId},
 };
 
-use aead::KeySizeUser;
 use digest::{Digest, ExtendableOutput, OutputSizeUser, XofReader};
+use hkdf::{Hkdf, HkdfExtract};
 use hmac::EagerHash;
-use hybrid_array::{typenum::Unsigned, Array, ArraySize};
-use p256::elliptic_curve::generic_array::ArrayLength;
+use hybrid_array::{
+    typenum::{U32, U48, U64},
+    Array, ArraySize,
+};
 use sha2::{Sha256, Sha384, Sha512};
 
 pub(crate) const VERSION_LABEL: &[u8] = b"HPKE-v1";
@@ -30,6 +32,7 @@ pub trait Kdf: Sized {
 
     /// The algorithm identifier for a KDF implementation
     const KDF_ID: u16;
+    type Nh: ArraySize;
 
     #[doc(hidden)]
     fn combine_secrets<A, Kem, O>(
@@ -41,16 +44,34 @@ pub trait Kdf: Sized {
         A: Aead,
         Kem: KemTrait,
         O: OpMode<Kem>;
+
+    fn extract_and_expand(
+        ikm: &[u8],
+        suite_id: &[u8],
+        info: &[u8],
+        out: &mut [u8],
+    ) -> Result<(), hkdf::InvalidLength>;
+
+    /// Derives 32 bytes for use as an X25519 secret key
+    fn derive_candidate_nocounter(suite_id: &KemSuiteId, ikm: &[u8]) -> [u8; 32];
+
+    /// Derives bytes for a use as a P256/P384/P521 secret key. Counter is because it may require
+    /// multiple attempts to find a valid secret key.
+    fn derive_candidate<PrivateKeySize: ArraySize>(
+        suite_id: &KemSuiteId,
+        ikm: &[u8],
+        counter: u8,
+    ) -> Array<u8, PrivateKeySize>;
 }
 
 // We use Kdf as a type parameter, so this is to avoid ambiguity.
 use Kdf as KdfTrait;
 
 // Convenience types for the functions below
-pub(crate) type DigestArray<Kdf> =
-    Array<u8, <<<Kdf as KdfTrait>::HashImpl as EagerHash>::Core as OutputSizeUser>::OutputSize>;
+//pub(crate) type DigestArray<Kdf> =
+//    Array<u8, <<<Kdf as KdfTrait>::HashImpl as EagerHash>::Core as OutputSizeUser>::OutputSize>;
+pub(crate) type DigestArray<Kdf> = Array<u8, <Kdf as KdfTrait>::Nh>;
 pub(crate) type SimpleHkdf<Kdf> = hkdf::Hkdf<<Kdf as KdfTrait>::HashImpl>;
-type SimpleHkdfExtract<Kdf> = hkdf::HkdfExtract<<Kdf as KdfTrait>::HashImpl>;
 
 /// The implementation of HKDF-SHA256
 pub struct HkdfSha256 {}
@@ -61,6 +82,7 @@ impl KdfTrait for HkdfSha256 {
 
     // RFC 9180 §7.2: HKDF-SHA256
     const KDF_ID: u16 = 0x0001;
+    type Nh = U32;
 
     fn combine_secrets<A, Kem, O>(
         mode: &O,
@@ -72,7 +94,28 @@ impl KdfTrait for HkdfSha256 {
         Kem: KemTrait,
         O: OpMode<Kem>,
     {
-        combine_secrets_two_stage(mode, shared_secret, info)
+        combine_secrets_two_stage::<_, Self::HashImpl, _, _, _>(mode, shared_secret, info)
+    }
+
+    fn extract_and_expand(
+        ikm: &[u8],
+        suite_id: &[u8],
+        info: &[u8],
+        out: &mut [u8],
+    ) -> Result<(), hkdf::InvalidLength> {
+        extract_and_expand_two_stage::<Self::HashImpl>(ikm, suite_id, info, out)
+    }
+
+    fn derive_candidate_nocounter(suite_id: &KemSuiteId, ikm: &[u8]) -> [u8; 32] {
+        derive_candidate_nocounter_two_stage::<Self::HashImpl>(suite_id, ikm)
+    }
+
+    fn derive_candidate<PrivateKeySize: ArraySize>(
+        suite_id: &KemSuiteId,
+        ikm: &[u8],
+        counter: u8,
+    ) -> Array<u8, PrivateKeySize> {
+        derive_candidate_two_stage::<Self::HashImpl, PrivateKeySize>(suite_id, ikm, counter)
     }
 }
 
@@ -85,6 +128,7 @@ impl KdfTrait for HkdfSha384 {
 
     // RFC 9180 §7.2: HKDF-SHA384
     const KDF_ID: u16 = 0x0002;
+    type Nh = U48;
 
     fn combine_secrets<A, Kem, O>(
         mode: &O,
@@ -96,7 +140,28 @@ impl KdfTrait for HkdfSha384 {
         Kem: KemTrait,
         O: OpMode<Kem>,
     {
-        combine_secrets_two_stage(mode, shared_secret, info)
+        combine_secrets_two_stage::<_, Self::HashImpl, _, _, _>(mode, shared_secret, info)
+    }
+
+    fn extract_and_expand(
+        ikm: &[u8],
+        suite_id: &[u8],
+        info: &[u8],
+        out: &mut [u8],
+    ) -> Result<(), hkdf::InvalidLength> {
+        extract_and_expand_two_stage::<Self::HashImpl>(ikm, suite_id, info, out)
+    }
+
+    fn derive_candidate_nocounter(suite_id: &KemSuiteId, ikm: &[u8]) -> [u8; 32] {
+        derive_candidate_nocounter_two_stage::<Self::HashImpl>(suite_id, ikm)
+    }
+
+    fn derive_candidate<PrivateKeySize: ArraySize>(
+        suite_id: &KemSuiteId,
+        ikm: &[u8],
+        counter: u8,
+    ) -> Array<u8, PrivateKeySize> {
+        derive_candidate_two_stage::<Self::HashImpl, PrivateKeySize>(suite_id, ikm, counter)
     }
 }
 
@@ -109,6 +174,7 @@ impl KdfTrait for HkdfSha512 {
 
     // RFC 9180 §7.2: HKDF-SHA512
     const KDF_ID: u16 = 0x0003;
+    type Nh = U64;
 
     fn combine_secrets<A, Kem, O>(
         mode: &O,
@@ -120,7 +186,28 @@ impl KdfTrait for HkdfSha512 {
         Kem: KemTrait,
         O: OpMode<Kem>,
     {
-        combine_secrets_two_stage(mode, shared_secret, info)
+        combine_secrets_two_stage::<_, Self::HashImpl, _, _, _>(mode, shared_secret, info)
+    }
+
+    fn extract_and_expand(
+        ikm: &[u8],
+        suite_id: &[u8],
+        info: &[u8],
+        out: &mut [u8],
+    ) -> Result<(), hkdf::InvalidLength> {
+        extract_and_expand_two_stage::<Self::HashImpl>(ikm, suite_id, info, out)
+    }
+
+    fn derive_candidate_nocounter(suite_id: &KemSuiteId, ikm: &[u8]) -> [u8; 32] {
+        derive_candidate_nocounter_two_stage::<Self::HashImpl>(suite_id, ikm)
+    }
+
+    fn derive_candidate<PrivateKeySize: ArraySize>(
+        suite_id: &KemSuiteId,
+        ikm: &[u8],
+        counter: u8,
+    ) -> Array<u8, PrivateKeySize> {
+        derive_candidate_two_stage::<Self::HashImpl, PrivateKeySize>(suite_id, ikm, counter)
     }
 }
 
@@ -132,18 +219,36 @@ impl KdfTrait for HkdfSha512 {
 //   return shared_secret
 
 /// Uses the given IKM to extract a secret, and then uses that secret, plus the given suite ID and
-/// info string, to expand to the output buffer
+/// info string, to expand to the output buffer. Uses HKDF rather than XOF.
 #[doc(hidden)]
-pub fn extract_and_expand<Kdf: KdfTrait>(
+fn extract_and_expand_two_stage<H>(
     ikm: &[u8],
     suite_id: &[u8],
     info: &[u8],
     out: &mut [u8],
-) -> Result<(), hkdf::InvalidLength> {
+) -> Result<(), hkdf::InvalidLength>
+where
+    H: Clone + Digest + EagerHash,
+{
     // Extract using given IKM
-    let (_, hkdf_ctx) = labeled_extract::<Kdf>(&[], suite_id, b"eae_prk", ikm);
+    let (_, hkdf_ctx) = labeled_extract::<H>(&[], suite_id, b"eae_prk", ikm);
     // Expand using given info string
     hkdf_ctx.labeled_expand(suite_id, b"shared_secret", info, out)
+}
+
+// §4.1 in https://datatracker.ietf.org/doc/html/draft-ietf-hpke-hpke-02
+//
+// def ExtractAndExpand_OneStage(dh, kem_context):
+//   return LabeledDerive(dh, "shared_secret", kem_context, Nsecret)
+
+/// Uses the given IKM to extract a secret, and then uses that secret, plus the given suite ID and
+/// info string, to expand to the output buffer. Uses XOF rather  than HKDF.
+#[doc(hidden)]
+fn extract_and_expand_one_stage<H>(ikm: &[u8], suite_id: &[u8], info: &[u8], out: &mut [u8])
+where
+    H: ExtendableOutput + Default + XofReader,
+{
+    labeled_derive::<H>(suite_id, &[ikm], b"shared_secret", &[info], out)
 }
 
 // RFC 9180 §4
@@ -153,14 +258,23 @@ pub fn extract_and_expand<Kdf: KdfTrait>(
 
 /// Returns the HKDF context derived from `(salt=salt, ikm="HPKE-v1"||suite_id||label||ikm)`
 #[doc(hidden)]
-pub fn labeled_extract<Kdf: KdfTrait>(
+fn labeled_extract<H: Digest>(
     salt: &[u8],
     suite_id: &[u8],
     label: &[u8],
     ikm: &[u8],
-) -> (DigestArray<Kdf>, SimpleHkdf<Kdf>) {
+) -> (
+    Array<u8, <<H as EagerHash>::Core as OutputSizeUser>::OutputSize>,
+    Hkdf<H>,
+)
+where
+    H: Clone + Digest + EagerHash,
+    //Kdf: KdfTrait<
+    //    Nh = <<<Kdf as KdfTrait>::HashImpl as EagerHash>::Core as OutputSizeUser>::OutputSize,
+    //>,
+{
     // Call HKDF-Extract with the IKM being the concatenation of all of the above
-    let mut extract_ctx = SimpleHkdfExtract::<Kdf>::new(Some(salt));
+    let mut extract_ctx = HkdfExtract::<H>::new(Some(salt));
     extract_ctx.input_ikm(VERSION_LABEL);
     extract_ctx.input_ikm(suite_id);
     extract_ctx.input_ikm(label);
@@ -250,7 +364,7 @@ fn buf_len_u16(buf: &[u8]) -> [u8; 2] {
 /// # Panics
 /// Panics if `label.len()` ≥ 2¹⁶ or `out.len()` ≥ 2¹⁶.
 fn labeled_derive<H>(
-    suite_id: &FullSuiteId,
+    suite_id: &[u8],
     ikm: &[&[u8]],
     label: &[u8],
     context: &[&[u8]],
@@ -276,13 +390,14 @@ fn labeled_derive<H>(
 
 // This is the KeySchedule function. It runs a KDF over all the parameters, inputs, and secrets,
 // and spits out a key-nonce pair to be used for symmetric encryption.
-fn combine_secrets_two_stage<A, Kdf, Kem, O>(
+fn combine_secrets_two_stage<A, H, Kdf, Kem, O>(
     mode: &O,
     shared_secret: SharedSecret<Kem>,
     info: &[u8],
 ) -> AeadCtx<A, Kdf, Kem>
 where
     A: Aead,
+    H: Clone + Digest + EagerHash,
     Kdf: KdfTrait,
     Kem: KemTrait,
     O: OpMode<Kem>,
@@ -299,8 +414,8 @@ where
     // taking the appropriately sized slice.
     let (sched_context_buf, sched_context_size) = {
         let (psk_id_hash, _) =
-            labeled_extract::<Kdf>(&[], &suite_id, b"psk_id_hash", mode.get_psk_id());
-        let (info_hash, _) = labeled_extract::<Kdf>(&[], &suite_id, b"info_hash", info);
+            labeled_extract::<H>(&[], &suite_id, b"psk_id_hash", mode.get_psk_id());
+        let (info_hash, _) = labeled_extract::<H>(&[], &suite_id, b"info_hash", info);
 
         // Yes it's overkill to bound the first input by MAX_DIGEST_SIZE, since it's only 1 byte.
         // But whatever, this is pretty clean.
@@ -321,7 +436,7 @@ where
     // Instead of `secret` we derive an HKDF context which we run .expand() on to derive the
     // key-nonce pair.
     let (_, secret_ctx) =
-        labeled_extract::<Kdf>(&shared_secret.0, &suite_id, b"secret", mode.get_psk_bytes());
+        labeled_extract::<H>(&shared_secret.0, &suite_id, b"secret", mode.get_psk_bytes());
 
     // Empty fixed-size buffers
     let mut key = crate::aead::AeadKey::<A>::default();
@@ -413,7 +528,7 @@ where
     // The max number of bytes we need from the XOF is Nk + Nn + Nh, with the max such values. This
     // is 108
     let mut digest = [0u8; 32 + 12 + 64];
-    labeled_derive::<H>(&suite_id, secrets, b"secret", context, &mut digest);
+    labeled_derive::<H>(suite_id, secrets, b"secret", context, &mut digest);
 
     let mut key = crate::aead::AeadKey::<A>::default();
     let key_len = key.0.len();
@@ -445,12 +560,12 @@ where
 //   return (sk, pk(sk))
 
 /// Derive secret key bytes for x25519 using a two-stage KDF
-pub(crate) fn derive_candidate_nocounter_two_stage<Kdf: KdfTrait>(
-    suite_id: &KemSuiteId,
-    ikm: &[u8],
-) -> [u8; 32] {
+fn derive_candidate_nocounter_two_stage<H>(suite_id: &KemSuiteId, ikm: &[u8]) -> [u8; 32]
+where
+    H: Clone + Digest + EagerHash,
+{
     // Write the label into a byte buffer and extract from the IKM
-    let (_, hkdf_ctx) = labeled_extract::<Kdf>(&[], suite_id, b"dkp_prk", ikm);
+    let (_, hkdf_ctx) = labeled_extract::<H>(&[], suite_id, b"dkp_prk", ikm);
     // The buffer we hold the candidate scalar bytes in. This is the size of a private key.
     let mut buf = [0u8; 32];
     hkdf_ctx
@@ -477,17 +592,17 @@ pub(crate) fn derive_candidate_nocounter_two_stage<Kdf: KdfTrait>(
 // where `bitmask` is defined to be 0xFF for P-256 and P-384, and 0x01 for P-521
 
 /// Derive candidate secret key bytes for p256/p384/p521 using a two-stage KDF
-pub(crate) fn derive_candidate_two_stage<Kdf, PrivateKeySize>(
+fn derive_candidate_two_stage<H, PrivateKeySize>(
     suite_id: &KemSuiteId,
     ikm: &[u8],
     counter: u8,
 ) -> Array<u8, PrivateKeySize>
 where
-    Kdf: KdfTrait,
+    H: Clone + Digest + EagerHash,
     PrivateKeySize: ArraySize,
 {
     // Write the label into a byte buffer and extract from the IKM
-    let (_, hkdf_ctx) = labeled_extract::<Kdf>(&[], suite_id, b"dkp_prk", ikm);
+    let (_, hkdf_ctx) = labeled_extract::<H>(&[], suite_id, b"dkp_prk", ikm);
 
     // The buffer we hold the candidate scalar bytes in. This is the size of a
     // private key.

@@ -14,7 +14,7 @@ macro_rules! nistp_dhkex {
 
             use crate::{
                 dhkex::{DhError, DhKeyExchange},
-                kdf::{derive_candidate_two_stage, Kdf as KdfTrait},
+                kdf::Kdf as KdfTrait,
                 util::{enforce_equal_len, enforce_outbuf_len, KemSuiteId},
                 Deserializable, HpkeError, Serializable,
             };
@@ -202,7 +202,7 @@ macro_rules! nistp_dhkex {
                     // Try to generate a key 256 times. Practically, this will succeed and return
                     // early on the first iteration.
                     for counter in 0u8..=255 {
-                        let mut candidate_bytes = derive_candidate_two_stage::<Kdf, PrivateKeySize>(
+                        let mut candidate_bytes = Kdf::derive_candidate::<PrivateKeySize>(
                             suite_id,
                             ikm,
                             counter,
