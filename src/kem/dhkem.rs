@@ -195,7 +195,7 @@ macro_rules! impl_dhkem {
 
                 /// The size of the shared secret at the end of the key exchange process
                 #[doc(hidden)]
-                type NSecret = <<$kdf as KdfTrait>::HashImpl as OutputSizeUser>::OutputSize;
+                type NSecret = <$kdf as KdfTrait>::Nh;
 
                 type PublicKey = PublicKey;
                 type PrivateKey = PrivateKey;

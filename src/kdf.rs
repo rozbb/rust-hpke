@@ -6,6 +6,7 @@ use crate::{
     op_mode::OpMode,
     setup::ExporterSecret,
     util::{full_suite_id, write_u16_be, FullSuiteId, KemSuiteId},
+    HpkeError,
 };
 
 use digest::{Digest, ExtendableOutput, OutputSizeUser, XofReader};
@@ -26,10 +27,6 @@ pub(crate) const MAX_DIGEST_SIZE: usize = 64;
 
 /// Represents key derivation functionality
 pub trait Kdf: Sized {
-    /// The underlying hash function
-    #[doc(hidden)]
-    type HashImpl: Clone + Digest + EagerHash;
-
     /// The algorithm identifier for a KDF implementation
     const KDF_ID: u16;
     type Nh: ArraySize;
@@ -62,6 +59,14 @@ pub trait Kdf: Sized {
         ikm: &[u8],
         counter: u8,
     ) -> Array<u8, PrivateKeySize>;
+
+    /// Constructs the export secret of an encryption context
+    fn export(
+        exporter_secret: &[u8],
+        suite_id: &[u8],
+        exporter_ctx: &[u8],
+        out_buf: &mut [u8],
+    ) -> Result<(), HpkeError>;
 }
 
 // We use Kdf as a type parameter, so this is to avoid ambiguity.
@@ -71,15 +76,11 @@ use Kdf as KdfTrait;
 //pub(crate) type DigestArray<Kdf> =
 //    Array<u8, <<<Kdf as KdfTrait>::HashImpl as EagerHash>::Core as OutputSizeUser>::OutputSize>;
 pub(crate) type DigestArray<Kdf> = Array<u8, <Kdf as KdfTrait>::Nh>;
-pub(crate) type SimpleHkdf<Kdf> = hkdf::Hkdf<<Kdf as KdfTrait>::HashImpl>;
 
 /// The implementation of HKDF-SHA256
 pub struct HkdfSha256 {}
 
 impl KdfTrait for HkdfSha256 {
-    #[doc(hidden)]
-    type HashImpl = Sha256;
-
     // RFC 9180 §7.2: HKDF-SHA256
     const KDF_ID: u16 = 0x0001;
     type Nh = U32;
@@ -94,7 +95,7 @@ impl KdfTrait for HkdfSha256 {
         Kem: KemTrait,
         O: OpMode<Kem>,
     {
-        combine_secrets_two_stage::<_, Self::HashImpl, _, _, _>(mode, shared_secret, info)
+        combine_secrets_two_stage::<_, Sha256, _, _, _>(mode, shared_secret, info)
     }
 
     fn extract_and_expand(
@@ -103,11 +104,11 @@ impl KdfTrait for HkdfSha256 {
         info: &[u8],
         out: &mut [u8],
     ) -> Result<(), hkdf::InvalidLength> {
-        extract_and_expand_two_stage::<Self::HashImpl>(ikm, suite_id, info, out)
+        extract_and_expand_two_stage::<Sha256>(ikm, suite_id, info, out)
     }
 
     fn derive_candidate_nocounter(suite_id: &KemSuiteId, ikm: &[u8]) -> [u8; 32] {
-        derive_candidate_nocounter_two_stage::<Self::HashImpl>(suite_id, ikm)
+        derive_candidate_nocounter_two_stage::<Sha256>(suite_id, ikm)
     }
 
     fn derive_candidate<PrivateKeySize: ArraySize>(
@@ -115,7 +116,16 @@ impl KdfTrait for HkdfSha256 {
         ikm: &[u8],
         counter: u8,
     ) -> Array<u8, PrivateKeySize> {
-        derive_candidate_two_stage::<Self::HashImpl, PrivateKeySize>(suite_id, ikm, counter)
+        derive_candidate_two_stage::<Sha256, PrivateKeySize>(suite_id, ikm, counter)
+    }
+
+    fn export(
+        exporter_secret: &[u8],
+        suite_id: &[u8],
+        exporter_ctx: &[u8],
+        out_buf: &mut [u8],
+    ) -> Result<(), HpkeError> {
+        export_two_stage::<Sha256>(exporter_secret, suite_id, exporter_ctx, out_buf)
     }
 }
 
@@ -123,9 +133,6 @@ impl KdfTrait for HkdfSha256 {
 pub struct HkdfSha384 {}
 
 impl KdfTrait for HkdfSha384 {
-    #[doc(hidden)]
-    type HashImpl = Sha384;
-
     // RFC 9180 §7.2: HKDF-SHA384
     const KDF_ID: u16 = 0x0002;
     type Nh = U48;
@@ -140,7 +147,7 @@ impl KdfTrait for HkdfSha384 {
         Kem: KemTrait,
         O: OpMode<Kem>,
     {
-        combine_secrets_two_stage::<_, Self::HashImpl, _, _, _>(mode, shared_secret, info)
+        combine_secrets_two_stage::<_, Sha384, _, _, _>(mode, shared_secret, info)
     }
 
     fn extract_and_expand(
@@ -149,11 +156,11 @@ impl KdfTrait for HkdfSha384 {
         info: &[u8],
         out: &mut [u8],
     ) -> Result<(), hkdf::InvalidLength> {
-        extract_and_expand_two_stage::<Self::HashImpl>(ikm, suite_id, info, out)
+        extract_and_expand_two_stage::<Sha384>(ikm, suite_id, info, out)
     }
 
     fn derive_candidate_nocounter(suite_id: &KemSuiteId, ikm: &[u8]) -> [u8; 32] {
-        derive_candidate_nocounter_two_stage::<Self::HashImpl>(suite_id, ikm)
+        derive_candidate_nocounter_two_stage::<Sha384>(suite_id, ikm)
     }
 
     fn derive_candidate<PrivateKeySize: ArraySize>(
@@ -161,7 +168,16 @@ impl KdfTrait for HkdfSha384 {
         ikm: &[u8],
         counter: u8,
     ) -> Array<u8, PrivateKeySize> {
-        derive_candidate_two_stage::<Self::HashImpl, PrivateKeySize>(suite_id, ikm, counter)
+        derive_candidate_two_stage::<Sha384, PrivateKeySize>(suite_id, ikm, counter)
+    }
+
+    fn export(
+        exporter_secret: &[u8],
+        suite_id: &[u8],
+        exporter_ctx: &[u8],
+        out_buf: &mut [u8],
+    ) -> Result<(), HpkeError> {
+        export_two_stage::<Sha384>(exporter_secret, suite_id, exporter_ctx, out_buf)
     }
 }
 
@@ -169,9 +185,6 @@ impl KdfTrait for HkdfSha384 {
 pub struct HkdfSha512 {}
 
 impl KdfTrait for HkdfSha512 {
-    #[doc(hidden)]
-    type HashImpl = Sha512;
-
     // RFC 9180 §7.2: HKDF-SHA512
     const KDF_ID: u16 = 0x0003;
     type Nh = U64;
@@ -186,7 +199,7 @@ impl KdfTrait for HkdfSha512 {
         Kem: KemTrait,
         O: OpMode<Kem>,
     {
-        combine_secrets_two_stage::<_, Self::HashImpl, _, _, _>(mode, shared_secret, info)
+        combine_secrets_two_stage::<_, Sha512, _, _, _>(mode, shared_secret, info)
     }
 
     fn extract_and_expand(
@@ -195,11 +208,11 @@ impl KdfTrait for HkdfSha512 {
         info: &[u8],
         out: &mut [u8],
     ) -> Result<(), hkdf::InvalidLength> {
-        extract_and_expand_two_stage::<Self::HashImpl>(ikm, suite_id, info, out)
+        extract_and_expand_two_stage::<Sha512>(ikm, suite_id, info, out)
     }
 
     fn derive_candidate_nocounter(suite_id: &KemSuiteId, ikm: &[u8]) -> [u8; 32] {
-        derive_candidate_nocounter_two_stage::<Self::HashImpl>(suite_id, ikm)
+        derive_candidate_nocounter_two_stage::<Sha512>(suite_id, ikm)
     }
 
     fn derive_candidate<PrivateKeySize: ArraySize>(
@@ -207,7 +220,16 @@ impl KdfTrait for HkdfSha512 {
         ikm: &[u8],
         counter: u8,
     ) -> Array<u8, PrivateKeySize> {
-        derive_candidate_two_stage::<Self::HashImpl, PrivateKeySize>(suite_id, ikm, counter)
+        derive_candidate_two_stage::<Sha512, PrivateKeySize>(suite_id, ikm, counter)
+    }
+
+    fn export(
+        exporter_secret: &[u8],
+        suite_id: &[u8],
+        exporter_ctx: &[u8],
+        out_buf: &mut [u8],
+    ) -> Result<(), HpkeError> {
+        export_two_stage::<Sha512>(exporter_secret, suite_id, exporter_ctx, out_buf)
     }
 }
 
@@ -615,4 +637,53 @@ where
         .unwrap();
 
     buf
+}
+
+// RFC 9180 §5.3
+// def Context.Export(exporter_context, L):
+//   return LabeledExpand(self.exporter_secret, "sec",
+//                        exporter_context, L)
+
+pub fn export_two_stage<H>(
+    exporter_secret: &[u8],
+    suite_id: &[u8],
+    exporter_ctx: &[u8],
+    out_buf: &mut [u8],
+) -> Result<(), HpkeError>
+where
+    H: Clone + Digest + EagerHash,
+{
+    // Use our exporter secret as the PRK for an HKDF-Expand op. The only time this fails is
+    // when the length of the PRK is not the the underlying hash function's digest size. But
+    // that's guaranteed by the type system, so we can unwrap().
+    let hkdf_ctx = Hkdf::<H>::from_prk(&exporter_secret).unwrap();
+
+    // This call either succeeds or returns hkdf::InvalidLength (iff the buffer length is more
+    // than 255x the digest size of the underlying hash function)
+    hkdf_ctx
+        .labeled_expand(suite_id, b"sec", exporter_ctx, out_buf)
+        .map_err(|_| HpkeError::KdfOutputTooLong)
+}
+
+// §5.3 in https://datatracker.ietf.org/doc/html/draft-ietf-hpke-hpke-02
+//
+// def Context.Export_OneStage(exporter_context, L):
+//   return LabeledDerive(self.exporter_secret, "sec",
+//                        exporter_context, L)
+
+pub fn export_one_stage<H>(
+    exporter_secret: &[u8],
+    suite_id: &[u8],
+    exporter_ctx: &[u8],
+    out_buf: &mut [u8],
+) where
+    H: ExtendableOutput + Default + XofReader,
+{
+    labeled_derive::<H>(
+        suite_id,
+        &[exporter_secret],
+        b"sec",
+        &[exporter_ctx],
+        out_buf,
+    )
 }
