@@ -1,9 +1,8 @@
 use crate::{
-    aead::{Aead, AeadCtx, AeadCtxR, AeadCtxS},
-    kdf::{labeled_extract, DigestArray, Kdf as KdfTrait, LabeledExpand, MAX_DIGEST_SIZE},
-    kem::{Kem as KemTrait, SharedSecret},
-    op_mode::{OpMode, OpModeR, OpModeS},
-    util::full_suite_id,
+    aead::{Aead, AeadCtxR, AeadCtxS},
+    kdf::{DigestArray, Kdf as KdfTrait},
+    kem::Kem as KemTrait,
+    op_mode::{OpModeR, OpModeS},
     HpkeError,
 };
 
@@ -70,13 +69,18 @@ impl<K: KdfTrait> Drop for ExporterSecret<K> {
 //   return enc, KeyScheduleS(mode_auth_psk, shared_secret, info,
 //                            psk, psk_id)
 
-/// Initiates an encryption context to the given recipient public key
+/// Initiates an encryption context to the given recipient public key. `info` is a domain separator
+/// whose length is at most 2¹⁶ - 1.
 ///
 /// Return Value
 /// ============
 /// On success, returns an encapsulated public key (intended to be sent to the recipient), and an
 /// encryption context. If an error happened during key encapsulation, returns
 /// `Err(HpkeError::EncapError)`. This is the only possible error.
+///
+/// Panics
+/// ======
+/// Panics if `info.len() >= 2^16`
 pub fn setup_sender<A, Kdf, Kem, R>(
     mode: &OpModeS<Kem>,
     pk_recip: &Kem::PublicKey,

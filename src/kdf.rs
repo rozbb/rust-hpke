@@ -1,16 +1,18 @@
 //! Traits and structs for key derivation functions
 
 use crate::{
-    aead::{Aead, AeadCtx},
+    aead::{Aead, AeadCtx, AeadKey},
     kem::{Kem as KemTrait, SharedSecret},
     op_mode::OpMode,
     setup::ExporterSecret,
-    util::{full_suite_id, write_u16_be, KemSuiteId},
+    util::{full_suite_id, write_u16_be, FullSuiteId, KemSuiteId},
 };
 
-use digest::{Digest, OutputSizeUser};
+use aead::KeySizeUser;
+use digest::{Digest, ExtendableOutput, OutputSizeUser, XofReader};
 use hmac::EagerHash;
-use hybrid_array::{Array, ArraySize};
+use hybrid_array::{typenum::Unsigned, Array, ArraySize};
+use p256::elliptic_curve::generic_array::ArrayLength;
 use sha2::{Sha256, Sha384, Sha512};
 
 pub(crate) const VERSION_LABEL: &[u8] = b"HPKE-v1";
@@ -217,6 +219,61 @@ where
     }
 }
 
+/// Returns I2OSP(buf, 2), i.e., the big-endian 2-byte representation of buf.len()
+///
+/// # Panics
+/// Panics if `buf.len()` ≥ 2¹⁶
+fn buf_len_u16(buf: &[u8]) -> [u8; 2] {
+    let len = u16::try_from(buf.len()).expect("buf len was more than 2 bytes");
+    let mut serialized_len = [0u8; 2];
+    write_u16_be(&mut serialized_len, len);
+    serialized_len
+}
+
+// §4 in https://datatracker.ietf.org/doc/html/draft-ietf-hpke-hpke-02
+//
+// # For use with one-stage KDFs
+// def LabeledDerive(ikm, label, context, L):
+//   labeled_ikm = concat(
+//     ikm,
+//     "HPKE-v1",
+//     suite_id,
+//     lengthPrefixed(label),
+//     I2OSP(L, 2)
+//     context,
+//   )
+//   return Derive(labeled_ikm, L)
+
+/// Does some domain separation, hashes in all the data, and writes to `out` until `out` is filled
+/// with new bytes.
+///
+/// # Panics
+/// Panics if `label.len()` ≥ 2¹⁶ or `out.len()` ≥ 2¹⁶.
+fn labeled_derive<H>(
+    suite_id: &FullSuiteId,
+    ikm: &[&[u8]],
+    label: &[u8],
+    context: &[&[u8]],
+    out: &mut [u8],
+) where
+    H: ExtendableOutput + Default + XofReader,
+{
+    // Encode the label and output buffer lengths
+    let label_len = buf_len_u16(label);
+    let out_len = buf_len_u16(out);
+
+    let mut h = H::default();
+    ikm.iter().for_each(|k| h.update(k));
+    h.update(VERSION_LABEL);
+    h.update(suite_id);
+    h.update(&label_len);
+    h.update(label);
+    h.update(&out_len);
+    context.iter().for_each(|c| h.update(c));
+
+    h.finalize_xof().read(out);
+}
+
 // This is the KeySchedule function. It runs a KDF over all the parameters, inputs, and secrets,
 // and spits out a key-nonce pair to be used for symmetric encryption.
 fn combine_secrets_two_stage<A, Kdf, Kem, O>(
@@ -233,7 +290,7 @@ where
     // Put together the binding context used for all KDF operations
     let suite_id = full_suite_id::<A, Kdf, Kem>();
 
-    // In KeySchedule(),
+    // In KeySchedule() in RFC 9180,
     //   psk_id_hash = LabeledExtract("", "psk_id_hash", psk_id)
     //   info_hash = LabeledExtract("", "info_hash", info)
     //   key_schedule_context = concat(mode, psk_id_hash, info_hash)
@@ -293,6 +350,90 @@ where
             exporter_secret.0.as_mut_slice(),
         )
         .expect("exporter secret len is way too big");
+
+    AeadCtx::new(&key, base_nonce, exporter_secret)
+}
+
+// §5.1 in https://datatracker.ietf.org/doc/html/draft-ietf-hpke-hpke-02
+//
+// # For use with a one-stage KDF
+// def CombineSecrets_OneStage(mode, shared_secret, info, psk, psk_id):
+//   secrets = concat(
+//     lengthPrefixed(psk),
+//     lengthPrefixed(shared_secret),
+//   )
+//   context = concat(
+//     mode,
+//     lengthPrefixed(psk_id),
+//     lengthPrefixed(info),
+//   )
+//
+//   secret = LabeledDerive(secrets, "secret", context, Nk + Nn + Nh)
+//
+//   key = secret[:Nk]
+//   base_nonce = secret[Nk:(Nk + Nn)]
+//   exporter_secret = secret[(Nk + Nn):]
+//
+//   return (key, base_nonce, exporter_secret)
+
+/// This is the KeySchedule function. It runs a KDF over all the parameters, inputs, and secrets,
+/// and spits out a symmetric encryption context.
+///
+/// # Panics
+/// Panics if `info.len()` ≥ 2¹⁶
+fn combine_secrets_one_stage<A, H, Kdf, Kem, O>(
+    suite_id: &FullSuiteId,
+    mode: &O,
+    shared_secret: SharedSecret<Kem>,
+    info: &[u8],
+) -> AeadCtx<A, Kdf, Kem>
+where
+    A: Aead,
+    H: ExtendableOutput + Default + XofReader,
+    Kdf: KdfTrait,
+    Kem: KemTrait,
+    O: OpMode<Kem>,
+{
+    let psk = mode.get_psk_bytes();
+    let psk_id = mode.get_psk_id();
+    let secrets = &[
+        &buf_len_u16(psk),
+        psk,
+        &buf_len_u16(&shared_secret.0),
+        &shared_secret.0,
+    ];
+    let context = &[
+        &[mode.mode_id()][..],
+        &buf_len_u16(psk_id),
+        psk_id,
+        &buf_len_u16(info),
+        info,
+    ];
+
+    // The max number of bytes we need from the XOF is Nk + Nn + Nh, with the max such values. This
+    // is 108
+    let mut digest = [0u8; 32 + 12 + 64];
+    labeled_derive::<H>(&suite_id, secrets, b"secret", context, &mut digest);
+
+    let mut key = crate::aead::AeadKey::<A>::default();
+    let key_len = key.0.len();
+    let mut base_nonce = crate::aead::AeadNonce::<A>::default();
+    let base_nonce_len = base_nonce.0.len();
+    let mut exporter_secret = <ExporterSecret<Kdf> as Default>::default();
+    let exporter_secret_len = exporter_secret.0.len();
+
+    let mut cursor = 0;
+    key.0.copy_from_slice(&digest[cursor..cursor + key_len]);
+    cursor += key_len;
+
+    base_nonce
+        .0
+        .copy_from_slice(&digest[cursor..cursor + base_nonce_len]);
+    cursor += base_nonce_len;
+
+    exporter_secret
+        .0
+        .copy_from_slice(&digest[cursor..cursor + exporter_secret_len]);
 
     AeadCtx::new(&key, base_nonce, exporter_secret)
 }
