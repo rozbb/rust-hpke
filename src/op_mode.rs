@@ -91,7 +91,8 @@ impl<Kem: KemTrait> OpModeS<'_, Kem> {
 
 /// Represents the convenience methods necessary for getting default values out of the operation
 /// mode
-pub(crate) trait OpMode<Kem: KemTrait> {
+#[doc(hidden)]
+pub trait OpMode<Kem: KemTrait> {
     /// Gets the mode ID (hardcoded based on variant)
     fn mode_id(&self) -> u8;
     /// If this is a PSK mode, returns the PSK. Otherwise returns the empty string.

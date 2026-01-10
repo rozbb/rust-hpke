@@ -1,6 +1,12 @@
 //! Traits and structs for key derivation functions
 
-use crate::util::write_u16_be;
+use crate::{
+    aead::{Aead, AeadCtx},
+    kem::{Kem as KemTrait, SharedSecret},
+    op_mode::OpMode,
+    setup::ExporterSecret,
+    util::{full_suite_id, write_u16_be},
+};
 
 use digest::{Digest, OutputSizeUser};
 use hmac::EagerHash;
@@ -15,13 +21,24 @@ pub(crate) const MAX_DIGEST_SIZE: usize = 64;
 // Pretty much all the KDF functionality is covered by the hkdf crate
 
 /// Represents key derivation functionality
-pub trait Kdf {
+pub trait Kdf: Sized {
     /// The underlying hash function
     #[doc(hidden)]
     type HashImpl: Clone + Digest + EagerHash;
 
     /// The algorithm identifier for a KDF implementation
     const KDF_ID: u16;
+
+    #[doc(hidden)]
+    fn combine_secrets<A, Kem, O>(
+        mode: &O,
+        shared_secret: SharedSecret<Kem>,
+        info: &[u8],
+    ) -> AeadCtx<A, Self, Kem>
+    where
+        A: Aead,
+        Kem: KemTrait,
+        O: OpMode<Kem>;
 }
 
 // We use Kdf as a type parameter, so this is to avoid ambiguity.
@@ -42,6 +59,19 @@ impl KdfTrait for HkdfSha256 {
 
     // RFC 9180 §7.2: HKDF-SHA256
     const KDF_ID: u16 = 0x0001;
+
+    fn combine_secrets<A, Kem, O>(
+        mode: &O,
+        shared_secret: SharedSecret<Kem>,
+        info: &[u8],
+    ) -> AeadCtx<A, Self, Kem>
+    where
+        A: Aead,
+        Kem: KemTrait,
+        O: OpMode<Kem>,
+    {
+        combine_secrets_two_stage(mode, shared_secret, info)
+    }
 }
 
 /// The implementation of HKDF-SHA384
@@ -53,6 +83,19 @@ impl KdfTrait for HkdfSha384 {
 
     // RFC 9180 §7.2: HKDF-SHA384
     const KDF_ID: u16 = 0x0002;
+
+    fn combine_secrets<A, Kem, O>(
+        mode: &O,
+        shared_secret: SharedSecret<Kem>,
+        info: &[u8],
+    ) -> AeadCtx<A, Self, Kem>
+    where
+        A: Aead,
+        Kem: KemTrait,
+        O: OpMode<Kem>,
+    {
+        combine_secrets_two_stage(mode, shared_secret, info)
+    }
 }
 
 /// The implementation of HKDF-SHA512
@@ -64,6 +107,19 @@ impl KdfTrait for HkdfSha512 {
 
     // RFC 9180 §7.2: HKDF-SHA512
     const KDF_ID: u16 = 0x0003;
+
+    fn combine_secrets<A, Kem, O>(
+        mode: &O,
+        shared_secret: SharedSecret<Kem>,
+        info: &[u8],
+    ) -> AeadCtx<A, Self, Kem>
+    where
+        A: Aead,
+        Kem: KemTrait,
+        O: OpMode<Kem>,
+    {
+        combine_secrets_two_stage(mode, shared_secret, info)
+    }
 }
 
 // RFC 9180 §4.1
@@ -159,4 +215,84 @@ where
         let labeled_info = [&len_buf, VERSION_LABEL, suite_id, label, info];
         self.expand_multi_info(&labeled_info, out)
     }
+}
+
+// This is the KeySchedule function. It runs a KDF over all the parameters, inputs, and secrets,
+// and spits out a key-nonce pair to be used for symmetric encryption.
+fn combine_secrets_two_stage<A, Kdf, Kem, O>(
+    mode: &O,
+    shared_secret: SharedSecret<Kem>,
+    info: &[u8],
+) -> AeadCtx<A, Kdf, Kem>
+where
+    A: Aead,
+    Kdf: KdfTrait,
+    Kem: KemTrait,
+    O: OpMode<Kem>,
+{
+    // Put together the binding context used for all KDF operations
+    let suite_id = full_suite_id::<A, Kdf, Kem>();
+
+    // In KeySchedule(),
+    //   psk_id_hash = LabeledExtract("", "psk_id_hash", psk_id)
+    //   info_hash = LabeledExtract("", "info_hash", info)
+    //   key_schedule_context = concat(mode, psk_id_hash, info_hash)
+
+    // We concat without allocation by making a buffer of the maximum possible size, then
+    // taking the appropriately sized slice.
+    let (sched_context_buf, sched_context_size) = {
+        let (psk_id_hash, _) =
+            labeled_extract::<Kdf>(&[], &suite_id, b"psk_id_hash", mode.get_psk_id());
+        let (info_hash, _) = labeled_extract::<Kdf>(&[], &suite_id, b"info_hash", info);
+
+        // Yes it's overkill to bound the first input by MAX_DIGEST_SIZE, since it's only 1 byte.
+        // But whatever, this is pretty clean.
+        concat_with_known_maxlen!(
+            MAX_DIGEST_SIZE,
+            &[mode.mode_id()],
+            psk_id_hash.as_slice(),
+            info_hash.as_slice()
+        )
+    };
+    let sched_context = &sched_context_buf[..sched_context_size];
+
+    // In KeySchedule(),
+    //   secret = LabeledExtract(shared_secret, "secret", psk)
+    //   key = LabeledExpand(secret, "key", key_schedule_context, Nk)
+    //   base_nonce = LabeledExpand(secret, "base_nonce", key_schedule_context, Nn)
+    //   exporter_secret = LabeledExpand(secret, "exp", key_schedule_context, Nh)
+    // Instead of `secret` we derive an HKDF context which we run .expand() on to derive the
+    // key-nonce pair.
+    let (_, secret_ctx) =
+        labeled_extract::<Kdf>(&shared_secret.0, &suite_id, b"secret", mode.get_psk_bytes());
+
+    // Empty fixed-size buffers
+    let mut key = crate::aead::AeadKey::<A>::default();
+    let mut base_nonce = crate::aead::AeadNonce::<A>::default();
+    let mut exporter_secret = <ExporterSecret<Kdf> as Default>::default();
+
+    // Fill the key, base nonce, and exporter secret. This only errors if the output values are
+    // 255x the digest size of the hash function. Since these values are fixed at compile time, we
+    // don't worry about it.
+    secret_ctx
+        .labeled_expand(&suite_id, b"key", sched_context, key.0.as_mut_slice())
+        .expect("aead key len is way too big");
+    secret_ctx
+        .labeled_expand(
+            &suite_id,
+            b"base_nonce",
+            sched_context,
+            base_nonce.0.as_mut_slice(),
+        )
+        .expect("nonce len is way too big");
+    secret_ctx
+        .labeled_expand(
+            &suite_id,
+            b"exp",
+            sched_context,
+            exporter_secret.0.as_mut_slice(),
+        )
+        .expect("exporter secret len is way too big");
+
+    AeadCtx::new(&key, base_nonce, exporter_secret)
 }
