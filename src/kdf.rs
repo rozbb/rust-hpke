@@ -5,12 +5,12 @@ use crate::{
     kem::{Kem as KemTrait, SharedSecret},
     op_mode::OpMode,
     setup::ExporterSecret,
-    util::{full_suite_id, write_u16_be},
+    util::{full_suite_id, write_u16_be, KemSuiteId},
 };
 
 use digest::{Digest, OutputSizeUser};
 use hmac::EagerHash;
-use hybrid_array::Array;
+use hybrid_array::{Array, ArraySize};
 use sha2::{Sha256, Sha384, Sha512};
 
 pub(crate) const VERSION_LABEL: &[u8] = b"HPKE-v1";
@@ -295,4 +295,68 @@ where
         .expect("exporter secret len is way too big");
 
     AeadCtx::new(&key, base_nonce, exporter_secret)
+}
+
+// RFC 9180 §7.1.3
+// def DeriveKeyPair(ikm):
+//   dkp_prk = LabeledExtract("", "dkp_prk", ikm)
+//   sk = LabeledExpand(dkp_prk, "sk", "", Nsk)
+//   return (sk, pk(sk))
+
+/// Derive secret key bytes for x25519 using a two-stage KDF
+pub(crate) fn derive_candidate_nocounter_two_stage<Kdf: KdfTrait>(
+    suite_id: &KemSuiteId,
+    ikm: &[u8],
+) -> [u8; 32] {
+    // Write the label into a byte buffer and extract from the IKM
+    let (_, hkdf_ctx) = labeled_extract::<Kdf>(&[], suite_id, b"dkp_prk", ikm);
+    // The buffer we hold the candidate scalar bytes in. This is the size of a private key.
+    let mut buf = [0u8; 32];
+    hkdf_ctx
+        .labeled_expand(suite_id, b"sk", &[], &mut buf)
+        .unwrap();
+
+    buf
+}
+
+// RFC 9180 §7.1.3:
+// def DeriveKeyPair(ikm):
+//   dkp_prk = LabeledExtract("", "dkp_prk", ikm)
+//   sk = 0
+//   counter = 0
+//   while sk == 0 or sk >= order:
+//     if counter > 255:
+//       raise DeriveKeyPairError
+//     bytes = LabeledExpand(dkp_prk, "candidate",
+//                           I2OSP(counter, 1), Nsk)
+//     bytes[0] = bytes[0] & bitmask
+//     sk = OS2IP(bytes)
+//     counter = counter + 1
+//   return (sk, pk(sk))
+// where `bitmask` is defined to be 0xFF for P-256 and P-384, and 0x01 for P-521
+
+/// Derive candidate secret key bytes for p256/p384/p521 using a two-stage KDF
+pub(crate) fn derive_candidate_two_stage<Kdf, PrivateKeySize>(
+    suite_id: &KemSuiteId,
+    ikm: &[u8],
+    counter: u8,
+) -> Array<u8, PrivateKeySize>
+where
+    Kdf: KdfTrait,
+    PrivateKeySize: ArraySize,
+{
+    // Write the label into a byte buffer and extract from the IKM
+    let (_, hkdf_ctx) = labeled_extract::<Kdf>(&[], suite_id, b"dkp_prk", ikm);
+
+    // The buffer we hold the candidate scalar bytes in. This is the size of a
+    // private key.
+    let mut buf = Array::<u8, PrivateKeySize>::default();
+
+    // This unwrap is fine. It only triggers if buf is way too big. It's only
+    // 32 bytes.
+    hkdf_ctx
+        .labeled_expand(suite_id, b"candidate", &[counter], &mut buf)
+        .unwrap();
+
+    buf
 }

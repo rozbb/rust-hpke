@@ -1,6 +1,6 @@
 use crate::{
     dhkex::{DhError, DhKeyExchange},
-    kdf::{labeled_extract, Kdf as KdfTrait, LabeledExpand},
+    kdf::{derive_candidate_nocounter_two_stage, Kdf as KdfTrait},
     util::{enforce_equal_len, enforce_outbuf_len, KemSuiteId},
     Deserializable, HpkeError, Serializable,
 };
@@ -157,15 +157,8 @@ impl DhKeyExchange for X25519 {
     /// key, i.e., 256.
     #[doc(hidden)]
     fn derive_keypair<Kdf: KdfTrait>(suite_id: &KemSuiteId, ikm: &[u8]) -> (PrivateKey, PublicKey) {
-        // Write the label into a byte buffer and extract from the IKM
-        let (_, hkdf_ctx) = labeled_extract::<Kdf>(&[], suite_id, b"dkp_prk", ikm);
-        // The buffer we hold the candidate scalar bytes in. This is the size of a private key.
-        let mut buf = [0u8; 32];
-        hkdf_ctx
-            .labeled_expand(suite_id, b"sk", &[], &mut buf)
-            .unwrap();
-
-        let sk = x25519_dalek::StaticSecret::from(buf);
+        let sk_bytes = derive_candidate_nocounter_two_stage::<Kdf>(suite_id, ikm);
+        let sk = x25519_dalek::StaticSecret::from(sk_bytes);
         let pk = x25519_dalek::PublicKey::from(&sk);
 
         (PrivateKey(sk), PublicKey(pk))

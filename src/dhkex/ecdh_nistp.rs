@@ -14,14 +14,14 @@ macro_rules! nistp_dhkex {
 
             use crate::{
                 dhkex::{DhError, DhKeyExchange},
-                kdf::{labeled_extract, Kdf as KdfTrait, LabeledExpand},
+                kdf::{derive_candidate_two_stage, Kdf as KdfTrait},
                 util::{enforce_equal_len, enforce_outbuf_len, KemSuiteId},
                 Deserializable, HpkeError, Serializable,
             };
 
             use ::$curve as curve_crate;
             use curve_crate::elliptic_curve::{ecdh::diffie_hellman, sec1::ToEncodedPoint};
-            use hybrid_array::{typenum::Unsigned, Array};
+            use hybrid_array::{typenum::Unsigned};
             use subtle::{Choice, ConstantTimeEq};
 
             #[doc = concat!(
@@ -197,30 +197,24 @@ macro_rules! nistp_dhkex {
                     suite_id: &KemSuiteId,
                     ikm: &[u8],
                 ) -> (PrivateKey, PublicKey) {
-                    // Write the label into a byte buffer and extract from the IKM
-                    let (_, hkdf_ctx) = labeled_extract::<Kdf>(&[], suite_id, b"dkp_prk", ikm);
-
-                    // The buffer we hold the candidate scalar bytes in. This is the size of a
-                    // private key.
-                    let mut buf =
-                        Array::<u8, <PrivateKey as Serializable>::OutputSize>::default();
+                    type PrivateKeySize = <PrivateKey as Serializable>::OutputSize;
 
                     // Try to generate a key 256 times. Practically, this will succeed and return
                     // early on the first iteration.
                     for counter in 0u8..=255 {
-                        // This unwrap is fine. It only triggers if buf is way too big. It's only
-                        // 32 bytes.
-                        hkdf_ctx
-                            .labeled_expand(suite_id, b"candidate", &[counter], &mut buf)
-                            .unwrap();
+                        let mut candidate_bytes = derive_candidate_two_stage::<Kdf, PrivateKeySize>(
+                            suite_id,
+                            ikm,
+                            counter,
+                        );
 
                         // Apply the bitmask
-                        buf[0] &= $keygen_bitmask;
+                        candidate_bytes[0] &= $keygen_bitmask;
 
                         // Try to convert to a valid secret key. If the conversion succeeded,
                         // return the keypair. Recall the invariant of PrivateKey: it is a value in
                         // the range [1,p).
-                        if let Ok(sk) = PrivateKey::from_bytes(&buf) {
+                        if let Ok(sk) = PrivateKey::from_bytes(&candidate_bytes) {
                             let pk = Self::sk_to_pk(&sk);
                             return (sk, pk);
                         }
