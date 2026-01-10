@@ -1,6 +1,6 @@
 use crate::{
     aead::{Aead, AesGcm128, AesGcm256, ChaCha20Poly1305, ExportOnlyAead},
-    kdf::{HkdfSha256, HkdfSha384, HkdfSha512, Kdf as KdfTrait},
+    kdf::{HkdfSha256, HkdfSha384, HkdfSha512, Kdf as KdfTrait, KdfShake256},
     kem::{
         self, DhP256HkdfSha256, DhP384HkdfSha384, DhP521HkdfSha512, Kem as KemTrait, SharedSecret,
         X25519HkdfSha256, XWing,
@@ -417,7 +417,7 @@ fn kat_test() {
         dispatch_testcase!(
             tv,
             (AesGcm128, AesGcm256, ChaCha20Poly1305, ExportOnlyAead),
-            (HkdfSha256, HkdfSha384, HkdfSha512),
+            (HkdfSha256, HkdfSha384, HkdfSha512, KdfShake256),
             (
                 X25519HkdfSha256,
                 DhP256HkdfSha256,

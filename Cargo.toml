@@ -22,7 +22,8 @@ x25519 = ["dep:x25519-dalek"]
 p384 = ["dep:p384"]
 p256 = ["dep:p256"]
 p521 = ["dep:p521"]
-xwing = ["dep:x-wing", "dep:kem", "dep:sha3"]
+_pq = ["dep:sha3"]
+xwing = ["_pq", "dep:x-wing", "dep:kem"]
 # Include allocating methods like open() and seal()
 alloc = []
 # Used to enable KAT tests. Also implies alloc

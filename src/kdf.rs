@@ -17,6 +17,8 @@ use hybrid_array::{
     Array, ArraySize,
 };
 use sha2::{Sha256, Sha384, Sha512};
+#[cfg(feature = "_pq")]
+use sha3::Shake256;
 
 pub(crate) const VERSION_LABEL: &[u8] = b"HPKE-v1";
 
@@ -233,6 +235,63 @@ impl KdfTrait for HkdfSha512 {
     }
 }
 
+/// The implementation of SHAKE256 KDF
+#[cfg(feature = "_pq")]
+pub struct KdfShake256 {}
+
+#[cfg(feature = "_pq")]
+impl KdfTrait for KdfShake256 {
+    // https://datatracker.ietf.org/doc/html/draft-ietf-hpke-pq-03#section-5
+    const KDF_ID: u16 = 0x0011;
+
+    type Nh = U64;
+
+    fn combine_secrets<A, Kem, O>(
+        mode: &O,
+        shared_secret: SharedSecret<Kem>,
+        info: &[u8],
+    ) -> AeadCtx<A, Self, Kem>
+    where
+        A: Aead,
+        Kem: KemTrait,
+        O: OpMode<Kem>,
+    {
+        combine_secrets_one_stage::<_, Shake256, _, _, _>(mode, shared_secret, info)
+    }
+
+    fn extract_and_expand(
+        ikm: &[u8],
+        suite_id: &[u8],
+        info: &[u8],
+        out: &mut [u8],
+    ) -> Result<(), hkdf::InvalidLength> {
+        extract_and_expand_one_stage::<Shake256>(ikm, suite_id, info, out);
+        Ok(())
+    }
+
+    fn derive_candidate_nocounter(suite_id: &KemSuiteId, ikm: &[u8]) -> [u8; 32] {
+        derive_candidate_nocounter_one_stage::<Shake256>(suite_id, ikm)
+    }
+
+    fn derive_candidate<PrivateKeySize: ArraySize>(
+        suite_id: &KemSuiteId,
+        ikm: &[u8],
+        counter: u8,
+    ) -> Array<u8, PrivateKeySize> {
+        derive_candidate_one_stage::<Shake256, PrivateKeySize>(suite_id, ikm, counter)
+    }
+
+    fn export(
+        exporter_secret: &[u8],
+        suite_id: &[u8],
+        exporter_ctx: &[u8],
+        out_buf: &mut [u8],
+    ) -> Result<(), HpkeError> {
+        export_one_stage::<Shake256>(exporter_secret, suite_id, exporter_ctx, out_buf);
+        Ok(())
+    }
+}
+
 // RFC 9180 §4.1
 // def ExtractAndExpand(dh, kem_context):
 //   eae_prk = LabeledExtract("", "eae_prk", dh)
@@ -268,7 +327,7 @@ where
 #[doc(hidden)]
 fn extract_and_expand_one_stage<H>(ikm: &[u8], suite_id: &[u8], info: &[u8], out: &mut [u8])
 where
-    H: ExtendableOutput + Default + XofReader,
+    H: ExtendableOutput + Default,
 {
     labeled_derive::<H>(suite_id, &[ikm], b"shared_secret", &[info], out)
 }
@@ -392,7 +451,7 @@ fn labeled_derive<H>(
     context: &[&[u8]],
     out: &mut [u8],
 ) where
-    H: ExtendableOutput + Default + XofReader,
+    H: ExtendableOutput + Default,
 {
     // Encode the label and output buffer lengths
     let label_len = buf_len_u16(label);
@@ -519,18 +578,20 @@ where
 /// # Panics
 /// Panics if `info.len()` ≥ 2¹⁶
 fn combine_secrets_one_stage<A, H, Kdf, Kem, O>(
-    suite_id: &FullSuiteId,
     mode: &O,
     shared_secret: SharedSecret<Kem>,
     info: &[u8],
 ) -> AeadCtx<A, Kdf, Kem>
 where
     A: Aead,
-    H: ExtendableOutput + Default + XofReader,
+    H: ExtendableOutput + Default,
     Kdf: KdfTrait,
     Kem: KemTrait,
     O: OpMode<Kem>,
 {
+    // Put together the binding context used for all KDF operations
+    let suite_id = full_suite_id::<A, Kdf, Kem>();
+
     let psk = mode.get_psk_bytes();
     let psk_id = mode.get_psk_id();
     let secrets = &[
@@ -550,7 +611,7 @@ where
     // The max number of bytes we need from the XOF is Nk + Nn + Nh, with the max such values. This
     // is 108
     let mut digest = [0u8; 32 + 12 + 64];
-    labeled_derive::<H>(suite_id, secrets, b"secret", context, &mut digest);
+    labeled_derive::<H>(&suite_id, secrets, b"secret", context, &mut digest);
 
     let mut key = crate::aead::AeadKey::<A>::default();
     let key_len = key.0.len();
@@ -595,6 +656,42 @@ where
         .unwrap();
 
     buf
+}
+
+// https://datatracker.ietf.org/doc/html/draft-ietf-hpke-hpke-02#section-7.1.3-9
+//
+// def DeriveKeyPair_OneStage(ikm):
+//   sk = LabeledDerive(ikm, "sk", "", Nsk)
+//   return (sk, pk(sk))
+
+/// Derive secret key bytes for x25519 using a one-stage KDF
+fn derive_candidate_nocounter_one_stage<H>(suite_id: &KemSuiteId, ikm: &[u8]) -> [u8; 32]
+where
+    H: Default + ExtendableOutput,
+{
+    let mut sk_bytes = [0u8; 32];
+    labeled_derive::<H>(suite_id, &[ikm], b"sk", &[b""], &mut sk_bytes);
+    sk_bytes
+}
+
+// https://datatracker.ietf.org/doc/html/draft-ietf-hpke-hpke-02#section-7.1.3-4
+//
+// def DeriveCandidate_OneStage(ikm, counter):
+//   return LabeledDerive(ikm, "candidate", I2OSP(counter, 1), Nsk)
+
+/// Derive candidate secret key bytes for p256/p384/p521 using a two-stage KDF
+fn derive_candidate_one_stage<H, PrivateKeySize>(
+    suite_id: &KemSuiteId,
+    ikm: &[u8],
+    counter: u8,
+) -> Array<u8, PrivateKeySize>
+where
+    H: Default + ExtendableOutput,
+    PrivateKeySize: ArraySize,
+{
+    let mut sk_bytes = Array::default();
+    labeled_derive::<H>(suite_id, &[ikm], b"candidate", &[&[counter]], &mut sk_bytes);
+    sk_bytes
 }
 
 // RFC 9180 §7.1.3:
@@ -677,7 +774,7 @@ pub fn export_one_stage<H>(
     exporter_ctx: &[u8],
     out_buf: &mut [u8],
 ) where
-    H: ExtendableOutput + Default + XofReader,
+    H: ExtendableOutput + Default,
 {
     labeled_derive::<H>(
         suite_id,
