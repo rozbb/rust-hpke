@@ -4,7 +4,10 @@
 use digest::{ExtendableOutput, Update, XofReader};
 use rand_core::{CryptoRng, RngCore};
 use sha3::Shake256;
-use x_wing::DECAPSULATION_KEY_SIZE;
+use x_wing::{
+    kem::{Decapsulate, Encapsulate},
+    DECAPSULATION_KEY_SIZE,
+};
 
 use crate::{
     kdf::VERSION_LABEL,
@@ -13,7 +16,6 @@ use crate::{
     Deserializable, Serializable,
 };
 use hybrid_array::typenum::{Prod, Sum, U1024, U3, U32, U64};
-use kem::Encapsulate;
 
 // Type-level size constants for X-Wing
 type U1216 = Sum<U1024, Prod<U64, U3>>;
@@ -144,30 +146,42 @@ impl KemTrait for XWing {
         )
     }
 
-    // Draft-connolly-cfrg-xwing-kem Section 5.6
-    //
-    // Encap() is Encapsulate() from Section 5.4, where an ML-KEM
-    // encapsulation key check failure causes an HPKE EncapError.
+    /// Decapsulate the encapsulated key using the recipient's private key. This DOES NOT support
+    /// authenticated encapsulation, i.e., `pk_sender_id` MUST be `None`.
+    ///
+    /// # Panics
+    /// Panics if `pk_sender_id` is `Some`.
     fn decap(
         sk_recip: &Self::PrivateKey,
-        _pk_sender_id: Option<&Self::PublicKey>,
+        pk_sender_id: Option<&Self::PublicKey>,
         encapped_key: &Self::EncappedKey,
     ) -> Result<super::SharedSecret<Self>, crate::HpkeError> {
-        use kem::Decapsulate;
+        assert!(
+            pk_sender_id.is_none(),
+            "X-Wing doesn't support authenticated encapsulation. Use Base or Psk operation mode."
+        );
+
         let sk = x_wing::DecapsulationKey::from(sk_recip);
         let ct = x_wing::Ciphertext::from(&encapped_key.0);
         let ss = sk.decapsulate(&ct).expect("infallible");
         Ok(super::SharedSecret(ss.into()))
     }
 
-    // Draft-connolly-cfrg-xwing-kem Section 5.6
-    //
-    // Decap() is Decapsulate() from Section 5.5.
+    /// Decapsulate the encapsulated key using the recipient's private key. This DOES NOT support
+    /// authenticated encapsulation, i.e., `sender_id_keypair` MUST be `None`.
+    ///
+    /// # Panics
+    /// Panics if `sender_id_keypair` is `Some`.
     fn encap<R: CryptoRng + RngCore>(
         pk_recip: &Self::PublicKey,
-        _sender_id_keypair: Option<(&Self::PrivateKey, &Self::PublicKey)>,
+        sender_id_keypair: Option<(&Self::PrivateKey, &Self::PublicKey)>,
         csprng: &mut R,
     ) -> Result<(super::SharedSecret<Self>, Self::EncappedKey), crate::HpkeError> {
+        assert!(
+            sender_id_keypair.is_none(),
+            "X-Wing doesn't support authenticated encapsulation. Use Base or Psk operation mode."
+        );
+
         let pk = x_wing::EncapsulationKey::from(pk_recip);
         let (ct, ss) = pk.encapsulate_with_rng(csprng).expect("infallible");
         Ok((super::SharedSecret(ss.into()), EncappedKey(ct.to_bytes())))
@@ -219,6 +233,7 @@ fn shake256_labeled_derive(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rand::Rng;
 
     #[test]
     fn test_roundtrip() {

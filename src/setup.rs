@@ -72,6 +72,9 @@ impl<K: KdfTrait> Drop for ExporterSecret<K> {
 /// Initiates an encryption context to the given recipient public key. `info` is a domain separator
 /// whose length is at most 2¹⁶ - 1.
 ///
+/// NOTE: The `XWing` KEM does not support authenticated encapsulation, so `mode` MUST be
+/// [`Base`](crate::OpModeS::Base) or [`Psk`](crate::OpModeS::Psk).
+///
 /// Return Value
 /// ============
 /// On success, returns an encapsulated public key (intended to be sent to the recipient), and an
@@ -80,7 +83,8 @@ impl<K: KdfTrait> Drop for ExporterSecret<K> {
 ///
 /// Panics
 /// ======
-/// Panics if `info.len() >= 2^16`
+/// Panics if `mode` is not [`Base`](crate::OpModeS::Base) or [`Psk`](crate::OpModeS::Psk), or if
+/// `info.len() >= 2¹⁶`.
 pub fn setup_sender<A, Kdf, Kem, R>(
     mode: &OpModeS<Kem>,
     pk_recip: &Kem::PublicKey,
@@ -109,13 +113,22 @@ where
 //   return KeyScheduleR(mode_auth_psk, shared_secret, info,
 //                       psk, psk_id)
 
-/// Initiates a decryption context given a private key `sk_recip` and an encapsulated key which
-/// was encapsulated to `sk_recip`'s corresponding public key
+/// Initiates a decryption context given a private key `sk_recip` and an encapsulated key which was
+/// encapsulated to `sk_recip`'s corresponding public key.   `info` is a domain separator whose
+/// length is at most 2¹⁶ - 1.
+///
+/// NOTE: The `XWing` KEM does not support authenticated encapsulation, so `mode` MUST be
+/// [`Base`](crate::OpModeR::Base) or [`Psk`](crate::OpModeR::Psk).
 ///
 /// Return Value
 /// ============
 /// On success, returns a decryption context. If an error happened during key decapsulation,
 /// returns `Err(HpkeError::DecapError)`. This is the only possible error.
+///
+/// Panics
+/// ======
+/// Panics if `mode` is not [`Base`](crate::OpModeR::Base) or [`Psk`](crate::OpModeR::Psk), or if
+/// `info.len() >= 2¹⁶`.
 pub fn setup_receiver<A, Kdf, Kem>(
     mode: &OpModeR<Kem>,
     sk_recip: &Kem::PrivateKey,

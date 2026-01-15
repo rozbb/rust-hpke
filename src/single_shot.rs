@@ -157,10 +157,11 @@ mod test {
     };
 
     macro_rules! test_single_shot_correctness {
-        ($test_name:ident, $aead:ty, $kdf:ty, $kem:ty) => {
+        ($test_name:ident, $aead:ty, $kdf:ty, $kem:ty, $use_auth:expr) => {
             /// Tests that `single_shot_open` can open a `single_shot_seal` ciphertext. This
-            /// doens't need to be tested for all ciphersuite combinations, since its correctness
-            /// follows from the correctness of `seal/open` and `setup_sender/setup_receiver`.
+            /// doesn't need to be tested for all ciphersuite combinations, since its correctness
+            /// follows from the correctness of `seal/open` and `setup_sender/setup_receiver`. Uses
+            /// the `AuthPsk` mode if `$use_auth` is true, otherwise uses the `Psk` mode.
             #[test]
             fn $test_name() {
                 type A = $aead;
@@ -181,16 +182,22 @@ mod test {
                 let (sk_sender_id, pk_sender_id) = Kem::gen_keypair(&mut csprng);
                 let (sk_recip, pk_recip) = Kem::gen_keypair(&mut csprng);
 
-                // Construct the sender's encryption context, and get an encapped key
-                let sender_mode = OpModeS::<Kem>::AuthPsk(
-                    (sk_sender_id, pk_sender_id.clone()),
-                    psk_bundle.clone(),
-                );
+                // Construct the sender's and receiver's operation modes
+                let sender_mode = if $use_auth {
+                    OpModeS::<Kem>::AuthPsk(
+                        (sk_sender_id, pk_sender_id.clone()),
+                        psk_bundle.clone(),
+                    )
+                } else {
+                    OpModeS::<Kem>::Psk(psk_bundle.clone())
+                };
+                let receiver_mode = if $use_auth {
+                    OpModeR::<Kem>::AuthPsk(pk_sender_id, psk_bundle)
+                } else {
+                    OpModeR::<Kem>::Psk(psk_bundle)
+                };
 
-                // Use the encapped key to derive the receiver's encryption context
-                let receiver_mode = OpModeR::<Kem>::AuthPsk(pk_sender_id, psk_bundle);
-
-                // Encrypt with the first context
+                // Single-shot encrypt
                 let (encapped_key, ciphertext) = single_shot_seal::<A, Kdf, Kem, _>(
                     &sender_mode,
                     &pk_recip,
@@ -204,7 +211,7 @@ mod test {
                 // Make sure seal() isn't a no-op
                 assert!(&ciphertext[..] != &msg[..]);
 
-                // Decrypt with the second context
+                // Single-shot decrypt
                 let decrypted = single_shot_open::<A, Kdf, Kem>(
                     &receiver_mode,
                     &sk_recip,
@@ -224,7 +231,8 @@ mod test {
         test_single_shot_correctness_x25519,
         ChaCha20Poly1305,
         crate::kdf::HkdfSha256,
-        crate::kem::x25519_hkdfsha256::X25519HkdfSha256
+        crate::kem::x25519_hkdfsha256::X25519HkdfSha256,
+        true
     );
 
     #[cfg(feature = "p256")]
@@ -232,7 +240,8 @@ mod test {
         test_single_shot_correctness_p256,
         ChaCha20Poly1305,
         crate::kdf::HkdfSha256,
-        crate::kem::dhp256_hkdfsha256::DhP256HkdfSha256
+        crate::kem::dhp256_hkdfsha256::DhP256HkdfSha256,
+        true
     );
 
     #[cfg(feature = "p384")]
@@ -240,7 +249,8 @@ mod test {
         test_single_shot_correctness_p384,
         ChaCha20Poly1305,
         crate::kdf::HkdfSha384,
-        crate::kem::dhp384_hkdfsha384::DhP384HkdfSha384
+        crate::kem::dhp384_hkdfsha384::DhP384HkdfSha384,
+        true
     );
 
     #[cfg(feature = "p521")]
@@ -248,7 +258,8 @@ mod test {
         test_single_shot_correctness_p521,
         ChaCha20Poly1305,
         crate::kdf::HkdfSha512,
-        crate::kem::dhp521_hkdfsha512::DhP521HkdfSha512
+        crate::kem::dhp521_hkdfsha512::DhP521HkdfSha512,
+        true
     );
 
     #[cfg(feature = "xwing")]
@@ -256,6 +267,7 @@ mod test {
         test_single_shot_correctness_xwing,
         ChaCha20Poly1305,
         crate::kdf::HkdfSha256,
-        crate::kem::xwing::XWing
+        crate::kem::xwing::XWing,
+        false
     );
 }
