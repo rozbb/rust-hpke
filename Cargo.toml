@@ -22,8 +22,7 @@ x25519 = ["dep:x25519-dalek"]
 p384 = ["dep:p384"]
 p256 = ["dep:p256"]
 p521 = ["dep:p521"]
-_pq = ["dep:sha3"]
-xwing = ["_pq", "dep:x-wing", "dep:kem"]
+xwing = ["dep:x-wing", "dep:kem"]
 # Include allocating methods like open() and seal()
 alloc = []
 # Used to enable KAT tests. Also implies alloc
@@ -53,7 +52,7 @@ p521 = { version = "0.13", default-features = false, features = [
     "ecdh",
 ], optional = true }
 sha2 = { version = "0.11.0-rc.3", default-features = false }
-sha3 = { version = "0.11.0-rc.3", default-features = false, optional = true }
+sha3 = { version = "0.11.0-rc.3", default-features = false }
 subtle = { version = "2.6", default-features = false }
 x25519-dalek = { version = "2", default-features = false, features = [
     "static_secrets",

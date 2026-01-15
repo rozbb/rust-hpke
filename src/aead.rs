@@ -1,7 +1,7 @@
 //! Traits and structs for authenticated encryption schemes
 
 use crate::{
-    kdf::{Kdf as KdfTrait, LabeledExpand},
+    kdf::Kdf as KdfTrait,
     kem::Kem as KemTrait,
     setup::ExporterSecret,
     util::{enforce_equal_len, enforce_outbuf_len, full_suite_id, write_u64_be, FullSuiteId},
