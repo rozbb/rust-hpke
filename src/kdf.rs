@@ -14,7 +14,7 @@ use hybrid_array::{
 };
 use sha2::{Sha256, Sha384, Sha512};
 
-mod one_stage_kdf;
+pub(crate) mod one_stage_kdf;
 mod two_stage_kdf;
 
 pub(crate) const VERSION_LABEL: &[u8] = b"HPKE-v1";

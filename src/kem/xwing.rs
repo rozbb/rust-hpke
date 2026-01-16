@@ -1,81 +1,80 @@
 //! Implemented as per https://filippo.io/hpke-pq, which itself derives from
 //! https://datatracker.ietf.org/doc/html/draft-ietf-hpke-pq-03
 
-use digest::{ExtendableOutput, Update, XofReader};
-use rand_core::{CryptoRng, RngCore};
-use sha3::Shake256;
-use x_wing::{
-    kem::{Decapsulate, Encapsulate},
-    DECAPSULATION_KEY_SIZE,
+use crate::{
+    kdf::one_stage_kdf::labeled_derive,
+    kem::KemTrait,
+    util::{enforce_equal_len, enforce_outbuf_len, kem_suite_id},
+    Deserializable, HpkeError, Serializable,
 };
 
-use crate::{
-    kdf::VERSION_LABEL,
-    kem::KemTrait,
-    util::{kem_suite_id, write_u16_be, KemSuiteId},
-    Deserializable, Serializable,
-};
-use hybrid_array::typenum::{Prod, Sum, U1024, U3, U32, U64};
+use hybrid_array::typenum::{Prod, Sum, Unsigned, U1024, U3, U32, U64};
+use rand_core::{CryptoRng, RngCore};
+use sha3::Shake256;
+use subtle::{Choice, ConstantTimeEq};
+use x_wing::kem::{Decapsulate, Encapsulate};
 
 // Type-level size constants for X-Wing
 type U1216 = Sum<U1024, Prod<U64, U3>>;
 type U1120 = Sum<Sum<U1024, U64>, U32>;
 
-/// The private key uses the compressed seed representation, not
-/// the full uncompressed version
-#[derive(Clone, PartialEq, Eq, Debug)]
-pub struct PrivateKey([u8; x_wing::DECAPSULATION_KEY_SIZE]);
-
-impl From<&PrivateKey> for x_wing::DecapsulationKey {
-    fn from(sk: &PrivateKey) -> x_wing::DecapsulationKey {
-        x_wing::DecapsulationKey::from(sk.0)
-    }
-}
+#[derive(Clone)]
+pub struct PrivateKey(x_wing::DecapsulationKey);
 
 impl Serializable for PrivateKey {
+    // x_wing::DECAPSULATION_KEY_SIZE == 32
     type OutputSize = U32;
 
     fn write_exact(&self, buf: &mut [u8]) {
-        buf.copy_from_slice(&self.0);
+        // Check the length is correct and panic if not
+        enforce_outbuf_len::<Self>(buf);
+
+        buf.copy_from_slice(self.0.as_bytes());
     }
 }
 
 impl Deserializable for PrivateKey {
-    fn from_bytes(bytes: &[u8]) -> Result<Self, crate::HpkeError> {
-        if bytes.len() != x_wing::DECAPSULATION_KEY_SIZE {
-            return Err(crate::HpkeError::ValidationError);
-        }
-        let mut arr = [0u8; x_wing::DECAPSULATION_KEY_SIZE];
-        arr.copy_from_slice(bytes);
-        Ok(PrivateKey(arr))
+    fn from_bytes(encoded: &[u8]) -> Result<Self, HpkeError> {
+        // Check the input buf length is correct and error if not
+        enforce_equal_len(Self::OutputSize::USIZE, encoded.len())?;
+
+        // Copy to a fixed-size array
+        let mut arr = [0u8; Self::OutputSize::USIZE];
+        arr.copy_from_slice(encoded);
+
+        Ok(PrivateKey(arr.into()))
     }
 }
 
-#[derive(Clone, PartialEq, Eq, Debug)]
-pub struct PublicKey([u8; x_wing::ENCAPSULATION_KEY_SIZE]);
+impl ConstantTimeEq for PrivateKey {
+    fn ct_eq(&self, other: &Self) -> Choice {
+        self.0.as_bytes().ct_eq(other.0.as_bytes())
+    }
+}
+
+#[derive(Clone, PartialEq)]
+pub struct PublicKey(x_wing::EncapsulationKey);
 
 impl Serializable for PublicKey {
     type OutputSize = U1216;
 
     fn write_exact(&self, buf: &mut [u8]) {
-        buf.copy_from_slice(&self.0);
+        // Check the length is correct and panic if not
+        enforce_outbuf_len::<Self>(buf);
+
+        buf.copy_from_slice(&self.0.to_bytes());
     }
 }
 
 impl Deserializable for PublicKey {
-    fn from_bytes(bytes: &[u8]) -> Result<Self, crate::HpkeError> {
-        if bytes.len() != x_wing::ENCAPSULATION_KEY_SIZE {
-            return Err(crate::HpkeError::ValidationError);
-        }
-        let mut arr = [0u8; x_wing::ENCAPSULATION_KEY_SIZE];
-        arr.copy_from_slice(bytes);
-        Ok(PublicKey(arr))
-    }
-}
+    fn from_bytes(encoded: &[u8]) -> Result<Self, HpkeError> {
+        // Check the input buf length is correct and error if not
+        enforce_equal_len(Self::OutputSize::USIZE, encoded.len())?;
 
-impl From<&PublicKey> for x_wing::EncapsulationKey {
-    fn from(pk: &PublicKey) -> x_wing::EncapsulationKey {
-        x_wing::EncapsulationKey::from(&pk.0)
+        let arr: &[u8; Self::OutputSize::USIZE] = encoded.try_into().unwrap();
+        let pk = x_wing::EncapsulationKey::try_from(arr).map_err(|_| HpkeError::ValidationError)?;
+
+        Ok(PublicKey(pk))
     }
 }
 
@@ -91,9 +90,9 @@ impl Serializable for EncappedKey {
 }
 
 impl Deserializable for EncappedKey {
-    fn from_bytes(bytes: &[u8]) -> Result<Self, crate::HpkeError> {
+    fn from_bytes(bytes: &[u8]) -> Result<Self, HpkeError> {
         if bytes.len() != x_wing::CIPHERTEXT_SIZE {
-            return Err(crate::HpkeError::ValidationError);
+            return Err(HpkeError::ValidationError);
         }
         let mut arr = [0u8; x_wing::CIPHERTEXT_SIZE];
         arr.copy_from_slice(bytes);
@@ -101,12 +100,16 @@ impl Deserializable for EncappedKey {
     }
 }
 
+/// Represents The X-Wing hybrid post-quantum KEM
 pub struct XWing;
 
 impl KemTrait for XWing {
-    // As per Draft-connolly-cfrg-xwing-kem
+    // Per https://www.ietf.org/archive/id/draft-ietf-hpke-pq-03.html#name-pq-t-hybrid-entries-for-the
     const KEM_ID: u16 = 0x647a;
 
+    // https://www.ietf.org/archive/id/draft-ietf-hpke-pq-03.html#section-4-6.3.2.1.1
+    // NSecret = Nss of X-Wing, which itself is 32 bytes, per
+    // https://www.ietf.org/archive/id/draft-irtf-cfrg-concrete-hybrid-kems-02.html#section-4.2-4.5.1
     type NSecret = U32;
 
     type PublicKey = PublicKey;
@@ -115,35 +118,28 @@ impl KemTrait for XWing {
 
     fn gen_keypair<CsPrng: CryptoRng + RngCore>(csprng: &mut CsPrng) -> (PrivateKey, PublicKey) {
         let (sk, pk) = x_wing::generate_key_pair_from_rng(csprng);
-        (PrivateKey(*sk.as_bytes()), PublicKey(pk.to_bytes()))
+        (PrivateKey(sk), PublicKey(pk))
     }
 
     fn sk_to_pk(sk: &Self::PrivateKey) -> Self::PublicKey {
-        PublicKey(
-            x_wing::DecapsulationKey::from(sk)
-                .encapsulation_key()
-                .to_bytes(),
-        )
+        PublicKey(sk.0.encapsulation_key())
     }
 
-    /// DeriveKeyPair from
-    /// https://github.com/FiloSottile/hpke/blob/8aa8a04dacd2fb6d7c40e16c3d57037d4eb5e659/hpke-pq.md#kem-functions
+    // From https://www.ietf.org/archive/id/draft-ietf-hpke-pq-03.html#section-4-5
     //
     // def DeriveKeyPair(ikm):
-    //     seed = SHAKE256.LabeledDerive(ikm, "DeriveKeyPair", "", Nsk)
-    //     ek_PQ, ek_T, _, _ = expandKey(seed)
-    //     ek = ek_PQ || ek_T
-    //     return (seed, ek)
+    //   seed = SHAKE256.LabeledDerive(ikm, "DeriveKeyPair", "", 32)
+    //   return KEM.DeriveKeyPair(seed)
     fn derive_keypair(ikm: &[u8]) -> (Self::PrivateKey, Self::PublicKey) {
         let suite_id = kem_suite_id::<Self>();
-        let mut sk = [0u8; DECAPSULATION_KEY_SIZE];
-        shake256_labeled_derive(suite_id, ikm, b"DeriveKeyPair", b"", &mut sk);
+        let mut sk_bytes = [0u8; <PrivateKey as Serializable>::OutputSize::USIZE];
+        labeled_derive::<Shake256>(&suite_id, &[ikm], b"DeriveKeyPair", &[b""], &mut sk_bytes);
 
-        let sk = x_wing::DecapsulationKey::from(sk);
-        (
-            PrivateKey(*sk.as_bytes()),
-            PublicKey(sk.encapsulation_key().to_bytes()),
-        )
+        // Parse the sk. Can unwrap bc from_bytes only requires that the input len is OutputSize
+        let sk = PrivateKey::from_bytes(&sk_bytes).unwrap();
+        let pk = Self::sk_to_pk(&sk);
+
+        (sk, pk)
     }
 
     /// Decapsulate the encapsulated key using the recipient's private key. This DOES NOT support
@@ -155,15 +151,14 @@ impl KemTrait for XWing {
         sk_recip: &Self::PrivateKey,
         pk_sender_id: Option<&Self::PublicKey>,
         encapped_key: &Self::EncappedKey,
-    ) -> Result<super::SharedSecret<Self>, crate::HpkeError> {
+    ) -> Result<super::SharedSecret<Self>, HpkeError> {
         assert!(
             pk_sender_id.is_none(),
             "X-Wing doesn't support authenticated encapsulation. Use Base or Psk operation mode."
         );
 
-        let sk = x_wing::DecapsulationKey::from(sk_recip);
         let ct = x_wing::Ciphertext::from(&encapped_key.0);
-        let ss = sk.decapsulate(&ct).expect("infallible");
+        let ss = sk_recip.0.decapsulate(&ct).expect("infallible");
         Ok(super::SharedSecret(ss.into()))
     }
 
@@ -176,64 +171,20 @@ impl KemTrait for XWing {
         pk_recip: &Self::PublicKey,
         sender_id_keypair: Option<(&Self::PrivateKey, &Self::PublicKey)>,
         csprng: &mut R,
-    ) -> Result<(super::SharedSecret<Self>, Self::EncappedKey), crate::HpkeError> {
+    ) -> Result<(super::SharedSecret<Self>, Self::EncappedKey), HpkeError> {
         assert!(
             sender_id_keypair.is_none(),
             "X-Wing doesn't support authenticated encapsulation. Use Base or Psk operation mode."
         );
 
-        let pk = x_wing::EncapsulationKey::from(pk_recip);
-        let (ct, ss) = pk.encapsulate_with_rng(csprng).expect("infallible");
+        let (ct, ss) = pk_recip.0.encapsulate_with_rng(csprng).expect("infallible");
         Ok((super::SharedSecret(ss.into()), EncappedKey(ct.to_bytes())))
     }
-}
-
-/// SHAKE256.LabeledDerive function from
-/// https://github.com/FiloSottile/hpke/blob/8aa8a04dacd2fb6d7c40e16c3d57037d4eb5e659/hpke-pq.md#shake256labeledderive
-///
-/// Does some domain separation, hashes in all the data, and writes to `out` until `out` is filled
-/// with new bytes.
-//
-// def SHAKE256.LabeledDerive(ikm, label, context, L):
-//   suite_id = concat("KEM", I2OSP(kem_id, 2))
-//   prefixed_label = I2OSP(len(label), 2) || label
-//   labeled_ikm = ikm || "HPKE-v1" || suite_id || prefixed_label || I2OSP(L, 2) || context
-//   return SHAKE256(labeled_ikm, L)
-fn shake256_labeled_derive(
-    suite_id: KemSuiteId,
-    ikm: &[u8],
-    label: &[u8],
-    context: &[u8],
-    out: &mut [u8],
-) {
-    // Encode the label and output buffer lengths
-    let label_len = {
-        let mut buf = [0u8; 2];
-        write_u16_be(&mut buf, label.len() as u16);
-        buf
-    };
-    let out_len = {
-        let mut buf = [0u8; 2];
-        write_u16_be(&mut buf, out.len() as u16);
-        buf
-    };
-
-    Shake256::default()
-        .chain(ikm)
-        .chain(VERSION_LABEL)
-        .chain(suite_id)
-        .chain(label_len)
-        .chain(label)
-        .chain(out_len)
-        .chain(context)
-        .finalize_xof()
-        .read(out)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rand::Rng;
 
     #[test]
     fn test_roundtrip() {

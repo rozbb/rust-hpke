@@ -57,7 +57,7 @@ subtle = { version = "2.6", default-features = false }
 x25519-dalek = { version = "2", default-features = false, features = [
     "static_secrets",
 ], optional = true }
-x-wing = { git = "https://github.com/RustCrypto/KEMs", rev = "ba2c61f2503244d1a716148a37c698f5948dd1e1", optional = true }
+x-wing = { git = "https://github.com/RustCrypto/KEMs", rev = "ba2c61f2503244d1a716148a37c698f5948dd1e1", features = ["zeroize"], optional = true }
 zeroize = { version = "1", default-features = false, features = [
     "zeroize_derive",
 ] }

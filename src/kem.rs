@@ -6,6 +6,7 @@ use core::fmt::Debug;
 
 use hybrid_array::{Array, ArraySize};
 use rand_core::{CryptoRng, RngCore};
+use subtle::ConstantTimeEq;
 use zeroize::Zeroize;
 
 mod dhkem;
@@ -19,11 +20,11 @@ pub use xwing::*;
 pub trait Kem: Sized {
     /// The key exchange's public key type. If you want to generate a keypair, see
     /// `Kem::gen_keypair` or `Kem::derive_keypair`
-    type PublicKey: Clone + Debug + PartialEq + Eq + Serializable + Deserializable;
+    type PublicKey: Clone + PartialEq + Serializable + Deserializable;
 
     /// The key exchange's private key type. If you want to generate a keypair, see
     /// `Kem::gen_keypair` or `Kem::derive_keypair`
-    type PrivateKey: Clone + PartialEq + Eq + Serializable + Deserializable;
+    type PrivateKey: Clone + ConstantTimeEq + Serializable + Deserializable;
 
     /// Computes the public key of a given private key
     fn sk_to_pk(sk: &Self::PrivateKey) -> Self::PublicKey;

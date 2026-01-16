@@ -26,7 +26,7 @@ where
     labeled_derive::<H>(suite_id, &[ikm], b"shared_secret", &[info], out)
 }
 
-// §4 in https://datatracker.ietf.org/doc/html/draft-ietf-hpke-hpke-02
+// From https://www.ietf.org/archive/id/draft-ietf-hpke-hpke-02.html#section-4-9
 //
 // # For use with one-stage KDFs
 // def LabeledDerive(ikm, label, context, L):
