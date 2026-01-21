@@ -135,9 +135,9 @@ impl TestableKem for XWing {
     type EphemeralKey = <X25519HkdfSha256 as KemTrait>::PrivateKey;
 
     fn encap_with_eph(
-        pk_recip: &Self::PublicKey,
-        sender_id_keypair: Option<(&Self::PrivateKey, &Self::PublicKey)>,
-        sk_eph: Self::EphemeralKey,
+        _pk_recip: &Self::PublicKey,
+        _sender_id_keypair: Option<(&Self::PrivateKey, &Self::PublicKey)>,
+        _sk_eph: Self::EphemeralKey,
     ) -> Result<(SharedSecret<Self>, Self::EncappedKey), HpkeError> {
         unimplemented!()
     }
@@ -148,8 +148,11 @@ impl TestableKem for XWing {
         sender_id_keypair: Option<(&Self::PrivateKey, &Self::PublicKey)>,
         randomness: &[u8],
     ) -> Result<(SharedSecret<Self>, Self::EncappedKey), HpkeError> {
-        let arr = randomness.try_into().unwrap();
-        XWing::encap_deterministic(&pk_recip, arr)
+        assert!(
+            sender_id_keypair.is_none(),
+            "X-Wing does not support authentciated encapsulation"
+        );
+        XWing::encap_deterministic(&pk_recip, randomness.try_into().unwrap())
     }
 }
 

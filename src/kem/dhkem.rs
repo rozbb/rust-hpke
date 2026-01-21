@@ -184,7 +184,7 @@ macro_rules! impl_dhkem {
 
             /// Encapsulates to the given public key, using `ikm` as the keying material for the
             /// ephemeral keypair. This is useful for known-answer tests.
-            #[cfg(test)]
+            #[cfg(all(test, feature = "std"))]
             pub(crate) fn encap_with_ikm(
                 pk_recip: &PublicKey,
                 sender_id_keypair: Option<(&PrivateKey, &PublicKey)>,

@@ -12,11 +12,15 @@ use hybrid_array::typenum::{Prod, Sum, Unsigned, U1024, U3, U32, U64};
 use rand_core::{CryptoRng, RngCore};
 use sha3::Shake256;
 use subtle::{Choice, ConstantTimeEq};
-use x_wing::kem::{Decapsulate, Encapsulate};
+use x_wing::kem::Decapsulate;
+use zeroize::Zeroize;
 
 // Type-level size constants for X-Wing
 type U1216 = Sum<U1024, Prod<U64, U3>>;
 type U1120 = Sum<Sum<U1024, U64>, U32>;
+
+/// The number of random bytes required to do an X-Wing encapsulation
+const XWING_ENCAP_RANDOMNESS_SIZE: usize = 64;
 
 #[derive(Clone)]
 pub struct PrivateKey(x_wing::DecapsulationKey);
@@ -107,7 +111,7 @@ impl KemTrait for XWing {
     // Per https://www.ietf.org/archive/id/draft-ietf-hpke-pq-03.html#name-pq-t-hybrid-entries-for-the
     const KEM_ID: u16 = 0x647a;
 
-    // https://www.ietf.org/archive/id/draft-ietf-hpke-pq-03.html#section-4-6.3.2.1.1
+    // From https://www.ietf.org/archive/id/draft-ietf-hpke-pq-03.html#section-4-6.3.2.1.1
     // NSecret = Nss of X-Wing, which itself is 32 bytes, per
     // https://www.ietf.org/archive/id/draft-irtf-cfrg-concrete-hybrid-kems-02.html#section-4.2-4.5.1
     type NSecret = U32;
@@ -177,15 +181,19 @@ impl KemTrait for XWing {
             "X-Wing doesn't support authenticated encapsulation. Use Base or Psk operation mode."
         );
 
-        let (ct, ss) = pk_recip.0.encapsulate_with_rng(csprng).expect("infallible");
-        Ok((SharedSecret(ss.into()), EncappedKey(ct.to_bytes())))
+        // Generate randomness and call encap_deterministic
+        let mut randomness = [0u8; XWING_ENCAP_RANDOMNESS_SIZE];
+        csprng.fill_bytes(&mut randomness);
+        let res = Self::encap_deterministic(pk_recip, &randomness);
+        randomness.zeroize();
+        res
     }
 }
 
 impl XWing {
-    pub fn encap_deterministic(
+    pub(crate) fn encap_deterministic(
         pk_recip: &PublicKey,
-        randomness: &[u8; 64],
+        randomness: &[u8; XWING_ENCAP_RANDOMNESS_SIZE],
     ) -> Result<(SharedSecret<Self>, EncappedKey), HpkeError> {
         let (ct, ss) = pk_recip
             .0
