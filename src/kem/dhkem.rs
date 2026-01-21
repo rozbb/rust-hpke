@@ -89,13 +89,9 @@ macro_rules! impl_dhkem {
             //   shared_secret = ExtractAndExpand(dh, kem_context)
             //   return shared_secret, enc
 
-            // The reason we define encap_with_eph() rather than just encap() is because we need to
-            // use deterministic ephemeral keys in the known-answer tests. So we define a function
-            // here, then use it to impl kem::Kem and kat_tests::TestableKem.
-
-            /// Derives a shared secret that the owner of the recipient's pubkey can use to derive
-            /// the same shared secret. If `sk_sender_id` is given, the sender's identity will be
-            /// tied to the shared secret.
+            /// Does a DH operation with `pk_recip`, using `sk_eph` as the ephemeral key share. If
+            /// `sk_sender_id` is given, the sender's identity will be tied to the resulting shared
+            /// secret.
             ///
             /// Return Value
             /// ============
@@ -184,6 +180,21 @@ macro_rules! impl_dhkem {
                 };
 
                 Ok((shared_secret, encapped_key))
+            }
+
+            /// Encapsulates to the given public key, using `ikm` as the keying material for the
+            /// ephemeral keypair. This is useful for known-answer tests.
+            #[cfg(test)]
+            pub(crate) fn encap_with_ikm(
+                pk_recip: &PublicKey,
+                sender_id_keypair: Option<(&PrivateKey, &PublicKey)>,
+                ikm: &[u8],
+            ) -> Result<(SharedSecret<$kem_name>, EncappedKey), HpkeError> {
+                // Compute the ephemeral keypair from the keying material
+                let suite_id = kem_suite_id::<$kem_name>();
+                let (sk_eph, _pk_eph) = <$dhkex as DhKeyExchange>::derive_keypair::<$kdf>(&suite_id, ikm);
+
+                encap_with_eph(pk_recip, sender_id_keypair, sk_eph)
             }
 
             impl KemTrait for $kem_name {
