@@ -22,7 +22,7 @@ x25519 = ["dep:x25519-dalek"]
 p384 = ["dep:p384"]
 p256 = ["dep:p256"]
 p521 = ["dep:p521"]
-xwing = ["dep:x-wing", "dep:kem"]
+xwing = ["dep:x-wing"]
 # Include allocating methods like open() and seal()
 alloc = []
 # Used to enable KAT tests. Also implies alloc
@@ -32,13 +32,12 @@ hazmat-streaming-enc = []
 [dependencies]
 aead = "0.6.0-rc.3"
 aes-gcm = "0.11.0-rc.2"
-chacha20poly1305 = "0.11.0-rc.2"
+chacha20poly1305 = "=0.11.0-rc.2"
 hybrid-array = "0.4"
-digest = "0.11.0-rc.4"
-hkdf = "0.13.0-rc.3"
-hmac = "0.13.0-rc.3"
-kem = { version = "0.4.0-rc.1", optional = true}
-rand_core = { version = "0.10.0-rc-2", default-features = false }
+digest = "=0.11.0-rc.4"
+hkdf = "=0.13.0-rc.3"
+hmac = "=0.13.0-rc.3"
+rand_core = { version = "=0.10.0-rc-3", default-features = false }
 p256 = { version = "0.13", default-features = false, features = [
     "arithmetic",
     "ecdh",
@@ -57,7 +56,7 @@ subtle = { version = "2.6", default-features = false }
 x25519-dalek = { version = "2", default-features = false, features = [
     "static_secrets",
 ], optional = true }
-x-wing = { git = "https://github.com/RustCrypto/KEMs", rev = "ba2c61f2503244d1a716148a37c698f5948dd1e1", features = ["zeroize"], optional = true }
+x-wing = { version = "0.1.0-pre.3", optional = true }
 zeroize = { version = "1", default-features = false, features = [
     "zeroize_derive",
 ] }
@@ -93,4 +92,5 @@ bench = false
 
 [patch.crates-io]
 # Needed because of version conflicts. This can be removed once RustCrypto releases newer stable versions.
-ml-kem = { git = "https://github.com/RustCrypto/KEMs", rev = "ba2c61f2503244d1a716148a37c698f5948dd1e1"  }
+#x-wing = { path = "../KEMs/x-wing" }
+x-wing = { git = "https://github.com/rozbb/KEMs.git", rev = "e14beae5464457526358e8c973b9fc6658ed9a80" }

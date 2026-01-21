@@ -29,6 +29,13 @@ trait TestableKem: KemTrait {
         sender_id_keypair: Option<(&Self::PrivateKey, &Self::PublicKey)>,
         sk_eph: Self::EphemeralKey,
     ) -> Result<(SharedSecret<Self>, Self::EncappedKey), HpkeError>;
+
+    #[doc(hidden)]
+    fn encap_det(
+        pk_recip: &Self::PublicKey,
+        sender_id_keypair: Option<(&Self::PrivateKey, &Self::PublicKey)>,
+        randomness: &[u8],
+    ) -> Result<(SharedSecret<Self>, Self::EncappedKey), HpkeError>;
 }
 
 // Now implement TestableKem for all the KEMs in the KAT
@@ -44,6 +51,15 @@ impl TestableKem for X25519HkdfSha256 {
     ) -> Result<(SharedSecret<Self>, Self::EncappedKey), HpkeError> {
         kem::x25519_hkdfsha256::encap_with_eph(pk_recip, sender_id_keypair, sk_eph)
     }
+
+    #[doc(hidden)]
+    fn encap_det(
+        pk_recip: &Self::PublicKey,
+        sender_id_keypair: Option<(&Self::PrivateKey, &Self::PublicKey)>,
+        randomness: &[u8],
+    ) -> Result<(SharedSecret<Self>, Self::EncappedKey), HpkeError> {
+        unimplemented!()
+    }
 }
 impl TestableKem for DhP256HkdfSha256 {
     // In DHKEM, ephemeral keys and private keys are both scalars
@@ -56,6 +72,15 @@ impl TestableKem for DhP256HkdfSha256 {
         sk_eph: Self::EphemeralKey,
     ) -> Result<(SharedSecret<Self>, Self::EncappedKey), HpkeError> {
         kem::dhp256_hkdfsha256::encap_with_eph(pk_recip, sender_id_keypair, sk_eph)
+    }
+
+    #[doc(hidden)]
+    fn encap_det(
+        pk_recip: &Self::PublicKey,
+        sender_id_keypair: Option<(&Self::PrivateKey, &Self::PublicKey)>,
+        randomness: &[u8],
+    ) -> Result<(SharedSecret<Self>, Self::EncappedKey), HpkeError> {
+        unimplemented!()
     }
 }
 
@@ -71,6 +96,15 @@ impl TestableKem for DhP384HkdfSha384 {
     ) -> Result<(SharedSecret<Self>, Self::EncappedKey), HpkeError> {
         kem::dhp384_hkdfsha384::encap_with_eph(pk_recip, sender_id_keypair, sk_eph)
     }
+
+    #[doc(hidden)]
+    fn encap_det(
+        pk_recip: &Self::PublicKey,
+        sender_id_keypair: Option<(&Self::PrivateKey, &Self::PublicKey)>,
+        randomness: &[u8],
+    ) -> Result<(SharedSecret<Self>, Self::EncappedKey), HpkeError> {
+        unimplemented!()
+    }
 }
 
 impl TestableKem for DhP521HkdfSha512 {
@@ -85,6 +119,15 @@ impl TestableKem for DhP521HkdfSha512 {
     ) -> Result<(SharedSecret<Self>, Self::EncappedKey), HpkeError> {
         kem::dhp521_hkdfsha512::encap_with_eph(pk_recip, sender_id_keypair, sk_eph)
     }
+
+    #[doc(hidden)]
+    fn encap_det(
+        pk_recip: &Self::PublicKey,
+        sender_id_keypair: Option<(&Self::PrivateKey, &Self::PublicKey)>,
+        randomness: &[u8],
+    ) -> Result<(SharedSecret<Self>, Self::EncappedKey), HpkeError> {
+        unimplemented!()
+    }
 }
 
 // Dummy impl. We don't support encap-with-seed yet
@@ -97,6 +140,16 @@ impl TestableKem for XWing {
         sk_eph: Self::EphemeralKey,
     ) -> Result<(SharedSecret<Self>, Self::EncappedKey), HpkeError> {
         unimplemented!()
+    }
+
+    #[doc(hidden)]
+    fn encap_det(
+        pk_recip: &Self::PublicKey,
+        sender_id_keypair: Option<(&Self::PrivateKey, &Self::PublicKey)>,
+        randomness: &[u8],
+    ) -> Result<(SharedSecret<Self>, Self::EncappedKey), HpkeError> {
+        let arr = randomness.try_into().unwrap();
+        XWing::encap_deterministic(&pk_recip, arr)
     }
 }
 
@@ -145,7 +198,7 @@ struct MainTestVector {
     #[serde(default, rename = "ikmS", deserialize_with = "bytes_from_hex_opt")]
     ikm_sender: Option<Vec<u8>>,
     #[serde(rename = "ikmE", deserialize_with = "bytes_from_hex")]
-    _ikm_eph: Vec<u8>,
+    ikm_eph: Vec<u8>,
 
     // Private keys
     #[serde(rename = "skRm", deserialize_with = "bytes_from_hex")]
@@ -254,7 +307,9 @@ fn make_op_mode_r<'a, Kem: KemTrait>(
 fn test_case<A: Aead, Kdf: KdfTrait, Kem: TestableKem>(tv: MainTestVector) {
     // First, deserialize all the relevant keys so we can reconstruct the encapped key
     let recip_keypair = deser_keypair::<Kem>(&tv.sk_recip, &tv.pk_recip);
-    //let sk_eph = <Kem as TestableKem>::EphemeralKey::from_bytes(&tv.sk_eph).unwrap();
+    let sk_eph = tv
+        .sk_eph
+        .map(|bytes| <Kem as TestableKem>::EphemeralKey::from_bytes(&bytes).unwrap());
     let sender_keypair = {
         let pk_sender = &tv.pk_sender.as_ref();
         tv.sk_sender
@@ -277,20 +332,20 @@ fn test_case<A: Aead, Kdf: KdfTrait, Kem: TestableKem>(tv: MainTestVector) {
     let (sk_recip, pk_recip) = recip_keypair;
 
     // Now derive the encapped key with the deterministic encap function, using all the inputs
-    // above
-    let shared_secret = tv.shared_secret.clone();
-    let encapped_key = <Kem as KemTrait>::EncappedKey::from_bytes(&tv.encapped_key).unwrap();
-    //let (shared_secret, encapped_key) = {
-    //    let sender_keypair_ref = sender_keypair.as_ref().map(|&(ref sk, ref pk)| (sk, pk));
-    //    Kem::encap_with_eph(&pk_recip, sender_keypair_ref, sk_eph).expect("encap failed")
-    //};
+    // above. If sk_eph is defined, use that, otherwise use ikm_eph
+    let sender_keypair_ref = sender_keypair.as_ref().map(|&(ref sk, ref pk)| (sk, pk));
+    let (shared_secret, encapped_key) = if let Some(sk_eph) = sk_eph {
+        Kem::encap_with_eph(&pk_recip, sender_keypair_ref, sk_eph).expect("encap failed")
+    } else {
+        Kem::encap_det(&pk_recip, sender_keypair_ref, tv.ikm_eph.as_slice()).expect("encap failed")
+    };
 
     // Assert that the derived shared secret key is identical to the one provided
-    //assert_eq!(
-    //    shared_secret.0.as_slice(),
-    //    tv.shared_secret.as_slice(),
-    //    "shared_secret doesn't match"
-    //);
+    assert_eq!(
+        shared_secret.0.as_slice(),
+        tv.shared_secret.as_slice(),
+        "shared_secret doesn't match"
+    );
 
     // Assert that the derived encapped key is identical to the one provided
     {

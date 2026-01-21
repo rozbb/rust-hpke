@@ -2,8 +2,6 @@
 
 use crate::{Deserializable, HpkeError, Serializable};
 
-use core::fmt::Debug;
-
 use hybrid_array::{Array, ArraySize};
 use rand_core::{CryptoRng, RngCore};
 use subtle::ConstantTimeEq;

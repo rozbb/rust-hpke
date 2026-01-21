@@ -3,7 +3,7 @@
 
 use crate::{
     kdf::one_stage_kdf::labeled_derive,
-    kem::KemTrait,
+    kem::{KemTrait, SharedSecret},
     util::{enforce_equal_len, enforce_outbuf_len, kem_suite_id},
     Deserializable, HpkeError, Serializable,
 };
@@ -121,7 +121,7 @@ impl KemTrait for XWing {
         (PrivateKey(sk), PublicKey(pk))
     }
 
-    fn sk_to_pk(sk: &Self::PrivateKey) -> Self::PublicKey {
+    fn sk_to_pk(sk: &PrivateKey) -> PublicKey {
         PublicKey(sk.0.encapsulation_key())
     }
 
@@ -130,7 +130,7 @@ impl KemTrait for XWing {
     // def DeriveKeyPair(ikm):
     //   seed = SHAKE256.LabeledDerive(ikm, "DeriveKeyPair", "", 32)
     //   return KEM.DeriveKeyPair(seed)
-    fn derive_keypair(ikm: &[u8]) -> (Self::PrivateKey, Self::PublicKey) {
+    fn derive_keypair(ikm: &[u8]) -> (PrivateKey, PublicKey) {
         let suite_id = kem_suite_id::<Self>();
         let mut sk_bytes = [0u8; <PrivateKey as Serializable>::OutputSize::USIZE];
         labeled_derive::<Shake256>(&suite_id, &[ikm], b"DeriveKeyPair", &[b""], &mut sk_bytes);
@@ -148,10 +148,10 @@ impl KemTrait for XWing {
     /// # Panics
     /// Panics if `pk_sender_id` is `Some`.
     fn decap(
-        sk_recip: &Self::PrivateKey,
-        pk_sender_id: Option<&Self::PublicKey>,
-        encapped_key: &Self::EncappedKey,
-    ) -> Result<super::SharedSecret<Self>, HpkeError> {
+        sk_recip: &PrivateKey,
+        pk_sender_id: Option<&PublicKey>,
+        encapped_key: &EncappedKey,
+    ) -> Result<SharedSecret<Self>, HpkeError> {
         assert!(
             pk_sender_id.is_none(),
             "X-Wing doesn't support authenticated encapsulation. Use Base or Psk operation mode."
@@ -159,7 +159,7 @@ impl KemTrait for XWing {
 
         let ct = x_wing::Ciphertext::from(&encapped_key.0);
         let ss = sk_recip.0.decapsulate(&ct).expect("infallible");
-        Ok(super::SharedSecret(ss.into()))
+        Ok(SharedSecret(ss.into()))
     }
 
     /// Decapsulate the encapsulated key using the recipient's private key. This DOES NOT support
@@ -168,17 +168,29 @@ impl KemTrait for XWing {
     /// # Panics
     /// Panics if `sender_id_keypair` is `Some`.
     fn encap<R: CryptoRng + RngCore>(
-        pk_recip: &Self::PublicKey,
-        sender_id_keypair: Option<(&Self::PrivateKey, &Self::PublicKey)>,
+        pk_recip: &PublicKey,
+        sender_id_keypair: Option<(&PrivateKey, &PublicKey)>,
         csprng: &mut R,
-    ) -> Result<(super::SharedSecret<Self>, Self::EncappedKey), HpkeError> {
+    ) -> Result<(SharedSecret<Self>, EncappedKey), HpkeError> {
         assert!(
             sender_id_keypair.is_none(),
             "X-Wing doesn't support authenticated encapsulation. Use Base or Psk operation mode."
         );
 
         let (ct, ss) = pk_recip.0.encapsulate_with_rng(csprng).expect("infallible");
-        Ok((super::SharedSecret(ss.into()), EncappedKey(ct.to_bytes())))
+        Ok((SharedSecret(ss.into()), EncappedKey(ct.to_bytes())))
+    }
+}
+
+impl XWing {
+    pub fn encap_deterministic(
+        pk_recip: &PublicKey,
+        randomness: &[u8; 64],
+    ) -> Result<(SharedSecret<Self>, EncappedKey), HpkeError> {
+        let (ct, ss) = pk_recip
+            .0
+            .encapsulate_deterministic(randomness.try_into().unwrap());
+        Ok((SharedSecret(ss.into()), EncappedKey(ct.to_bytes())))
     }
 }
 
