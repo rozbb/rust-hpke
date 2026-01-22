@@ -2,7 +2,7 @@ use crate::{
     aead::{Aead, AesGcm128, AesGcm256, ChaCha20Poly1305, ExportOnlyAead},
     kdf::{HkdfSha256, HkdfSha384, HkdfSha512, Kdf as KdfTrait, KdfShake256},
     kem::{
-        self, DhP256HkdfSha256, DhP384HkdfSha384, DhP521HkdfSha512, Kem as KemTrait, SharedSecret,
+        DhP256HkdfSha256, DhP384HkdfSha384, DhP521HkdfSha512, Kem as KemTrait, SharedSecret,
         X25519HkdfSha256, XWing,
     },
     op_mode::{OpModeR, PskBundle},
@@ -12,17 +12,15 @@ use crate::{
 
 use std::{fs::File, string::String, vec::Vec};
 
-use hex;
 use serde::{de::Error as SError, Deserialize, Deserializer};
-use serde_json;
 
 // For known-answer tests we need to be able to encap with fixed randomness. This allows that.
-trait TestableKem: KemTrait {
+pub(crate) trait TestableKem: KemTrait {
     /// The ephemeral key used in encapsulation. This is the same thing as a private key in the
     /// case of DHKEM, but this is not always true
     type EphemeralKey: Deserializable;
 
-    // Encap with fixed randomness
+    // Encapsulate with a fixed ephemeral key. Only makes sense in DHKEMs
     #[doc(hidden)]
     fn encap_with_eph(
         pk_recip: &Self::PublicKey,
@@ -30,130 +28,13 @@ trait TestableKem: KemTrait {
         sk_eph: Self::EphemeralKey,
     ) -> Result<(SharedSecret<Self>, Self::EncappedKey), HpkeError>;
 
+    // Encapsulate with fixed randomness
     #[doc(hidden)]
     fn encap_det(
         pk_recip: &Self::PublicKey,
         sender_id_keypair: Option<(&Self::PrivateKey, &Self::PublicKey)>,
         randomness: &[u8],
     ) -> Result<(SharedSecret<Self>, Self::EncappedKey), HpkeError>;
-}
-
-// Now implement TestableKem for all the KEMs in the KAT
-impl TestableKem for X25519HkdfSha256 {
-    // In DHKEM, ephemeral keys and private keys are both scalars
-    type EphemeralKey = <X25519HkdfSha256 as KemTrait>::PrivateKey;
-
-    // Call the x25519 deterministic encap function we defined in dhkem.rs
-    fn encap_with_eph(
-        pk_recip: &Self::PublicKey,
-        sender_id_keypair: Option<(&Self::PrivateKey, &Self::PublicKey)>,
-        sk_eph: Self::EphemeralKey,
-    ) -> Result<(SharedSecret<Self>, Self::EncappedKey), HpkeError> {
-        kem::x25519_hkdfsha256::encap_with_eph(pk_recip, sender_id_keypair, sk_eph)
-    }
-
-    #[doc(hidden)]
-    fn encap_det(
-        pk_recip: &Self::PublicKey,
-        sender_id_keypair: Option<(&Self::PrivateKey, &Self::PublicKey)>,
-        randomness: &[u8],
-    ) -> Result<(SharedSecret<Self>, Self::EncappedKey), HpkeError> {
-        kem::x25519_hkdfsha256::encap_with_ikm(pk_recip, sender_id_keypair, randomness)
-    }
-}
-impl TestableKem for DhP256HkdfSha256 {
-    // In DHKEM, ephemeral keys and private keys are both scalars
-    type EphemeralKey = <DhP256HkdfSha256 as KemTrait>::PrivateKey;
-
-    // Call the p256 deterministic encap function we defined in dhkem.rs
-    fn encap_with_eph(
-        pk_recip: &Self::PublicKey,
-        sender_id_keypair: Option<(&Self::PrivateKey, &Self::PublicKey)>,
-        sk_eph: Self::EphemeralKey,
-    ) -> Result<(SharedSecret<Self>, Self::EncappedKey), HpkeError> {
-        kem::dhp256_hkdfsha256::encap_with_eph(pk_recip, sender_id_keypair, sk_eph)
-    }
-
-    #[doc(hidden)]
-    fn encap_det(
-        pk_recip: &Self::PublicKey,
-        sender_id_keypair: Option<(&Self::PrivateKey, &Self::PublicKey)>,
-        randomness: &[u8],
-    ) -> Result<(SharedSecret<Self>, Self::EncappedKey), HpkeError> {
-        kem::dhp256_hkdfsha256::encap_with_ikm(pk_recip, sender_id_keypair, randomness)
-    }
-}
-
-impl TestableKem for DhP384HkdfSha384 {
-    // In DHKEM, ephemeral keys and private keys are both scalars
-    type EphemeralKey = <DhP384HkdfSha384 as KemTrait>::PrivateKey;
-
-    // Call the p384 deterministic encap function we defined in dhkem.rs
-    fn encap_with_eph(
-        pk_recip: &Self::PublicKey,
-        sender_id_keypair: Option<(&Self::PrivateKey, &Self::PublicKey)>,
-        sk_eph: Self::EphemeralKey,
-    ) -> Result<(SharedSecret<Self>, Self::EncappedKey), HpkeError> {
-        kem::dhp384_hkdfsha384::encap_with_eph(pk_recip, sender_id_keypair, sk_eph)
-    }
-
-    #[doc(hidden)]
-    fn encap_det(
-        pk_recip: &Self::PublicKey,
-        sender_id_keypair: Option<(&Self::PrivateKey, &Self::PublicKey)>,
-        randomness: &[u8],
-    ) -> Result<(SharedSecret<Self>, Self::EncappedKey), HpkeError> {
-        kem::dhp384_hkdfsha384::encap_with_ikm(pk_recip, sender_id_keypair, randomness)
-    }
-}
-
-impl TestableKem for DhP521HkdfSha512 {
-    // In DHKEM, ephemeral keys and private keys are both scalars
-    type EphemeralKey = <DhP521HkdfSha512 as KemTrait>::PrivateKey;
-
-    // Call the p521 deterministic encap function we defined in dhkem.rs
-    fn encap_with_eph(
-        pk_recip: &Self::PublicKey,
-        sender_id_keypair: Option<(&Self::PrivateKey, &Self::PublicKey)>,
-        sk_eph: Self::EphemeralKey,
-    ) -> Result<(SharedSecret<Self>, Self::EncappedKey), HpkeError> {
-        kem::dhp521_hkdfsha512::encap_with_eph(pk_recip, sender_id_keypair, sk_eph)
-    }
-
-    #[doc(hidden)]
-    fn encap_det(
-        pk_recip: &Self::PublicKey,
-        sender_id_keypair: Option<(&Self::PrivateKey, &Self::PublicKey)>,
-        randomness: &[u8],
-    ) -> Result<(SharedSecret<Self>, Self::EncappedKey), HpkeError> {
-        kem::dhp521_hkdfsha512::encap_with_ikm(pk_recip, sender_id_keypair, randomness)
-    }
-}
-
-// Dummy impl. We don't support encap-with-seed yet
-impl TestableKem for XWing {
-    type EphemeralKey = <X25519HkdfSha256 as KemTrait>::PrivateKey;
-
-    fn encap_with_eph(
-        _pk_recip: &Self::PublicKey,
-        _sender_id_keypair: Option<(&Self::PrivateKey, &Self::PublicKey)>,
-        _sk_eph: Self::EphemeralKey,
-    ) -> Result<(SharedSecret<Self>, Self::EncappedKey), HpkeError> {
-        unimplemented!()
-    }
-
-    #[doc(hidden)]
-    fn encap_det(
-        pk_recip: &Self::PublicKey,
-        sender_id_keypair: Option<(&Self::PrivateKey, &Self::PublicKey)>,
-        randomness: &[u8],
-    ) -> Result<(SharedSecret<Self>, Self::EncappedKey), HpkeError> {
-        assert!(
-            sender_id_keypair.is_none(),
-            "X-Wing does not support authentciated encapsulation"
-        );
-        XWing::encap_deterministic(&pk_recip, randomness.try_into().unwrap())
-    }
 }
 
 /// Asserts that the given serializable values are equal

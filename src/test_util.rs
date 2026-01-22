@@ -5,7 +5,7 @@ use crate::{
     kem::Kem as KemTrait,
     op_mode::{OpModeR, OpModeS, PskBundle},
     setup::ExporterSecret,
-    Serializable,
+    Deserializable, Serializable,
 };
 
 use aead::inout::InOutBuf;
@@ -160,4 +160,18 @@ pub(crate) fn aead_ctx_eq<A: Aead, Kdf: KdfTrait, Kem: KemTrait>(
     }
 
     true
+}
+
+// Dummy impls for testing purposes
+impl Serializable for core::convert::Infallible {
+    type OutputSize = hybrid_array::typenum::U0;
+
+    fn write_exact(&self, _: &mut [u8]) {
+        unimplemented!()
+    }
+}
+impl Deserializable for core::convert::Infallible {
+    fn from_bytes(_: &[u8]) -> Result<Self, crate::HpkeError> {
+        unimplemented!()
+    }
 }

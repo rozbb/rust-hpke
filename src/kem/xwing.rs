@@ -107,6 +107,19 @@ impl Deserializable for EncappedKey {
 /// Represents The X-Wing hybrid post-quantum KEM
 pub struct XWing;
 
+impl XWing {
+    // Encapsulate with the given randomness
+    pub(crate) fn encap_deterministic(
+        pk_recip: &PublicKey,
+        randomness: &[u8; XWING_ENCAP_RANDOMNESS_SIZE],
+    ) -> Result<(SharedSecret<Self>, EncappedKey), HpkeError> {
+        let (ct, ss) = pk_recip
+            .0
+            .encapsulate_deterministic(randomness.try_into().unwrap());
+        Ok((SharedSecret(ss.into()), EncappedKey(ct.to_bytes())))
+    }
+}
+
 impl KemTrait for XWing {
     // Per https://www.ietf.org/archive/id/draft-ietf-hpke-pq-03.html#name-pq-t-hybrid-entries-for-the
     const KEM_ID: u16 = 0x647a;
@@ -190,15 +203,29 @@ impl KemTrait for XWing {
     }
 }
 
-impl XWing {
-    pub(crate) fn encap_deterministic(
-        pk_recip: &PublicKey,
-        randomness: &[u8; XWING_ENCAP_RANDOMNESS_SIZE],
-    ) -> Result<(SharedSecret<Self>, EncappedKey), HpkeError> {
-        let (ct, ss) = pk_recip
-            .0
-            .encapsulate_deterministic(randomness.try_into().unwrap());
-        Ok((SharedSecret(ss.into()), EncappedKey(ct.to_bytes())))
+// Impl the trait necessary for known-answer tests
+#[cfg(all(test, feature = "std"))]
+impl crate::kat_tests::TestableKem for XWing {
+    // There is no encap-with-eph, since that only makes sense for DHKEMs
+    type EphemeralKey = core::convert::Infallible;
+    fn encap_with_eph(
+        _pk_recip: &Self::PublicKey,
+        _sender_id_keypair: Option<(&Self::PrivateKey, &Self::PublicKey)>,
+        _sk_eph: Self::EphemeralKey,
+    ) -> Result<(SharedSecret<Self>, Self::EncappedKey), HpkeError> {
+        unimplemented!()
+    }
+
+    fn encap_det(
+        pk_recip: &Self::PublicKey,
+        sender_id_keypair: Option<(&Self::PrivateKey, &Self::PublicKey)>,
+        randomness: &[u8],
+    ) -> Result<(SharedSecret<Self>, Self::EncappedKey), HpkeError> {
+        assert!(
+            sender_id_keypair.is_none(),
+            "X-Wing does not support authentciated encapsulation"
+        );
+        XWing::encap_deterministic(&pk_recip, randomness.try_into().unwrap())
     }
 }
 

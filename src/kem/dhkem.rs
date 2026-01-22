@@ -182,21 +182,6 @@ macro_rules! impl_dhkem {
                 Ok((shared_secret, encapped_key))
             }
 
-            /// Encapsulates to the given public key, using `ikm` as the keying material for the
-            /// ephemeral keypair. This is useful for known-answer tests.
-            #[cfg(all(test, feature = "std"))]
-            pub(crate) fn encap_with_ikm(
-                pk_recip: &PublicKey,
-                sender_id_keypair: Option<(&PrivateKey, &PublicKey)>,
-                ikm: &[u8],
-            ) -> Result<(SharedSecret<$kem_name>, EncappedKey), HpkeError> {
-                // Compute the ephemeral keypair from the keying material
-                let suite_id = kem_suite_id::<$kem_name>();
-                let (sk_eph, _pk_eph) = <$dhkex as DhKeyExchange>::derive_keypair::<$kdf>(&suite_id, ikm);
-
-                encap_with_eph(pk_recip, sender_id_keypair, sk_eph)
-            }
-
             impl KemTrait for $kem_name {
                 // RFC 9180 §4.1
                 // For the variants of DHKEM defined in this document, the size Nsecret of the
@@ -355,6 +340,37 @@ macro_rules! impl_dhkem {
                         .expect("shared secret is way too big");
                         Ok(shared_secret)
                     }
+                }
+            }
+
+            #[cfg(all(test, feature = "std"))]
+            impl crate::kat_tests::TestableKem for $kem_name {
+                // In DHKEM, ephemeral keys and private keys are both scalars
+                type EphemeralKey = PrivateKey;
+
+                fn encap_with_eph(
+                    pk_recip: &Self::PublicKey,
+                    sender_id_keypair: Option<(&PrivateKey, &PublicKey)>,
+                    sk_eph: Self::EphemeralKey,
+                ) -> Result<(SharedSecret<Self>, Self::EncappedKey), HpkeError> {
+                    encap_with_eph(pk_recip, sender_id_keypair, sk_eph)
+                }
+
+                /// Encapsulates to the given public key, using `ikm` as the keying material for the
+                /// ephemeral keypair
+                fn encap_det(
+                    pk_recip: &Self::PublicKey,
+                    sender_id_keypair: Option<(&Self::PrivateKey, &Self::PublicKey)>,
+                    randomness: &[u8],
+                ) -> Result<(SharedSecret<Self>, Self::EncappedKey), HpkeError> {
+                    // Compute the ephemeral keypair from the keying material
+                    let suite_id = kem_suite_id::<$kem_name>();
+                    let (sk_eph, _pk_eph) = <$dhkex as DhKeyExchange>::derive_keypair::<$kdf>(
+                        &suite_id,
+                        randomness,
+                    );
+
+                    encap_with_eph(pk_recip, sender_id_keypair, sk_eph)
                 }
             }
         }
