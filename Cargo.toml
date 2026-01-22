@@ -19,14 +19,14 @@ rust-version = "1.85"
 # "xwing" enables the use of X-Wing hybrid post-quantum KEM
 default = ["alloc", "p256", "x25519"]
 x25519 = ["dep:x25519-dalek"]
-p384 = ["dep:p384"]
 p256 = ["dep:p256"]
+p384 = ["dep:p384"]
 p521 = ["dep:p521"]
 xwing = ["dep:x-wing"]
 # Include allocating methods like open() and seal()
 alloc = []
-# Used to enable KAT tests. Also implies alloc
-std = ["alloc"]
+# Used to enable known-answer tests. Implies alloc and all other features
+kat = ["alloc", "x25519", "p256", "p384", "p521", "xwing"]
 hazmat-streaming-enc = []
 
 [dependencies]

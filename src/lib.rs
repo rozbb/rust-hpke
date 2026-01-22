@@ -76,7 +76,8 @@
 //-------- no_std stuff --------//
 #![no_std]
 
-#[cfg(feature = "std")]
+// Known-answer tests need std for file IO
+#[cfg(feature = "kat")]
 #[macro_use]
 extern crate std;
 
@@ -90,16 +91,7 @@ pub(crate) use alloc::vec::Vec;
 
 //-------- Testing stuff --------//
 
-// kat_tests tests all the implemented ciphersuites, and thus needs all the dependencies. It also
-// needs std for file IO.
-#[cfg(all(
-    test,
-    feature = "std",
-    feature = "x25519",
-    feature = "p256",
-    feature = "p384",
-    feature = "p521"
-))]
+#[cfg(all(test, feature = "kat"))]
 mod kat_tests;
 
 #[cfg(test)]

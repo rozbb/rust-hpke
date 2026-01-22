@@ -55,7 +55,7 @@ Feature flag list:
 * `p384` - Enables NIST P-384-based KEMs
 * `p521` - Enables NIST P-521-based KEMs
 * `xwing` - Enables the X-Wing (aka MLKEM768-X25519) hybrid post-quantum KEM
-* `std` - Used only for testing (necessary for known-answer tests)
+* `kat` - Used only to enabled known-answer tests, which require `std`. Only use with `cargo test`
 
 For info on how to omit or include feature flags, see the [cargo docs on features](https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html#choosing-features).
 

@@ -204,7 +204,7 @@ impl KemTrait for XWing {
 }
 
 // Impl the trait necessary for known-answer tests
-#[cfg(all(test, feature = "std"))]
+#[cfg(all(test, feature = "kat"))]
 impl crate::kat_tests::TestableKem for XWing {
     // There is no encap-with-eph, since that only makes sense for DHKEMs
     type EphemeralKey = core::convert::Infallible;

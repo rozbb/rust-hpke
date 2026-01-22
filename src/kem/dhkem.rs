@@ -343,7 +343,7 @@ macro_rules! impl_dhkem {
                 }
             }
 
-            #[cfg(all(test, feature = "std"))]
+            #[cfg(all(test, feature = "kat"))]
             impl crate::kat_tests::TestableKem for $kem_name {
                 // In DHKEM, ephemeral keys and private keys are both scalars
                 type EphemeralKey = PrivateKey;
