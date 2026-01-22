@@ -62,7 +62,7 @@ fn bytes_from_hex_opt<'de, D>(deserializer: D) -> Result<Option<Vec<u8>>, D::Err
 where
     D: Deserializer<'de>,
 {
-    bytes_from_hex(deserializer).map(|v| Some(v))
+    bytes_from_hex(deserializer).map(Some)
 }
 
 // Each individual test case looks like this
@@ -257,8 +257,8 @@ fn test_case<A: Aead, Kdf: KdfTrait, Kem: TestableKem>(tv: MainTestVector) {
     let mode = make_op_mode_r(
         tv.mode,
         sender_keypair.map(|(_, pk)| pk),
-        tv.psk.as_ref().map(Vec::as_slice),
-        tv.psk_id.as_ref().map(Vec::as_slice),
+        tv.psk.as_deref(),
+        tv.psk_id.as_deref(),
     );
     let mut aead_ctx = setup_receiver::<A, Kdf, Kem>(&mode, &sk_recip, &encapped_key, &tv.info)
         .expect("setup_receiver failed");

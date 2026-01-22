@@ -403,8 +403,8 @@ mod tests {
         dh_res_xcoord_bytes: &[u8],
     ) {
         // Deserialize the pubkey and privkey and do a DH operation
-        let sk_recip = Kex::PrivateKey::from_bytes(&sk_recip_bytes).unwrap();
-        let pk_sender = Kex::PublicKey::from_bytes(&pk_sender_bytes).unwrap();
+        let sk_recip = Kex::PrivateKey::from_bytes(sk_recip_bytes).unwrap();
+        let pk_sender = Kex::PublicKey::from_bytes(pk_sender_bytes).unwrap();
         let derived_dh = Kex::dh(&sk_recip, &pk_sender).unwrap();
 
         // Assert that the derived DH result matches the test vector. Recall that the HPKE DH
@@ -470,19 +470,19 @@ mod tests {
     #[cfg(feature = "p256")]
     #[test]
     fn test_vector_ecdh_p256() {
-        test_vector_ecdh::<DhP256>(&P256_PRIVKEYS[0], &P256_PUBKEYS[1], &P256_DH_RES_XCOORD);
+        test_vector_ecdh::<DhP256>(P256_PRIVKEYS[0], P256_PUBKEYS[1], P256_DH_RES_XCOORD);
     }
 
     #[cfg(feature = "p384")]
     #[test]
     fn test_vector_ecdh_p384() {
-        test_vector_ecdh::<DhP384>(&P384_PRIVKEYS[0], &P384_PUBKEYS[1], &P384_DH_RES_XCOORD);
+        test_vector_ecdh::<DhP384>(P384_PRIVKEYS[0], P384_PUBKEYS[1], P384_DH_RES_XCOORD);
     }
 
     #[cfg(feature = "p521")]
     #[test]
     fn test_vector_ecdh_p521() {
-        test_vector_ecdh::<DhP521>(&P521_PRIVKEYS[0], &P521_PUBKEYS[1], &P521_DH_RES_XCOORD);
+        test_vector_ecdh::<DhP521>(P521_PRIVKEYS[0], P521_PUBKEYS[1], P521_DH_RES_XCOORD);
     }
 
     #[cfg(feature = "p256")]

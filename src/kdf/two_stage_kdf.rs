@@ -45,7 +45,7 @@ where
 //   return Extract(salt, labeled_ikm)
 
 /// Returns the HKDF context derived from `(salt=salt, ikm="HPKE-v1"||suite_id||label||ikm)`
-pub(crate) fn labeled_extract<H: Digest>(
+pub(crate) fn labeled_extract<H>(
     salt: &[u8],
     suite_id: &[u8],
     label: &[u8],
@@ -281,7 +281,7 @@ where
     // Use our exporter secret as the PRK for an HKDF-Expand op. The only time this fails is
     // when the length of the PRK is not the the underlying hash function's digest size. But
     // that's guaranteed by the type system, so we can unwrap().
-    let hkdf_ctx = Hkdf::<H>::from_prk(&exporter_secret).unwrap();
+    let hkdf_ctx = Hkdf::<H>::from_prk(exporter_secret).unwrap();
 
     // This call either succeeds or returns hkdf::InvalidLength (iff the buffer length is more
     // than 255x the digest size of the underlying hash function)

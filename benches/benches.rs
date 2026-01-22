@@ -77,14 +77,9 @@ where
     // Collect the encapsulated keys from each setup_sender under each opmode. We will pass these
     // to setup_receiver in a moment
     let encapped_keys = opmodes_s.iter().map(|opmode_s| {
-        setup_sender::<Aead, Kdf, Kem, _>(
-            &opmode_s,
-            &pk_recip,
-            b"bench setup receiver",
-            &mut csprng,
-        )
-        .unwrap()
-        .0
+        setup_sender::<Aead, Kdf, Kem, _>(opmode_s, &pk_recip, b"bench setup receiver", &mut csprng)
+            .unwrap()
+            .0
     });
 
     // Bench setup_receiver for each opmode

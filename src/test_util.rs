@@ -73,7 +73,7 @@ pub(crate) enum OpModeKind {
 }
 
 /// Makes an agreeing pair of `OpMode`s of the specified variant
-pub(crate) fn new_op_mode_pair<'a, Kdf: KdfTrait, Kem: KemTrait>(
+pub(crate) fn new_op_mode_pair<'a, Kem: KemTrait>(
     kind: OpModeKind,
     psk: &'a [u8],
     psk_id: &'a [u8],
@@ -135,17 +135,17 @@ pub(crate) fn aead_ctx_eq<A: Aead, Kdf: KdfTrait, Kem: KemTrait>(
     // each time.
     for i in 0..1000 {
         // Clone the backing array, and make a slice into it that's msg_len long. This is the message
-        let mut tmp_backing_arr = msg_backing_arr.clone();
+        let mut tmp_backing_arr = msg_backing_arr;
         let buf = &mut tmp_backing_arr[..msg_len];
 
         // Encrypt the plaintext
         let tag = sender
-            .seal_inout_detached(InOutBuf::new(&msg, buf).unwrap(), &aad)
+            .seal_inout_detached(InOutBuf::new(msg, buf).unwrap(), aad)
             .unwrap_or_else(|_| panic!("seal() #{} failed", i));
 
         // Now to decrypt on the other side
         if receiver
-            .open_inout_detached(InOutBuf::from(&mut *buf), &aad, &tag)
+            .open_inout_detached(InOutBuf::from(&mut *buf), aad, &tag)
             .is_err()
         {
             // An error occurred in decryption. These encryption contexts are not identical.

@@ -113,9 +113,7 @@ impl XWing {
         pk_recip: &PublicKey,
         randomness: &[u8; XWING_ENCAP_RANDOMNESS_SIZE],
     ) -> Result<(SharedSecret<Self>, EncappedKey), HpkeError> {
-        let (ct, ss) = pk_recip
-            .0
-            .encapsulate_deterministic(randomness.try_into().unwrap());
+        let (ct, ss) = pk_recip.0.encapsulate_deterministic(randomness);
         Ok((SharedSecret(ss.into()), EncappedKey(ct.to_bytes())))
     }
 }
@@ -225,7 +223,7 @@ impl crate::kat_tests::TestableKem for XWing {
             sender_id_keypair.is_none(),
             "X-Wing does not support authentciated encapsulation"
         );
-        XWing::encap_deterministic(&pk_recip, randomness.try_into().unwrap())
+        XWing::encap_deterministic(pk_recip, randomness.try_into().unwrap())
     }
 }
 
@@ -239,8 +237,8 @@ mod tests {
         let (sk, pk) = XWing::gen_keypair(&mut csprng);
         let (shared_secret, encapped_key) =
             XWing::encap(&pk, None, &mut csprng).expect("encapsulation failed");
-        let shared_secret_recipient = XWing::decap(&sk, None, &EncappedKey(encapped_key.0.into()))
-            .expect("decapsulation failed");
+        let shared_secret_recipient =
+            XWing::decap(&sk, None, &EncappedKey(encapped_key.0)).expect("decapsulation failed");
         assert_eq!(shared_secret.0, shared_secret_recipient.0);
     }
 }
