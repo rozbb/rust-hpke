@@ -12,7 +12,7 @@ use hybrid_array::typenum::{Prod, Sum, Unsigned, U1024, U3, U32, U64};
 use rand_core::{CryptoRng, RngCore};
 use sha3::Shake256;
 use subtle::{Choice, ConstantTimeEq};
-use x_wing::kem::Decapsulate;
+use x_wing::{kem::Decapsulate, Decapsulator, KeyExport, TryKeyInit};
 use zeroize::Zeroize;
 
 // Type-level size constants for X-Wing
@@ -56,7 +56,7 @@ impl ConstantTimeEq for PrivateKey {
     }
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct PublicKey(x_wing::EncapsulationKey);
 
 impl Serializable for PublicKey {
@@ -74,16 +74,17 @@ impl Deserializable for PublicKey {
     fn from_bytes(encoded: &[u8]) -> Result<Self, HpkeError> {
         // Check the input buf length is correct and error if not
         enforce_equal_len(Self::OutputSize::USIZE, encoded.len())?;
+        // Infallible bc of the check above
+        let arr = encoded.try_into().unwrap();
 
-        let arr: &[u8; Self::OutputSize::USIZE] = encoded.try_into().unwrap();
-        let pk = x_wing::EncapsulationKey::try_from(arr).map_err(|_| HpkeError::ValidationError)?;
+        let pk = x_wing::EncapsulationKey::new(arr).map_err(|_| HpkeError::ValidationError)?;
 
         Ok(PublicKey(pk))
     }
 }
 
 #[derive(Clone)]
-pub struct EncappedKey([u8; x_wing::CIPHERTEXT_SIZE]);
+pub struct EncappedKey(x_wing::Ciphertext);
 
 impl Serializable for EncappedKey {
     type OutputSize = U1120;
@@ -95,12 +96,9 @@ impl Serializable for EncappedKey {
 
 impl Deserializable for EncappedKey {
     fn from_bytes(bytes: &[u8]) -> Result<Self, HpkeError> {
-        if bytes.len() != x_wing::CIPHERTEXT_SIZE {
-            return Err(HpkeError::ValidationError);
-        }
-        let mut arr = [0u8; x_wing::CIPHERTEXT_SIZE];
-        arr.copy_from_slice(bytes);
-        Ok(EncappedKey(arr))
+        x_wing::Ciphertext::try_from(bytes)
+            .map_err(|_| HpkeError::ValidationError)
+            .map(EncappedKey)
     }
 }
 
@@ -113,8 +111,8 @@ impl XWing {
         pk_recip: &PublicKey,
         randomness: &[u8; XWING_ENCAP_RANDOMNESS_SIZE],
     ) -> Result<(SharedSecret<Self>, EncappedKey), HpkeError> {
-        let (ct, ss) = pk_recip.0.encapsulate_deterministic(randomness);
-        Ok((SharedSecret(ss.into()), EncappedKey(ct.to_bytes())))
+        let (ct, ss) = pk_recip.0.encapsulate_deterministic(randomness.into());
+        Ok((SharedSecret(ss.into()), EncappedKey(ct.into())))
     }
 }
 
@@ -137,7 +135,7 @@ impl KemTrait for XWing {
     }
 
     fn sk_to_pk(sk: &PrivateKey) -> PublicKey {
-        PublicKey(sk.0.encapsulation_key())
+        PublicKey(sk.0.encapsulator().clone())
     }
 
     // From https://www.ietf.org/archive/id/draft-ietf-hpke-pq-03.html#section-4-5
@@ -172,8 +170,7 @@ impl KemTrait for XWing {
             "X-Wing doesn't support authenticated encapsulation. Use Base or Psk operation mode."
         );
 
-        let ct = x_wing::Ciphertext::from(&encapped_key.0);
-        let ss = sk_recip.0.decapsulate(&ct).expect("infallible");
+        let ss = sk_recip.0.decapsulate(&encapped_key.0);
         Ok(SharedSecret(ss.into()))
     }
 

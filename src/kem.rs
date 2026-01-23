@@ -18,7 +18,7 @@ pub use xwing::*;
 pub trait Kem: Sized {
     /// The key exchange's public key type. If you want to generate a keypair, see
     /// `Kem::gen_keypair` or `Kem::derive_keypair`
-    type PublicKey: Clone + PartialEq + Serializable + Deserializable;
+    type PublicKey: Clone + PartialEq + Eq + Serializable + Deserializable;
 
     /// The key exchange's private key type. If you want to generate a keypair, see
     /// `Kem::gen_keypair` or `Kem::derive_keypair`
