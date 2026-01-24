@@ -112,7 +112,7 @@ impl XWing {
         randomness: &[u8; XWING_ENCAP_RANDOMNESS_SIZE],
     ) -> Result<(SharedSecret<Self>, EncappedKey), HpkeError> {
         let (ct, ss) = pk_recip.0.encapsulate_deterministic(randomness.into());
-        Ok((SharedSecret(ss.into()), EncappedKey(ct.into())))
+        Ok((SharedSecret(ss), EncappedKey(ct)))
     }
 }
 
@@ -171,7 +171,7 @@ impl KemTrait for XWing {
         );
 
         let ss = sk_recip.0.decapsulate(&encapped_key.0);
-        Ok(SharedSecret(ss.into()))
+        Ok(SharedSecret(ss))
     }
 
     /// Decapsulate the encapsulated key using the recipient's private key. This DOES NOT support
