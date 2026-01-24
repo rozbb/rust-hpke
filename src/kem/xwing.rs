@@ -56,7 +56,7 @@ impl ConstantTimeEq for PrivateKey {
     }
 }
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PublicKey(x_wing::EncapsulationKey);
 
 impl Serializable for PublicKey {

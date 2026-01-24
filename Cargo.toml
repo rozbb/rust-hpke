@@ -56,7 +56,7 @@ subtle = { version = "2.6", default-features = false }
 x25519-dalek = { version = "2", default-features = false, features = [
     "static_secrets",
 ], optional = true }
-x-wing = { git = "https://github.com/RustCrypto/KEMs.git", rev = "4ec3d64406caf59d6db7dd459c7c47985336ce82", optional = true, features = ["hazmat"] }
+x-wing = { git = "https://github.com/RustCrypto/KEMs.git", rev = "a9105421687e323927e2e6417627a9627641a2ee", optional = true, features = ["hazmat"] }
 zeroize = { version = "1", default-features = false, features = [
     "zeroize_derive",
 ] }
@@ -92,4 +92,4 @@ bench = false
 
 [patch.crates-io]
 # Dependency of x-wing, which currently has the same Git dependency
-ml-kem = { git = "https://github.com/RustCrypto/KEMs.git", rev = "4ec3d64406caf59d6db7dd459c7c47985336ce82" }
+ml-kem = { git = "https://github.com/RustCrypto/KEMs.git", rev = "a9105421687e323927e2e6417627a9627641a2ee" }

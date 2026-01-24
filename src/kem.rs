@@ -2,6 +2,8 @@
 
 use crate::{Deserializable, HpkeError, Serializable};
 
+use core::fmt::Debug;
+
 use hybrid_array::{Array, ArraySize};
 use rand_core::{CryptoRng, RngCore};
 use subtle::ConstantTimeEq;
@@ -18,7 +20,7 @@ pub use xwing::*;
 pub trait Kem: Sized {
     /// The key exchange's public key type. If you want to generate a keypair, see
     /// `Kem::gen_keypair` or `Kem::derive_keypair`
-    type PublicKey: Clone + PartialEq + Eq + Serializable + Deserializable;
+    type PublicKey: Clone + Debug + PartialEq + Eq + Serializable + Deserializable;
 
     /// The key exchange's private key type. If you want to generate a keypair, see
     /// `Kem::gen_keypair` or `Kem::derive_keypair`
