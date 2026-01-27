@@ -31,29 +31,41 @@ jobs:
           toolchain: ${{ matrix.toolchain }}
           override: true
 
-      - name: Run cargo test with just X25519 enabled
+      - name: Run cargo test with X25519 and ChaCha20-Poly1305
         env:
           CARGO_INCREMENTAL: 0
           RUSTFLAGS: -D warnings -A dead_code -A unused_imports
-        run: cargo test --no-default-features --features="x25519"
+        run: cargo test --no-default-features --features="x25519,chacha20poly1305"
 
-      - name: Run cargo test with just P256 enabled
+      - name: Run cargo test with P256 and ChaCha20-Poly1305
         env:
           CARGO_INCREMENTAL: 0
           RUSTFLAGS: -D warnings -A dead_code -A unused_imports
-        run: cargo test --no-default-features --features="p256"
+        run: cargo test --no-default-features --features="p256,chacha20poly1305"
 
-      - name: Run cargo test with just P384 enabled
+      - name: Run cargo test with P384 and ChaCha20-Poly1305
         env:
           CARGO_INCREMENTAL: 0
           RUSTFLAGS: -D warnings -A dead_code -A unused_imports
-        run: cargo test --no-default-features --features="p384"
+        run: cargo test --no-default-features --features="p384,chacha20poly1305"
 
-      - name: Run cargo test with just P521 enabled
+      - name: Run cargo test with P521 and ChaCha20-Poly1305
         env:
           CARGO_INCREMENTAL: 0
           RUSTFLAGS: -D warnings -A dead_code -A unused_imports
-        run: cargo test --no-default-features --features="p521"
+        run: cargo test --no-default-features --features="p521,chacha20poly1305"
+
+      - name: Run cargo test with X25519 and AES-GCM
+        env:
+          CARGO_INCREMENTAL: 0
+          RUSTFLAGS: -D warnings -A dead_code -A unused_imports
+        run: cargo test --no-default-features --features="x25519,aes-gcm"
+
+      - name: Run cargo test with P256 and AES-GCM
+        env:
+          CARGO_INCREMENTAL: 0
+          RUSTFLAGS: -D warnings -A dead_code -A unused_imports
+        run: cargo test --no-default-features --features="p256,aes-gcm"
 
       - name: Run cargo test with all features enabled
         env:

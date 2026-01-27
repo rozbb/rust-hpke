@@ -151,7 +151,10 @@ where
 mod test {
     use super::{setup_receiver, setup_sender};
     use crate::test_util::{aead_ctx_eq, gen_rand_buf, new_op_mode_pair, OpModeKind};
-    use crate::{aead::ChaCha20Poly1305, kdf::HkdfSha256, kem::Kem as KemTrait};
+    use crate::{kdf::HkdfSha256, kem::Kem as KemTrait};
+
+    #[cfg(feature = "chacha20poly1305")]
+    use crate::aead::ChaCha20Poly1305;
 
     /// This tests that `setup_sender` and `setup_receiver` derive the same context. We do this by
     /// testing that `gen_ctx_kem_pair` returns identical encryption contexts
@@ -282,7 +285,7 @@ mod test {
         };
     }
 
-    #[cfg(feature = "x25519")]
+    #[cfg(all(feature = "x25519", feature = "chacha20poly1305"))]
     mod x25519_tests {
         use super::*;
 
@@ -300,7 +303,7 @@ mod test {
         );
     }
 
-    #[cfg(feature = "p256")]
+    #[cfg(all(feature = "p256", feature = "chacha20poly1305"))]
     mod p256_tests {
         use super::*;
 
@@ -318,7 +321,7 @@ mod test {
         );
     }
 
-    #[cfg(feature = "p384")]
+    #[cfg(all(feature = "p384", feature = "chacha20poly1305"))]
     mod p384_tests {
         use super::*;
         use crate::kdf::HkdfSha384;
@@ -337,7 +340,7 @@ mod test {
         );
     }
 
-    #[cfg(feature = "p521")]
+    #[cfg(all(feature = "p521", feature = "chacha20poly1305"))]
     mod p521_tests {
         use super::*;
         use crate::kdf::HkdfSha512;

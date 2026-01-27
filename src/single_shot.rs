@@ -146,11 +146,13 @@ where
 mod test {
     use super::*;
     use crate::{
-        aead::ChaCha20Poly1305,
         kem::Kem as KemTrait,
         op_mode::{OpModeR, OpModeS, PskBundle},
         test_util::gen_rand_buf,
     };
+
+    #[cfg(feature = "chacha20poly1305")]
+    use crate::aead::ChaCha20Poly1305;
 
     macro_rules! test_single_shot_correctness {
         ($test_name:ident, $aead:ty, $kdf:ty, $kem:ty, $use_auth:expr) => {
@@ -222,7 +224,7 @@ mod test {
         };
     }
 
-    #[cfg(feature = "x25519")]
+    #[cfg(all(feature = "x25519", feature = "chacha20poly1305"))]
     test_single_shot_correctness!(
         test_single_shot_correctness_x25519,
         ChaCha20Poly1305,
@@ -231,7 +233,7 @@ mod test {
         true
     );
 
-    #[cfg(feature = "p256")]
+    #[cfg(all(feature = "p256", feature = "chacha20poly1305"))]
     test_single_shot_correctness!(
         test_single_shot_correctness_p256,
         ChaCha20Poly1305,
@@ -240,7 +242,7 @@ mod test {
         true
     );
 
-    #[cfg(feature = "p384")]
+    #[cfg(all(feature = "p384", feature = "chacha20poly1305"))]
     test_single_shot_correctness!(
         test_single_shot_correctness_p384,
         ChaCha20Poly1305,
@@ -249,7 +251,7 @@ mod test {
         true
     );
 
-    #[cfg(feature = "p521")]
+    #[cfg(all(feature = "p521", feature = "chacha20poly1305"))]
     test_single_shot_correctness!(
         test_single_shot_correctness_p521,
         ChaCha20Poly1305,
