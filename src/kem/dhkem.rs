@@ -180,14 +180,22 @@ macro_rules! impl_dhkem {
                     // input with the recipient pubkey. The HKDF-Expand call only errors if the
                     // output values are 255x the digest size of the hash function. Since these
                     // values are fixed at compile time, we don't worry about it.
+
+                    // Store serialized DH output in a variable so we can zeroize it
+                    let mut kex_eph_bytes = kex_res_eph.to_bytes();
+
                     let mut buf = <SharedSecret<$kem_name> as Default>::default();
                     <$kdf>::extract_and_expand(
-                        &kex_res_eph.to_bytes(),
+                        &kex_eph_bytes,
                         &suite_id,
                         kem_context,
                         &mut buf.0,
                     )
                     .expect("shared secret is way too big");
+
+                    // Zeroize the buffer containing sensitive DH output
+                    kex_eph_bytes.zeroize();
+
                     buf
                 };
 
@@ -351,14 +359,22 @@ macro_rules! impl_dhkem {
                         // input with the recipient pubkey. The HKDF-Expand call only errors if the
                         // output values are 255x the digest size of the hash function. Since these
                         // values are fixed at compile time, we don't worry about it.
+
+                        // Store serialized DH output in a variable so we can zeroize it
+                        let mut kex_eph_bytes = kex_res_eph.to_bytes();
+
                         let mut shared_secret = <SharedSecret<Self> as Default>::default();
                         <$kdf>::extract_and_expand(
-                            &kex_res_eph.to_bytes(),
+                            &kex_eph_bytes,
                             &suite_id,
                             kem_context,
                             &mut shared_secret.0,
                         )
                         .expect("shared secret is way too big");
+
+                        // Zeroize the buffer containing sensitive DH output
+                        kex_eph_bytes.zeroize();
+
                         Ok(shared_secret)
                     }
                 }
