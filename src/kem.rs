@@ -55,7 +55,12 @@ pub trait Kem: Sized {
         // Fill it with randomness
         csprng.fill_bytes(&mut ikm);
         // Run derive_keypair using the KEM's KDF
-        Self::derive_keypair(&ikm)
+        let keypair = Self::derive_keypair(&ikm);
+
+        // Zeroize the IKM as it contains sensitive material used to derive the private key
+        ikm.zeroize();
+
+        keypair
     }
 
     /// Derives a shared secret given the encapsulated key and the recipients secret key. If
