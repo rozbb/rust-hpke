@@ -334,6 +334,7 @@ macro_rules! impl_dhkem {
                         kex_eph_bytes.zeroize();
                         kex_identity_bytes.zeroize();
                         concatted_secrets_buf.zeroize();
+
                         Ok(shared_secret)
                     } else {
                         // kem_context = encapped_key || pk_recip || pk_sender_id
