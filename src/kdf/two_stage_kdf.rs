@@ -24,6 +24,9 @@ use hybrid_array::{Array, ArraySize};
 
 /// Uses the given IKM to extract a secret, and then uses that secret, plus the given suite ID and
 /// info string, to expand to the output buffer. Uses HKDF rather than XOF.
+///
+/// If `out.len()` is more than 255x the digest size (in bytes) of the underlying hash function,
+/// returns an `Err(hkdf::InvalidLength)`.
 pub(crate) fn extract_and_expand<H>(
     ikm: &[u8],
     suite_id: &[u8],
@@ -36,7 +39,7 @@ where
     // Extract using given IKM
     let (_, hkdf_ctx) = labeled_extract::<H>(&[], suite_id, b"eae_prk", ikm);
     // Expand using given info string
-    hkdf_ctx.labeled_expand(suite_id, b"shared_secret", info, out)
+    labeled_expand(&hkdf_ctx, suite_id, b"shared_secret", info, out)
 }
 
 // RFC 9180 §4
@@ -45,7 +48,7 @@ where
 //   return Extract(salt, labeled_ikm)
 
 /// Returns the HKDF context derived from `(salt=salt, ikm="HPKE-v1"||suite_id||label||ikm)`
-pub(crate) fn labeled_extract<H>(
+fn labeled_extract<H>(
     salt: &[u8],
     suite_id: &[u8],
     label: &[u8],
@@ -56,9 +59,6 @@ pub(crate) fn labeled_extract<H>(
 )
 where
     H: Clone + Digest + EagerHash,
-    //Kdf: KdfTrait<
-    //    Nh = <<<Kdf as KdfTrait>::HashImpl as EagerHash>::Core as OutputSizeUser>::OutputSize,
-    //>,
 {
     // Call HKDF-Extract with the IKM being the concatenation of all of the above
     let mut extract_ctx = HkdfExtract::<H>::new(Some(salt));
@@ -69,54 +69,34 @@ where
     extract_ctx.finalize()
 }
 
-// This trait only exists so I can implement it for hkdf::Hkdf
-pub(crate) trait LabeledExpand {
-    /// Does a `LabeledExpand` key derivation function using HKDF. If `out.len()` is more than 255x
-    /// the digest size (in bytes) of the underlying hash function, returns an
-    /// `Err(hkdf::InvalidLength)`.
-    fn labeled_expand(
-        &self,
-        suite_id: &[u8],
-        label: &[u8],
-        info: &[u8],
-        out: &mut [u8],
-    ) -> Result<(), hkdf::InvalidLength>;
-}
+// RFC 9180 §4
+// def LabeledExpand(prk, label, info, L):
+//   labeled_info = concat(I2OSP(L, 2), "HPKE-v1", suite_id,
+//                         label, info)
+//   return Expand(prk, labeled_info, L)
 
-impl<D> LabeledExpand for hkdf::Hkdf<D>
-where
-    D: Clone + EagerHash,
-{
-    // RFC 9180 §4
-    // def LabeledExpand(prk, label, info, L):
-    //   labeled_info = concat(I2OSP(L, 2), "HPKE-v1", suite_id,
-    //                         label, info)
-    //   return Expand(prk, labeled_info, L)
-
-    /// Does a `LabeledExpand` key derivation function using HKDF. If `out.len()` is more than 255x
-    /// the digest size (in bytes) of the underlying hash function, returns an
-    /// `Err(hkdf::InvalidLength)`.
-    fn labeled_expand(
-        &self,
-        suite_id: &[u8],
-        label: &[u8],
-        info: &[u8],
-        out: &mut [u8],
-    ) -> Result<(), hkdf::InvalidLength> {
-        // We need to write the length as a u16, so that's the de-facto upper bound on length
-        if out.len() > u16::MAX as usize {
-            // The error condition is met, since 2^16 is way bigger than 255 * digest_bytelen
-            return Err(hkdf::InvalidLength);
-        }
-
-        // Encode the output length in the info string
-        let mut len_buf = [0u8; 2];
-        write_u16_be(&mut len_buf, out.len() as u16);
-
-        // Call HKDF-Expand() with the info string set to the concatenation of all of the above
-        let labeled_info = [&len_buf, VERSION_LABEL, suite_id, label, info];
-        self.expand_multi_info(&labeled_info, out)
+/// Does a `LabeledExpand` key derivation function using HKDF. If `out.len()` is more than 255x the
+/// digest size (in bytes) of the underlying hash function, returns an `Err(hkdf::InvalidLength)`.
+fn labeled_expand<D: Clone + EagerHash>(
+    hkdf_ctx: &Hkdf<D>,
+    suite_id: &[u8],
+    label: &[u8],
+    info: &[u8],
+    out: &mut [u8],
+) -> Result<(), hkdf::InvalidLength> {
+    // We need to write the length as a u16, so that's the de-facto upper bound on length
+    if out.len() > u16::MAX as usize {
+        // The error condition is met, since 2^16 is way bigger than 255 * digest_bytelen
+        return Err(hkdf::InvalidLength);
     }
+
+    // Encode the output length in the info string
+    let mut len_buf = [0u8; 2];
+    write_u16_be(&mut len_buf, out.len() as u16);
+
+    // Call HKDF-Expand() with the info string set to the concatenation of all of the above
+    let labeled_info = [&len_buf, VERSION_LABEL, suite_id, label, info];
+    hkdf_ctx.expand_multi_info(&labeled_info, out)
 }
 
 // This is the KeySchedule function. It runs a KDF over all the parameters, inputs, and secrets,
@@ -177,25 +157,30 @@ where
     // Fill the key, base nonce, and exporter secret. This only errors if the output values are
     // 255x the digest size of the hash function. Since these values are fixed at compile time, we
     // don't worry about it.
-    secret_ctx
-        .labeled_expand(&suite_id, b"key", sched_context, key.0.as_mut_slice())
-        .expect("aead key len is way too big");
-    secret_ctx
-        .labeled_expand(
-            &suite_id,
-            b"base_nonce",
-            sched_context,
-            base_nonce.0.as_mut_slice(),
-        )
-        .expect("nonce len is way too big");
-    secret_ctx
-        .labeled_expand(
-            &suite_id,
-            b"exp",
-            sched_context,
-            exporter_secret.0.as_mut_slice(),
-        )
-        .expect("exporter secret len is way too big");
+    labeled_expand(
+        &secret_ctx,
+        &suite_id,
+        b"key",
+        sched_context,
+        key.0.as_mut_slice(),
+    )
+    .expect("aead key len is way too big");
+    labeled_expand(
+        &secret_ctx,
+        &suite_id,
+        b"base_nonce",
+        sched_context,
+        base_nonce.0.as_mut_slice(),
+    )
+    .expect("nonce len is way too big");
+    labeled_expand(
+        &secret_ctx,
+        &suite_id,
+        b"exp",
+        sched_context,
+        exporter_secret.0.as_mut_slice(),
+    )
+    .expect("exporter secret len is way too big");
 
     AeadCtx::new(&key, base_nonce, exporter_secret)
 }
@@ -207,7 +192,7 @@ where
 //   return (sk, pk(sk))
 
 /// Derive secret key bytes for x25519 using a two-stage KDF
-pub(crate) fn derive_candidate_nocounter<H>(suite_id: &KemSuiteId, ikm: &[u8]) -> [u8; 32]
+pub(crate) fn derive_x25519_sk_eph_bytes<H>(suite_id: &KemSuiteId, ikm: &[u8]) -> [u8; 32]
 where
     H: Clone + Digest + EagerHash,
 {
@@ -215,9 +200,7 @@ where
     let (_, hkdf_ctx) = labeled_extract::<H>(&[], suite_id, b"dkp_prk", ikm);
     // The buffer we hold the candidate scalar bytes in. This is the size of a private key.
     let mut buf = [0u8; 32];
-    hkdf_ctx
-        .labeled_expand(suite_id, b"sk", &[], &mut buf)
-        .unwrap();
+    labeled_expand(&hkdf_ctx, suite_id, b"sk", &[], &mut buf).unwrap();
 
     buf
 }
@@ -239,7 +222,7 @@ where
 // where `bitmask` is defined to be 0xFF for P-256 and P-384, and 0x01 for P-521
 
 /// Derive candidate secret key bytes for p256/p384/p521 using a two-stage KDF
-pub(crate) fn derive_candidate<H, PrivateKeySize>(
+pub(crate) fn derive_nistp_sk_eph_bytes<H, PrivateKeySize>(
     suite_id: &KemSuiteId,
     ikm: &[u8],
     counter: u8,
@@ -257,9 +240,7 @@ where
 
     // This unwrap is fine. It only triggers if buf is way too big. It's only
     // 32 bytes.
-    hkdf_ctx
-        .labeled_expand(suite_id, b"candidate", &[counter], &mut buf)
-        .unwrap();
+    labeled_expand(&hkdf_ctx, suite_id, b"candidate", &[counter], &mut buf).unwrap();
 
     buf
 }
@@ -269,6 +250,8 @@ where
 //   return LabeledExpand(self.exporter_secret, "sec",
 //                        exporter_context, L)
 
+/// Derive an exporter secret using a two-stage KDF. Returns `Err(HpkeError::KdfOutputTooLong)` if
+/// `out_buf.len()` ≥ 2¹⁶.
 pub(crate) fn export<H>(
     exporter_secret: &[u8],
     suite_id: &[u8],
@@ -285,7 +268,6 @@ where
 
     // This call either succeeds or returns hkdf::InvalidLength (iff the buffer length is more
     // than 255x the digest size of the underlying hash function)
-    hkdf_ctx
-        .labeled_expand(suite_id, b"sec", exporter_ctx, out_buf)
+    labeled_expand(&hkdf_ctx, suite_id, b"sec", exporter_ctx, out_buf)
         .map_err(|_| HpkeError::KdfOutputTooLong)
 }

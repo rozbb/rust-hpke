@@ -157,7 +157,7 @@ impl DhKeyExchange for X25519 {
     /// key, i.e., 256.
     #[doc(hidden)]
     fn derive_keypair<Kdf: KdfTrait>(suite_id: &KemSuiteId, ikm: &[u8]) -> (PrivateKey, PublicKey) {
-        let sk_bytes = Kdf::derive_candidate_nocounter(suite_id, ikm);
+        let sk_bytes = Kdf::derive_x25519_sk_eph_bytes(suite_id, ikm);
         let sk = x25519_dalek::StaticSecret::from(sk_bytes);
         let pk = x25519_dalek::PublicKey::from(&sk);
 

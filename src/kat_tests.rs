@@ -212,28 +212,31 @@ fn test_case<A: Aead, Kdf: KdfTrait, Kem: TestableKem>(tv: MainTestVector) {
 
     let (sk_recip, pk_recip) = recip_keypair;
 
-    // Now derive the encapped key with the deterministic encap function, using all the inputs
-    // above. If sk_eph is defined, use that, otherwise use ikm_eph
+    // Now derive the encapped key with the deterministic encap function, using ikm_eph as the
+    // ephemeral keying material
     let sender_keypair_ref = sender_keypair.as_ref().map(|&(ref sk, ref pk)| (sk, pk));
     let (shared_secret, encapped_key) =
         Kem::encap_det(&pk_recip, sender_keypair_ref, tv.ikm_eph.as_slice()).expect("encap failed");
 
-    // Check that encap_with_eph is the same as encap_det when the ephemeral key is given
+    // Check that encap_with_eph is the same as encap_det when the ephemeral secret key (DHKEM only)
+    // is given
     if let Some(sk_eph) = tv
         .sk_eph
         .map(|b| Kem::EphemeralKey::from_bytes(&b).unwrap())
     {
         let (other_shared_secret, other_encapped_key) =
             Kem::encap_with_eph(&pk_recip, sender_keypair_ref, sk_eph).expect("encap failed");
-        assert!(shared_secret.0 == other_shared_secret.0);
-        assert!(encapped_key.to_bytes() == other_encapped_key.to_bytes());
-    }
 
-    //let (shared_secret, encapped_key) = if let Some(sk_eph) = sk_eph {
-    //    Kem::encap_with_eph(&pk_recip, sender_keypair_ref, sk_eph).expect("encap failed")
-    //} else {
-    //    Kem::encap_det(&pk_recip, sender_keypair_ref, tv.ikm_eph.as_slice()).expect("encap failed")
-    //};
+        assert!(
+            shared_secret.0 == other_shared_secret.0,
+            "ikm shared secret doesn't match sk_eph shared secret"
+        );
+        assert_serializable_eq!(
+            encapped_key,
+            other_encapped_key,
+            "ikm encapped key doesn't match sk_eph encapped key"
+        );
+    }
 
     // Assert that the derived shared secret key is identical to the one provided
     assert_eq!(

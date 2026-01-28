@@ -7,6 +7,7 @@ use crate::{
     op_mode::OpMode,
     setup::ExporterSecret,
     util::{full_suite_id, write_u16_be, KemSuiteId},
+    HpkeError,
 };
 
 use digest::{ExtendableOutput, XofReader};
@@ -96,7 +97,7 @@ pub(crate) fn labeled_derive<H>(
 /// and spits out a symmetric encryption context.
 ///
 /// # Panics
-/// Panics if `info.len()` ≥ 2¹⁶
+/// Panics if `info.len() + mode.get_psk_id().len() + 5` ≥ 2¹⁶
 pub(crate) fn combine_secrets<A, H, Kdf, Kem, O>(
     mode: &O,
     shared_secret: SharedSecret<Kem>,
@@ -128,11 +129,7 @@ where
         info,
     ];
 
-    // The max number of bytes we need from the XOF is Nk + Nn + Nh, with the max such values. This
-    // is 108
-    let mut digest = [0u8; 32 + 12 + 64];
-    labeled_derive::<H>(&suite_id, secrets, b"secret", context, &mut digest);
-
+    // Make buffers for the values we need to derive
     let mut key = crate::aead::AeadKey::<A>::default();
     let key_len = key.0.len();
     let mut base_nonce = crate::aead::AeadNonce::<A>::default();
@@ -140,6 +137,14 @@ where
     let mut exporter_secret = <ExporterSecret<Kdf> as Default>::default();
     let exporter_secret_len = exporter_secret.0.len();
 
+    // We can't make an array with length Nk + Nn + Nh, so we make an array with the maximum
+    // possible length, and slice it
+    let mut digest_backing_arr = [0u8; 32 + 12 + 64];
+    let digest = &mut digest_backing_arr[..key_len + base_nonce_len + exporter_secret_len];
+
+    labeled_derive::<H>(&suite_id, secrets, b"secret", context, digest);
+
+    // Copy the secret bytes into the appropriate places
     let mut cursor = 0;
     key.0.copy_from_slice(&digest[cursor..cursor + key_len]);
     cursor += key_len;
@@ -163,7 +168,7 @@ where
 //   return (sk, pk(sk))
 
 /// Derive secret key bytes for x25519 using a one-stage KDF
-pub(crate) fn derive_candidate_nocounter<H>(suite_id: &KemSuiteId, ikm: &[u8]) -> [u8; 32]
+pub(crate) fn derive_x25519_sk_eph_bytes<H>(suite_id: &KemSuiteId, ikm: &[u8]) -> [u8; 32]
 where
     H: Default + ExtendableOutput,
 {
@@ -178,7 +183,7 @@ where
 //   return LabeledDerive(ikm, "candidate", I2OSP(counter, 1), Nsk)
 
 /// Derive candidate secret key bytes for p256/p384/p521 using a two-stage KDF
-pub(crate) fn derive_candidate<H, PrivateKeySize>(
+pub(crate) fn derive_nistp_sk_eph_bytes<H, PrivateKeySize>(
     suite_id: &KemSuiteId,
     ikm: &[u8],
     counter: u8,
@@ -198,21 +203,30 @@ where
 //   return LabeledDerive(self.exporter_secret, "sec",
 //                        exporter_context, L)
 
+/// Derive an exporter secret using a one-stage KDF. Returns `Err(HpkeError::KdfOutputTooLong)` if
+/// `out_buf.len()` ≥ 2¹⁶.
 pub(crate) fn export<H>(
     exporter_secret: &[u8],
     suite_id: &[u8],
     exporter_ctx: &[u8],
     out_buf: &mut [u8],
-) where
+) -> Result<(), HpkeError>
+where
     H: ExtendableOutput + Default,
 {
+    if out_buf.len() >= 2usize.pow(16) {
+        return Err(HpkeError::KdfOutputTooLong);
+    }
+
     labeled_derive::<H>(
         suite_id,
         &[exporter_secret],
         b"sec",
         &[exporter_ctx],
         out_buf,
-    )
+    );
+
+    Ok(())
 }
 
 /// Returns I2OSP(buf, 2), i.e., the big-endian 2-byte representation of buf.len()

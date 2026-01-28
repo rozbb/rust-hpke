@@ -202,7 +202,7 @@ macro_rules! nistp_dhkex {
                     // Try to generate a key 256 times. Practically, this will succeed and return
                     // early on the first iteration.
                     for counter in 0u8..=255 {
-                        let mut candidate_bytes = Kdf::derive_candidate::<PrivateKeySize>(
+                        let mut candidate_bytes = Kdf::derive_nistp_sk_eph_bytes::<PrivateKeySize>(
                             suite_id,
                             ikm,
                             counter,

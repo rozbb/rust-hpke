@@ -348,6 +348,7 @@ macro_rules! impl_dhkem {
                 // In DHKEM, ephemeral keys and private keys are both scalars
                 type EphemeralKey = PrivateKey;
 
+                /// Encapsulates to the given public key, using `sk_eph` as the ephemeral secret
                 fn encap_with_eph(
                     pk_recip: &Self::PublicKey,
                     sender_id_keypair: Option<(&PrivateKey, &PublicKey)>,
