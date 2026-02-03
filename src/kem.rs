@@ -5,11 +5,16 @@ use crate::{Deserializable, HpkeError, Serializable};
 use core::fmt::Debug;
 
 use hybrid_array::{Array, ArraySize};
-use rand_core::{CryptoRng, RngCore};
+use rand_core::CryptoRng;
+use subtle::ConstantTimeEq;
 use zeroize::Zeroize;
 
 mod dhkem;
 pub use dhkem::*;
+#[cfg(feature = "xwing")]
+pub mod xwing;
+#[cfg(feature = "xwing")]
+pub use xwing::*;
 
 /// Represents authenticated encryption functionality
 pub trait Kem: Sized {
@@ -19,7 +24,7 @@ pub trait Kem: Sized {
 
     /// The key exchange's private key type. If you want to generate a keypair, see
     /// `Kem::gen_keypair` or `Kem::derive_keypair`
-    type PrivateKey: Clone + PartialEq + Eq + Serializable + Deserializable;
+    type PrivateKey: Clone + ConstantTimeEq + Serializable + Deserializable;
 
     /// Computes the public key of a given private key
     fn sk_to_pk(sk: &Self::PrivateKey) -> Self::PublicKey;
@@ -44,7 +49,7 @@ pub trait Kem: Sized {
     fn derive_keypair(ikm: &[u8]) -> (Self::PrivateKey, Self::PublicKey);
 
     /// Generates a random keypair using the given RNG
-    fn gen_keypair<R: CryptoRng + RngCore>(csprng: &mut R) -> (Self::PrivateKey, Self::PublicKey) {
+    fn gen_keypair(csprng: &mut impl CryptoRng) -> (Self::PrivateKey, Self::PublicKey) {
         // Make some keying material that's the size of a private key
         let mut ikm: Array<u8, <Self::PrivateKey as Serializable>::OutputSize> = Array::default();
         // Fill it with randomness
@@ -77,10 +82,10 @@ pub trait Kem: Sized {
     /// Returns a shared secret and encapped key on success. If an error happened during key
     /// exchange, returns `Err(HpkeError::EncapError)`.
     #[doc(hidden)]
-    fn encap<R: CryptoRng + RngCore>(
+    fn encap(
         pk_recip: &Self::PublicKey,
         sender_id_keypair: Option<(&Self::PrivateKey, &Self::PublicKey)>,
-        csprng: &mut R,
+        csprng: &mut impl CryptoRng,
     ) -> Result<(SharedSecret<Self>, Self::EncappedKey), HpkeError>;
 }
 

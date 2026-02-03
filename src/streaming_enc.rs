@@ -20,7 +20,7 @@
 //! #     },
 //! #     Kem as KemTrait, OpModeR, OpModeS, setup_receiver, setup_sender,
 //! # };
-//! # use rand::RngCore;
+//! # use rand_core::Rng;
 //! // These types define the ciphersuite Alice and Bob will be using
 //! type Kem = X25519HkdfSha256;
 //! type Aead = ChaCha20Poly1305;
@@ -123,7 +123,7 @@ mod test {
         aead::{AesGcm128, AesGcm256, ChaCha20Poly1305},
         kdf::HkdfSha256,
     };
-    use rand_core::RngCore;
+    use rand_core::Rng;
 
     /// Tests that `open()` can decrypt things properly encrypted with `seal()`
     macro_rules! test_create_ctx_correctness {

@@ -23,7 +23,7 @@ use hpke::{
     Serializable,
 };
 
-use rand::{CryptoRng, RngCore};
+use rand_core::{CryptoRng, Rng};
 
 trait AgileAeadCtxS {
     fn seal_inout_detached(
@@ -306,7 +306,7 @@ macro_rules! do_gen_keypair {
     }};
 }
 
-fn agile_gen_keypair<R: CryptoRng + RngCore>(kem_alg: KemAlg, csprng: &mut R) -> AgileKeypair {
+fn agile_gen_keypair(kem_alg: KemAlg, csprng: &mut impl CryptoRng) -> AgileKeypair {
     match kem_alg {
         KemAlg::X25519HkdfSha256 => do_gen_keypair!(X25519HkdfSha256, kem_alg, csprng),
         KemAlg::DhP256HkdfSha256 => do_gen_keypair!(DhP256HkdfSha256, kem_alg, csprng),
@@ -450,11 +450,11 @@ impl<'a> AgilePskBundle<'a> {
 macro_rules! hpke_dispatch {
     // Step 1: Roll up the AEAD, KDF, and KEM types into tuples. We'll unroll them later
     ($to_set:ident, $to_match:ident,
-     ($( $aead_ty:ident ),*), ($( $kdf_ty:ident ),*), ($( $kem_ty:ident ),*), $rng_ty:ident,
+     ($( $aead_ty:ident ),*), ($( $kdf_ty:ident ),*), ($( $kem_ty:ident ),*),
      $callback:ident, $( $callback_args:ident ),* ) => {
         hpke_dispatch!(@tup1
             $to_set, $to_match,
-            ($( $aead_ty ),*), ($( $kdf_ty ),*), ($( $kem_ty ),*), $rng_ty,
+            ($( $aead_ty ),*), ($( $kdf_ty ),*), ($( $kem_ty ),*),
             $callback, ($( $callback_args ),*)
         )
     };
@@ -462,12 +462,12 @@ macro_rules! hpke_dispatch {
     // Step 2: Expand with respect to every AEAD
     (@tup1
      $to_set:ident, $to_match:ident,
-     ($( $aead_ty:ident ),*), $kdf_tup:tt, $kem_tup:tt, $rng_ty:tt,
+     ($( $aead_ty:ident ),*), $kdf_tup:tt, $kem_tup:tt,
      $callback:ident, $callback_args:tt) => {
         $(
             hpke_dispatch!(@tup2
                 $to_set, $to_match,
-                $aead_ty, $kdf_tup, $kem_tup, $rng_ty,
+                $aead_ty, $kdf_tup, $kem_tup,
                 $callback, $callback_args
             );
         )*
@@ -476,12 +476,12 @@ macro_rules! hpke_dispatch {
     // Step 3: Expand with respect to every KDF
     (@tup2
      $to_set:ident, $to_match:ident,
-     $aead_ty:ident, ($( $kdf_ty:ident ),*), $kem_tup:tt, $rng_ty:tt,
+     $aead_ty:ident, ($( $kdf_ty:ident ),*), $kem_tup:tt,
      $callback:ident, $callback_args:tt) => {
         $(
             hpke_dispatch!(@tup3
                 $to_set, $to_match,
-                $aead_ty, $kdf_ty, $kem_tup, $rng_ty,
+                $aead_ty, $kdf_ty, $kem_tup,
                 $callback, $callback_args
             );
         )*
@@ -490,12 +490,12 @@ macro_rules! hpke_dispatch {
     // Step 4: Expand with respect to every KEM
     (@tup3
      $to_set:ident, $to_match:ident,
-     $aead_ty:ident, $kdf_ty:ident, ($( $kem_ty:ident ),*), $rng_ty:tt,
+     $aead_ty:ident, $kdf_ty:ident, ($( $kem_ty:ident ),*),
      $callback:ident, $callback_args:tt) => {
         $(
             hpke_dispatch!(@base
                 $to_set, $to_match,
-                $aead_ty, $kdf_ty, $kem_ty, $rng_ty,
+                $aead_ty, $kdf_ty, $kem_ty,
                 $callback, $callback_args
             );
         )*
@@ -505,33 +505,32 @@ macro_rules! hpke_dispatch {
     // vector matches the IDs of these types, run the test case.
     (@base
      $to_set:ident, $to_match:ident,
-     $aead_ty:ident, $kdf_ty:ident, $kem_ty:ident, $rng_ty:ident,
+     $aead_ty:ident, $kdf_ty:ident, $kem_ty:ident,
      $callback:ident, ($( $callback_args:ident ),*)) => {
         if let (AeadAlg::$aead_ty, KemAlg::$kem_ty, KdfAlg::$kdf_ty) = $to_match
         {
-            $to_set = Some($callback::<$aead_ty, $kdf_ty, $kem_ty, $rng_ty>($( $callback_args ),*));
+            $to_set = Some($callback::<$aead_ty, $kdf_ty, $kem_ty>($( $callback_args ),*));
         }
     };
 }
 
 // The leg work of agile_setup_receiver
-fn do_setup_sender<A, Kdf, Kem, R>(
+fn do_setup_sender<A, Kdf, Kem>(
     mode: &AgileOpModeS,
     pk_recip: &AgilePublicKey,
     info: &[u8],
-    csprng: &mut R,
+    csprng: &mut impl CryptoRng,
 ) -> Result<(AgileEncappedKey, Box<dyn AgileAeadCtxS>), AgileHpkeError>
 where
     A: 'static + Aead,
     Kdf: 'static + KdfTrait,
     Kem: 'static + KemTrait,
-    R: CryptoRng + RngCore,
 {
     let kem_alg = mode.kem_alg;
     let mode = mode.clone().try_lift::<Kem, Kdf>()?;
     let pk_recip = pk_recip.try_lift::<Kem>()?;
 
-    let (encapped_key, aead_ctx) = setup_sender::<A, Kdf, Kem, _>(&mode, &pk_recip, info, csprng)?;
+    let (encapped_key, aead_ctx) = setup_sender::<A, Kdf, Kem>(&mode, &pk_recip, info, csprng)?;
     let encapped_key = AgileEncappedKey {
         kem_alg,
         encapped_key_bytes: encapped_key.to_bytes().to_vec(),
@@ -540,14 +539,14 @@ where
     Ok((encapped_key, Box::new(aead_ctx)))
 }
 
-fn agile_setup_sender<R: CryptoRng + RngCore>(
+fn agile_setup_sender(
     aead_alg: AeadAlg,
     kdf_alg: KdfAlg,
     kem_alg: KemAlg,
     mode: &AgileOpModeS,
     pk_recip: &AgilePublicKey,
     info: &[u8],
-    csprng: &mut R,
+    csprng: &mut impl CryptoRng,
 ) -> Result<(AgileEncappedKey, Box<dyn AgileAeadCtxS>), AgileHpkeError> {
     // Do all the necessary validation
     mode.validate()?;
@@ -576,7 +575,6 @@ fn agile_setup_sender<R: CryptoRng + RngCore>(
         (ChaCha20Poly1305, AesGcm128, AesGcm256),
         (HkdfSha256, HkdfSha384, HkdfSha512),
         (X25519HkdfSha256, DhP256HkdfSha256, DhP384HkdfSha384, DhP521HkdfSha512),
-        R,
         do_setup_sender,
             mode,
             pk_recip,
@@ -593,7 +591,7 @@ fn agile_setup_sender<R: CryptoRng + RngCore>(
 
 // The leg work of agile_setup_receiver. The Dummy type parameter is so that it can be used with
 // the hpke_dispatch! macro. The macro expects its callback function to have 4 type parameters
-fn do_setup_receiver<A, Kdf, Kem, Dummy>(
+fn do_setup_receiver<A, Kdf, Kem>(
     mode: &AgileOpModeR,
     recip_keypair: &AgileKeypair,
     encapped_key: &AgileEncappedKey,
@@ -649,17 +647,12 @@ fn agile_setup_receiver(
     // This gets overwritten by the below macro call. It's None iff dispatch failed.
     let mut res: Option<Result<Box<dyn AgileAeadCtxR>, AgileHpkeError>> = None;
 
-    // Dummy type to give to the macro. do_setup_receiver doesn't use an RNG, so it doesn't need a
-    // concrete RNG type. We give it the unit type to make it happy.
-    type Unit = ();
-
     #[rustfmt::skip]
     hpke_dispatch!(
         res, to_match,
         (ChaCha20Poly1305, AesGcm128, AesGcm256),
         (HkdfSha256, HkdfSha384, HkdfSha512),
         (X25519HkdfSha256, DhP256HkdfSha256, DhP384HkdfSha384, DhP521HkdfSha512),
-        Unit,
         do_setup_receiver,
             mode,
             recip_keypair,

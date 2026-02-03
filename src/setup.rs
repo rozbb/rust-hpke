@@ -1,13 +1,12 @@
 use crate::{
-    aead::{Aead, AeadCtx, AeadCtxR, AeadCtxS},
-    kdf::{labeled_extract, DigestArray, Kdf as KdfTrait, LabeledExpand, MAX_DIGEST_SIZE},
-    kem::{Kem as KemTrait, SharedSecret},
-    op_mode::{OpMode, OpModeR, OpModeS},
-    util::full_suite_id,
+    aead::{Aead, AeadCtxR, AeadCtxS},
+    kdf::{DigestArray, Kdf as KdfTrait},
+    kem::Kem as KemTrait,
+    op_mode::{OpModeR, OpModeS},
     HpkeError,
 };
 
-use rand_core::{CryptoRng, RngCore};
+use rand_core::CryptoRng;
 use zeroize::Zeroize;
 
 /// Secret generated in `derive_enc_ctx` and stored in `AeadCtx`.
@@ -64,117 +63,44 @@ impl<K: KdfTrait> Drop for ExporterSecret<K> {
 //
 //   return Context<ROLE>(key, base_nonce, 0, exporter_secret)
 
-// This is the KeySchedule function. It runs a KDF over all the parameters, inputs, and secrets,
-// and spits out a key-nonce pair to be used for symmetric encryption.
-fn derive_enc_ctx<A, Kdf, Kem, O>(
-    mode: &O,
-    shared_secret: SharedSecret<Kem>,
-    info: &[u8],
-) -> AeadCtx<A, Kdf, Kem>
-where
-    A: Aead,
-    Kdf: KdfTrait,
-    Kem: KemTrait,
-    O: OpMode<Kem>,
-{
-    // Put together the binding context used for all KDF operations
-    let suite_id = full_suite_id::<A, Kdf, Kem>();
-
-    // In KeySchedule(),
-    //   psk_id_hash = LabeledExtract("", "psk_id_hash", psk_id)
-    //   info_hash = LabeledExtract("", "info_hash", info)
-    //   key_schedule_context = concat(mode, psk_id_hash, info_hash)
-
-    // We concat without allocation by making a buffer of the maximum possible size, then
-    // taking the appropriately sized slice.
-    let (sched_context_buf, sched_context_size) = {
-        let (psk_id_hash, _) =
-            labeled_extract::<Kdf>(&[], &suite_id, b"psk_id_hash", mode.get_psk_id());
-        let (info_hash, _) = labeled_extract::<Kdf>(&[], &suite_id, b"info_hash", info);
-
-        // Yes it's overkill to bound the first input by MAX_DIGEST_SIZE, since it's only 1 byte.
-        // But whatever, this is pretty clean.
-        concat_with_known_maxlen!(
-            MAX_DIGEST_SIZE,
-            &[mode.mode_id()],
-            psk_id_hash.as_slice(),
-            info_hash.as_slice()
-        )
-    };
-    let sched_context = &sched_context_buf[..sched_context_size];
-
-    // In KeySchedule(),
-    //   secret = LabeledExtract(shared_secret, "secret", psk)
-    //   key = LabeledExpand(secret, "key", key_schedule_context, Nk)
-    //   base_nonce = LabeledExpand(secret, "base_nonce", key_schedule_context, Nn)
-    //   exporter_secret = LabeledExpand(secret, "exp", key_schedule_context, Nh)
-    // Instead of `secret` we derive an HKDF context which we run .expand() on to derive the
-    // key-nonce pair.
-    let (_, secret_ctx) =
-        labeled_extract::<Kdf>(&shared_secret.0, &suite_id, b"secret", mode.get_psk_bytes());
-
-    // Empty fixed-size buffers
-    let mut key = crate::aead::AeadKey::<A>::default();
-    let mut base_nonce = crate::aead::AeadNonce::<A>::default();
-    let mut exporter_secret = <ExporterSecret<Kdf> as Default>::default();
-
-    // Fill the key, base nonce, and exporter secret. This only errors if the output values are
-    // 255x the digest size of the hash function. Since these values are fixed at compile time, we
-    // don't worry about it.
-    secret_ctx
-        .labeled_expand(&suite_id, b"key", sched_context, key.0.as_mut_slice())
-        .expect("aead key len is way too big");
-    secret_ctx
-        .labeled_expand(
-            &suite_id,
-            b"base_nonce",
-            sched_context,
-            base_nonce.0.as_mut_slice(),
-        )
-        .expect("nonce len is way too big");
-    secret_ctx
-        .labeled_expand(
-            &suite_id,
-            b"exp",
-            sched_context,
-            exporter_secret.0.as_mut_slice(),
-        )
-        .expect("exporter secret len is way too big");
-
-    AeadCtx::new(&key, base_nonce, exporter_secret)
-}
-
 // RFC 9180 §5.1.4:
 // def SetupAuthPSKS(pkR, info, psk, psk_id, skS):
 //   shared_secret, enc = AuthEncap(pkR, skS)
 //   return enc, KeyScheduleS(mode_auth_psk, shared_secret, info,
 //                            psk, psk_id)
 
-/// Initiates an encryption context to the given recipient public key
+/// Initiates an encryption context to the given recipient public key. `info` is a domain separator.
+///
+/// NOTE: The `XWing` KEM does not support authenticated encapsulation, so `mode` MUST be
+/// [`Base`](crate::OpModeS::Base) or [`Psk`](crate::OpModeS::Psk).
 ///
 /// Return Value
 /// ============
 /// On success, returns an encapsulated public key (intended to be sent to the recipient), and an
 /// encryption context. If an error happened during key encapsulation, returns
 /// `Err(HpkeError::EncapError)`. This is the only possible error.
-pub fn setup_sender<A, Kdf, Kem, R>(
+///
+/// Panics
+/// ======
+/// Panics if `mode` is not [`Base`](crate::OpModeS::Base) or [`Psk`](crate::OpModeS::Psk), or if
+/// `info.len() + mode.get_psk_id().len() + 5` ≥ 2¹⁶.
+pub fn setup_sender<A, Kdf, Kem>(
     mode: &OpModeS<Kem>,
     pk_recip: &Kem::PublicKey,
     info: &[u8],
-    csprng: &mut R,
+    csprng: &mut impl CryptoRng,
 ) -> Result<(Kem::EncappedKey, AeadCtxS<A, Kdf, Kem>), HpkeError>
 where
     A: Aead,
     Kdf: KdfTrait,
     Kem: KemTrait,
-    R: CryptoRng + RngCore,
 {
     // If the identity key is set, use it
     let sender_id_keypair = mode.get_sender_id_keypair();
     // Do the encapsulation
     let (shared_secret, encapped_key) = Kem::encap(pk_recip, sender_id_keypair, csprng)?;
     // Use everything to derive an encryption context
-    let enc_ctx = derive_enc_ctx::<_, _, Kem, _>(mode, shared_secret, info);
+    let enc_ctx = Kdf::combine_secrets(mode, shared_secret, info);
 
     Ok((encapped_key, enc_ctx.into()))
 }
@@ -185,13 +111,21 @@ where
 //   return KeyScheduleR(mode_auth_psk, shared_secret, info,
 //                       psk, psk_id)
 
-/// Initiates a decryption context given a private key `sk_recip` and an encapsulated key which
-/// was encapsulated to `sk_recip`'s corresponding public key
+/// Initiates a decryption context given a private key `sk_recip` and an encapsulated key which was
+/// encapsulated to `sk_recip`'s corresponding public key.   `info` is a domain separator.
+///
+/// NOTE: The `XWing` KEM does not support authenticated encapsulation, so `mode` MUST be
+/// [`Base`](crate::OpModeR::Base) or [`Psk`](crate::OpModeR::Psk).
 ///
 /// Return Value
 /// ============
 /// On success, returns a decryption context. If an error happened during key decapsulation,
 /// returns `Err(HpkeError::DecapError)`. This is the only possible error.
+///
+/// Panics
+/// ======
+/// Panics if `mode` is not [`Base`](crate::OpModeR::Base) or [`Psk`](crate::OpModeR::Psk), or if
+/// `info.len() + mode.get_psk_id().len() + 5` ≥ 2¹⁶.
 pub fn setup_receiver<A, Kdf, Kem>(
     mode: &OpModeR<Kem>,
     sk_recip: &Kem::PrivateKey,
@@ -209,7 +143,7 @@ where
     let shared_secret = Kem::decap(sk_recip, pk_sender_id, encapped_key)?;
 
     // Use everything to derive an encryption context
-    let enc_ctx = derive_enc_ctx::<_, _, Kem, _>(mode, shared_secret, info);
+    let enc_ctx = Kdf::combine_secrets(mode, shared_secret, info);
     Ok(enc_ctx.into())
 }
 
@@ -246,10 +180,10 @@ mod test {
                     // Generate a mutually agreeing op mode pair
                     let (psk, psk_id) = (gen_rand_buf(), gen_rand_buf());
                     let (sender_mode, receiver_mode) =
-                        new_op_mode_pair::<Kdf, Kem>(*op_mode_kind, &psk, &psk_id);
+                        new_op_mode_pair::<Kem>(*op_mode_kind, &psk, &psk_id);
 
                     // Construct the sender's encryption context, and get an encapped key
-                    let (encapped_key, mut aead_ctx1) = setup_sender::<A, Kdf, Kem, _>(
+                    let (encapped_key, mut aead_ctx1) = setup_sender::<A, Kdf, Kem>(
                         &sender_mode,
                         &pk_recip,
                         &info[..],
@@ -292,11 +226,11 @@ mod test {
                 // Generate a mutually agreeing op mode pair
                 let (psk, psk_id) = (gen_rand_buf(), gen_rand_buf());
                 let (sender_mode, receiver_mode) =
-                    new_op_mode_pair::<Kdf, Kem>(OpModeKind::Base, &psk, &psk_id);
+                    new_op_mode_pair::<Kem>(OpModeKind::Base, &psk, &psk_id);
 
                 // Construct the sender's encryption context normally
                 let (encapped_key, sender_ctx) =
-                    setup_sender::<A, Kdf, Kem, _>(&sender_mode, &pk_recip, &info[..], &mut csprng)
+                    setup_sender::<A, Kdf, Kem>(&sender_mode, &pk_recip, &info[..], &mut csprng)
                         .unwrap();
 
                 // Now make a receiver with the wrong info string and ensure it doesn't match the
@@ -323,7 +257,7 @@ mod test {
                 // sender. The reason `bad_encapped_key` is bad is because its underlying key is
                 // uniformly random, and therefore different from the key that the sender sent.
                 let (bad_encapped_key, _) =
-                    setup_sender::<A, Kdf, Kem, _>(&sender_mode, &pk_recip, &info[..], &mut csprng)
+                    setup_sender::<A, Kdf, Kem>(&sender_mode, &pk_recip, &info[..], &mut csprng)
                         .unwrap();
                 let mut aead_ctx2 = setup_receiver::<_, _, Kem>(
                     &receiver_mode,
