@@ -30,11 +30,11 @@ kat = ["alloc", "x25519", "p256", "p384", "p521", "xwing"]
 hazmat-streaming-enc = []
 
 [dependencies]
-aead = "0.6.0-rc.10"
-aes-gcm = "=0.11.0-rc.3"
-chacha20poly1305 = "=0.11.0-rc.3"
+aead = { version = "0.6.0-rc.10", default-features = false }
+aes-gcm = { version = "=0.11.0-rc.3", default-features = false, features = ["aes"] }
+chacha20poly1305 = { version = "=0.11.0-rc.3", default-features = false }
 hybrid-array = "0.4"
-hkdf = "=0.13.0-rc.5"
+hkdf = { version = "=0.13.0-rc.5", default-features = false }
 rand_core = { version = "0.10.0", default-features = false }
 p256 = { version = "0.13", default-features = false, features = [
     "arithmetic",
@@ -54,7 +54,7 @@ subtle = { version = "2.6", default-features = false }
 x25519-dalek = { version = "2", default-features = false, features = [
     "static_secrets",
 ], optional = true }
-x-wing = { version = "0.1.0-pre.6", optional = true, features = ["hazmat"] }
+x-wing = { version = "0.1.0-pre.6", optional = true, default-features = false, features = ["hazmat"] }
 zeroize = { version = "1", default-features = false, features = [
     "zeroize_derive",
 ] }
