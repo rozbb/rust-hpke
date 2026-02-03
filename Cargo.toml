@@ -30,11 +30,11 @@ kat = ["alloc", "x25519", "p256", "p384", "p521", "xwing"]
 hazmat-streaming-enc = []
 
 [dependencies]
-aead = "0.6.0-rc.3"
-aes-gcm = "=0.11.0-rc.2"
-chacha20poly1305 = "=0.11.0-rc.2"
+aead = "0.6.0-rc.10"
+aes-gcm = "=0.11.0-rc.3"
+chacha20poly1305 = "=0.11.0-rc.3"
 hybrid-array = "0.4"
-hkdf = "=0.13.0-rc.4"
+hkdf = "=0.13.0-rc.5"
 rand_core = { version = "0.10.0", default-features = false }
 p256 = { version = "0.13", default-features = false, features = [
     "arithmetic",
@@ -48,8 +48,8 @@ p521 = { version = "0.13", default-features = false, features = [
     "arithmetic",
     "ecdh",
 ], optional = true }
-sha2 = { version = "=0.11.0-rc.4", default-features = false }
-sha3 = { version = "=0.11.0-rc.6", default-features = false }
+sha2 = { version = "=0.11.0-rc.5", default-features = false }
+sha3 = { version = "=0.11.0-rc.7", default-features = false }
 subtle = { version = "2.6", default-features = false }
 x25519-dalek = { version = "2", default-features = false, features = [
     "static_secrets",
