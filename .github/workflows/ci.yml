@@ -117,3 +117,17 @@ jobs:
           toolchain: stable
           components: clippy
       - run: cargo clippy --all-features -- -D warnings
+
+  no_std:
+    name: no_std build test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: thumbv6m-none-eabi
+      - name: Build with default features
+        run: cargo build --release --target thumbv6m-none-eabi
+      - name: Build with no default features
+        run: cargo build --release --target thumbv6m-none-eabi --no-default-features
+

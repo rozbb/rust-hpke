@@ -28,13 +28,13 @@ std = ["alloc"]
 hazmat-streaming-enc = []
 
 [dependencies]
-aead = "0.6.0-rc.3"
-aes-gcm = "0.11.0-rc.2"
-chacha20poly1305 = "0.11.0-rc.2"
+aead = { version = "0.6.0-rc.3", default-features = false }
+aes-gcm = { version = "0.11.0-rc.2", default-features = false, features = ["aes"] }
+chacha20poly1305 = { version = "0.11.0-rc.2", default-features = false }
 hybrid-array = "0.4"
-digest = "0.11.0-rc.4"
-hkdf = "0.13.0-rc.3"
-hmac = "0.13.0-rc.3"
+digest = { version = "0.11.0-rc.4", default-features = false }
+hkdf = { version = "0.13.0-rc.3", default-features = false }
+hmac = { version = "0.13.0-rc.3", default-features = false }
 rand_core = { version = "0.10.0-rc-2", default-features = false }
 p256 = { version = "0.13", default-features = false, features = [
     "arithmetic",
