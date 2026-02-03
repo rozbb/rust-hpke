@@ -9,10 +9,10 @@ use crate::{
 };
 
 use hybrid_array::typenum::{Prod, Sum, Unsigned, U1024, U3, U32, U64};
-use rand_core::{CryptoRng, RngCore};
+use rand_core::CryptoRng;
 use sha3::Shake256;
 use subtle::{Choice, ConstantTimeEq};
-use x_wing::{kem::Decapsulate, Decapsulator, KeyExport, TryKeyInit};
+use x_wing::{kem::Decapsulate, Kem, KeyExport, TryKeyInit, XWingKem};
 use zeroize::Zeroize;
 
 // Type-level size constants for X-Wing
@@ -129,13 +129,13 @@ impl KemTrait for XWing {
     type PrivateKey = PrivateKey;
     type EncappedKey = EncappedKey;
 
-    fn gen_keypair<CsPrng: CryptoRng + RngCore>(csprng: &mut CsPrng) -> (PrivateKey, PublicKey) {
-        let (sk, pk) = x_wing::generate_key_pair_from_rng(csprng);
+    fn gen_keypair(csprng: &mut impl CryptoRng) -> (PrivateKey, PublicKey) {
+        let (sk, pk) = XWingKem::generate_keypair_from_rng(csprng);
         (PrivateKey(sk), PublicKey(pk))
     }
 
     fn sk_to_pk(sk: &PrivateKey) -> PublicKey {
-        PublicKey(sk.0.encapsulator().clone())
+        PublicKey(sk.0.as_ref().clone())
     }
 
     // From https://www.ietf.org/archive/id/draft-ietf-hpke-pq-03.html#section-4-5
@@ -179,10 +179,10 @@ impl KemTrait for XWing {
     ///
     /// # Panics
     /// Panics if `sender_id_keypair` is `Some`.
-    fn encap<R: CryptoRng + RngCore>(
+    fn encap(
         pk_recip: &PublicKey,
         sender_id_keypair: Option<(&PrivateKey, &PublicKey)>,
-        csprng: &mut R,
+        csprng: &mut impl CryptoRng,
     ) -> Result<(SharedSecret<Self>, EncappedKey), HpkeError> {
         assert!(
             sender_id_keypair.is_none(),

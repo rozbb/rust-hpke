@@ -7,7 +7,7 @@ use hpke::{
 };
 
 use criterion::{criterion_main, Criterion};
-use rand::RngCore;
+use rand_core::Rng;
 use std::time::Instant;
 
 // Length of AAD for all seal/open benchmarks
@@ -64,7 +64,7 @@ where
         let bench_name = format!("setup_sender[mode={}]", mode);
         group.bench_function(bench_name, |b| {
             b.iter(|| {
-                setup_sender::<Aead, Kdf, Kem, _>(
+                setup_sender::<Aead, Kdf, Kem>(
                     opmode_s,
                     &pk_recip,
                     b"bench setup sender",
@@ -77,7 +77,7 @@ where
     // Collect the encapsulated keys from each setup_sender under each opmode. We will pass these
     // to setup_receiver in a moment
     let encapped_keys = opmodes_s.iter().map(|opmode_s| {
-        setup_sender::<Aead, Kdf, Kem, _>(opmode_s, &pk_recip, b"bench setup receiver", &mut csprng)
+        setup_sender::<Aead, Kdf, Kem>(opmode_s, &pk_recip, b"bench setup receiver", &mut csprng)
             .unwrap()
             .0
     });
@@ -100,7 +100,7 @@ where
 
     // Make the encryption context so we can benchmark seal()
     let (_, mut encryption_ctx) =
-        setup_sender::<Aead, Kdf, Kem, _>(&OpModeS::Base, &pk_recip, b"bench seal", &mut csprng)
+        setup_sender::<Aead, Kdf, Kem>(&OpModeS::Base, &pk_recip, b"bench seal", &mut csprng)
             .unwrap();
 
     // Bench seal_inout_detached() on a MSG_LEN-byte plaintext and AAD_LEN-byte AAD
@@ -163,7 +163,7 @@ where
     // Make up the recipient's keypair and setup an encryption context
     let (sk_recip, pk_recip) = Kem::gen_keypair(&mut csprng);
     let (encapped_key, mut encryption_ctx) =
-        setup_sender::<Aead, Kdf, Kem, _>(&OpModeS::Base, &pk_recip, b"bench seal", &mut csprng)
+        setup_sender::<Aead, Kdf, Kem>(&OpModeS::Base, &pk_recip, b"bench seal", &mut csprng)
             .unwrap();
 
     // Construct num_ciphertext many (plaintext, aad) pairs and pass them through seal()

@@ -10,10 +10,9 @@ use crate::{
     HpkeError,
 };
 
-use digest::{Digest, OutputSizeUser};
-use hkdf::{Hkdf, HkdfExtract};
-use hmac::EagerHash;
+use hkdf::{hmac::EagerHash, Hkdf, HkdfExtract};
 use hybrid_array::{Array, ArraySize};
+use sha2::digest::{Digest, OutputSizeUser};
 
 // RFC 9180 §4.1
 // def ExtractAndExpand(dh, kem_context):

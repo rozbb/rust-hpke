@@ -6,7 +6,7 @@ use crate::{
     HpkeError,
 };
 
-use rand_core::{CryptoRng, RngCore};
+use rand_core::CryptoRng;
 use zeroize::Zeroize;
 
 /// Secret generated in `derive_enc_ctx` and stored in `AeadCtx`.
@@ -84,17 +84,16 @@ impl<K: KdfTrait> Drop for ExporterSecret<K> {
 /// ======
 /// Panics if `mode` is not [`Base`](crate::OpModeS::Base) or [`Psk`](crate::OpModeS::Psk), or if
 /// `info.len() + mode.get_psk_id().len() + 5` ≥ 2¹⁶.
-pub fn setup_sender<A, Kdf, Kem, R>(
+pub fn setup_sender<A, Kdf, Kem>(
     mode: &OpModeS<Kem>,
     pk_recip: &Kem::PublicKey,
     info: &[u8],
-    csprng: &mut R,
+    csprng: &mut impl CryptoRng,
 ) -> Result<(Kem::EncappedKey, AeadCtxS<A, Kdf, Kem>), HpkeError>
 where
     A: Aead,
     Kdf: KdfTrait,
     Kem: KemTrait,
-    R: CryptoRng + RngCore,
 {
     // If the identity key is set, use it
     let sender_id_keypair = mode.get_sender_id_keypair();
@@ -184,7 +183,7 @@ mod test {
                         new_op_mode_pair::<Kem>(*op_mode_kind, &psk, &psk_id);
 
                     // Construct the sender's encryption context, and get an encapped key
-                    let (encapped_key, mut aead_ctx1) = setup_sender::<A, Kdf, Kem, _>(
+                    let (encapped_key, mut aead_ctx1) = setup_sender::<A, Kdf, Kem>(
                         &sender_mode,
                         &pk_recip,
                         &info[..],
@@ -231,7 +230,7 @@ mod test {
 
                 // Construct the sender's encryption context normally
                 let (encapped_key, sender_ctx) =
-                    setup_sender::<A, Kdf, Kem, _>(&sender_mode, &pk_recip, &info[..], &mut csprng)
+                    setup_sender::<A, Kdf, Kem>(&sender_mode, &pk_recip, &info[..], &mut csprng)
                         .unwrap();
 
                 // Now make a receiver with the wrong info string and ensure it doesn't match the
@@ -258,7 +257,7 @@ mod test {
                 // sender. The reason `bad_encapped_key` is bad is because its underlying key is
                 // uniformly random, and therefore different from the key that the sender sent.
                 let (bad_encapped_key, _) =
-                    setup_sender::<A, Kdf, Kem, _>(&sender_mode, &pk_recip, &info[..], &mut csprng)
+                    setup_sender::<A, Kdf, Kem>(&sender_mode, &pk_recip, &info[..], &mut csprng)
                         .unwrap();
                 let mut aead_ctx2 = setup_receiver::<_, _, Kem>(
                     &receiver_mode,

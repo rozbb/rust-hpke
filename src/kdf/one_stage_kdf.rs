@@ -10,8 +10,8 @@ use crate::{
     HpkeError,
 };
 
-use digest::{ExtendableOutput, XofReader};
 use hybrid_array::{Array, ArraySize};
+use sha3::digest::{ExtendableOutput, XofReader};
 
 // §4.1 in https://datatracker.ietf.org/doc/html/draft-ietf-hpke-hpke-02
 //

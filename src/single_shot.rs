@@ -8,7 +8,7 @@ use crate::{
 };
 
 use aead::inout::InOutBuf;
-use rand_core::{CryptoRng, RngCore};
+use rand_core::CryptoRng;
 
 // RFC 9180 §6.1
 // def SealAuthPSK(pkR, info, aad, pt, psk, psk_id, skS):
@@ -26,23 +26,21 @@ use rand_core::{CryptoRng, RngCore};
 /// Returns `Ok((encapped_key, auth_tag))` on success. If an error happened during key
 /// encapsulation, returns `Err(HpkeError::EncapError)`. If an error happened during encryption,
 /// returns `Err(HpkeError::SealError)`. In this case, the contents of `plaintext` is undefined.
-pub fn single_shot_seal_inout_detached<A, Kdf, Kem, R>(
+pub fn single_shot_seal_inout_detached<A, Kdf, Kem>(
     mode: &OpModeS<Kem>,
     pk_recip: &Kem::PublicKey,
     info: &[u8],
     buffer: InOutBuf<'_, '_, u8>,
     aad: &[u8],
-    csprng: &mut R,
+    csprng: &mut impl CryptoRng,
 ) -> Result<(Kem::EncappedKey, AeadTag<A>), HpkeError>
 where
     A: Aead,
     Kdf: KdfTrait,
     Kem: KemTrait,
-    R: CryptoRng + RngCore,
 {
     // Encap a key
-    let (encapped_key, mut aead_ctx) =
-        setup_sender::<A, Kdf, Kem, R>(mode, pk_recip, info, csprng)?;
+    let (encapped_key, mut aead_ctx) = setup_sender::<A, Kdf, Kem>(mode, pk_recip, info, csprng)?;
     // Encrypt
     let tag = aead_ctx.seal_inout_detached(buffer, aad)?;
 
@@ -58,23 +56,21 @@ where
 /// encapsulation, returns `Err(HpkeError::EncapError)`. If an error happened during encryption,
 /// returns `Err(HpkeError::SealError)`.
 #[cfg(feature = "alloc")]
-pub fn single_shot_seal<A, Kdf, Kem, R>(
+pub fn single_shot_seal<A, Kdf, Kem>(
     mode: &OpModeS<Kem>,
     pk_recip: &Kem::PublicKey,
     info: &[u8],
     plaintext: &[u8],
     aad: &[u8],
-    csprng: &mut R,
+    csprng: &mut impl CryptoRng,
 ) -> Result<(Kem::EncappedKey, crate::Vec<u8>), HpkeError>
 where
     A: Aead,
     Kdf: KdfTrait,
     Kem: KemTrait,
-    R: CryptoRng + RngCore,
 {
     // Encap a key
-    let (encapped_key, mut aead_ctx) =
-        setup_sender::<A, Kdf, Kem, R>(mode, pk_recip, info, csprng)?;
+    let (encapped_key, mut aead_ctx) = setup_sender::<A, Kdf, Kem>(mode, pk_recip, info, csprng)?;
     // Encrypt
     let ciphertext = aead_ctx.seal(plaintext, aad)?;
 
@@ -198,7 +194,7 @@ mod test {
                 };
 
                 // Single-shot encrypt
-                let (encapped_key, ciphertext) = single_shot_seal::<A, Kdf, Kem, _>(
+                let (encapped_key, ciphertext) = single_shot_seal::<A, Kdf, Kem>(
                     &sender_mode,
                     &pk_recip,
                     info,

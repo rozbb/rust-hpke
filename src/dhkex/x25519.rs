@@ -172,7 +172,7 @@ mod tests {
         test_util::dhkex_gen_keypair,
     };
     use hybrid_array::typenum::Unsigned;
-    use rand::RngCore;
+    use rand_core::Rng;
 
     /// Tests that an serialize-deserialize round-trip ends up at the same pubkey
     #[test]
@@ -206,7 +206,7 @@ mod tests {
         let mut csprng = rand::rng();
 
         // Make a random keypair and serialize it
-        let (sk, pk) = dhkex_gen_keypair::<Kex, _>(&mut csprng);
+        let (sk, pk) = dhkex_gen_keypair::<Kex>(&mut csprng);
         let (sk_bytes, pk_bytes) = (sk.to_bytes(), pk.to_bytes());
 
         // Now deserialize those bytes

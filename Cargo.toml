@@ -31,13 +31,11 @@ hazmat-streaming-enc = []
 
 [dependencies]
 aead = "0.6.0-rc.3"
-aes-gcm = "0.11.0-rc.2"
-chacha20poly1305 = "0.11.0-rc.2"
+aes-gcm = "=0.11.0-rc.2"
+chacha20poly1305 = "=0.11.0-rc.2"
 hybrid-array = "0.4"
-digest = "0.11.0-rc.4"
-hkdf = "0.13.0-rc.3"
-hmac = "0.13.0-rc.3"
-rand_core = { version = "0.10.0-rc-3", default-features = false }
+hkdf = "=0.13.0-rc.4"
+rand_core = { version = "0.10.0", default-features = false }
 p256 = { version = "0.13", default-features = false, features = [
     "arithmetic",
     "ecdh",
@@ -50,13 +48,13 @@ p521 = { version = "0.13", default-features = false, features = [
     "arithmetic",
     "ecdh",
 ], optional = true }
-sha2 = { version = "0.11.0-rc.3", default-features = false }
-sha3 = { version = "0.11.0-rc.3", default-features = false }
+sha2 = { version = "=0.11.0-rc.4", default-features = false }
+sha3 = { version = "=0.11.0-rc.6", default-features = false }
 subtle = { version = "2.6", default-features = false }
 x25519-dalek = { version = "2", default-features = false, features = [
     "static_secrets",
 ], optional = true }
-x-wing = { git = "https://github.com/RustCrypto/KEMs.git", rev = "a9105421687e323927e2e6417627a9627641a2ee", optional = true, features = ["hazmat"] }
+x-wing = { version = "0.1.0-pre.6", optional = true, features = ["hazmat"] }
 zeroize = { version = "1", default-features = false, features = [
     "zeroize_derive",
 ] }
@@ -67,7 +65,7 @@ hex = "0.4"
 hex-literal = "1"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-rand = { version = "0.10.0-rc.5", default-features = false, features = [ "thread_rng" ] }
+rand = { git = "https://github.com/rust-random/rand.git", rev = "9c98f59e8b042e5c7c714e933e49b384a4ce75a6", features = [ "thread_rng" ] }
 
 [[example]]
 name = "client_server"
@@ -89,7 +87,3 @@ harness = false
 
 [lib]
 bench = false
-
-[patch.crates-io]
-# Dependency of x-wing, which currently has the same Git dependency
-ml-kem = { git = "https://github.com/RustCrypto/KEMs.git", rev = "a9105421687e323927e2e6417627a9627641a2ee" }

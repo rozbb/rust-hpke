@@ -22,7 +22,7 @@ macro_rules! impl_dhkem {
                 Deserializable, HpkeError, Serializable,
             };
 
-            use rand_core::{CryptoRng, RngCore};
+            use rand_core::{CryptoRng};
 
             // Define convenience types
             type PublicKey = <$dhkex as DhKeyExchange>::PublicKey;
@@ -216,10 +216,10 @@ macro_rules! impl_dhkem {
                 }
 
                 // Runs encap_with_eph using a random ephemeral key
-                fn encap<R: CryptoRng + RngCore>(
+                fn encap(
                     pk_recip: &Self::PublicKey,
                     sender_id_keypair: Option<(&Self::PrivateKey, &Self::PublicKey)>,
-                    csprng: &mut R,
+                    csprng: &mut impl CryptoRng,
                 ) -> Result<(SharedSecret<Self>, Self::EncappedKey), HpkeError> {
                     // Generate a new ephemeral key
                     let (sk_eph, _) = Self::gen_keypair(csprng);
