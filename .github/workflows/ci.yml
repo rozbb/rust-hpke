@@ -126,8 +126,8 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: thumbv6m-none-eabi
-      - name: Build with default features
-        run: cargo build --release --target thumbv6m-none-eabi
+      - name: Build with all features but kat
+        run: cargo build --target thumbv6m-none-eabi --features "x25519,p256,p384,p521,xwing"
       - name: Build with no default features
-        run: cargo build --release --target thumbv6m-none-eabi --no-default-features
+        run: cargo build --target thumbv6m-none-eabi --no-default-features
 
