@@ -5,12 +5,12 @@ use crate::{
     kem::Kem as KemTrait,
     op_mode::{OpModeR, OpModeS, PskBundle},
     setup::ExporterSecret,
-    Serializable,
+    Deserializable, Serializable,
 };
 
 use aead::inout::InOutBuf;
 use hybrid_array::Array;
-use rand::{CryptoRng, Rng, RngCore};
+use rand::{CryptoRng, Rng, RngExt};
 
 /// Returns a random 32-byte buffer
 pub(crate) fn gen_rand_buf() -> [u8; 32] {
@@ -21,8 +21,8 @@ pub(crate) fn gen_rand_buf() -> [u8; 32] {
 }
 
 /// Generates a keypair without the need of a KEM
-pub(crate) fn dhkex_gen_keypair<Kex: DhKeyExchange, R: CryptoRng + RngCore>(
-    csprng: &mut R,
+pub(crate) fn dhkex_gen_keypair<Kex: DhKeyExchange>(
+    csprng: &mut impl CryptoRng,
 ) -> (Kex::PrivateKey, Kex::PublicKey) {
     // Make some keying material that's the size of a private key
     let mut ikm: Array<u8, <Kex::PrivateKey as Serializable>::OutputSize> = Array::default();
@@ -73,7 +73,7 @@ pub(crate) enum OpModeKind {
 }
 
 /// Makes an agreeing pair of `OpMode`s of the specified variant
-pub(crate) fn new_op_mode_pair<'a, Kdf: KdfTrait, Kem: KemTrait>(
+pub(crate) fn new_op_mode_pair<'a, Kem: KemTrait>(
     kind: OpModeKind,
     psk: &'a [u8],
     psk_id: &'a [u8],
@@ -135,17 +135,17 @@ pub(crate) fn aead_ctx_eq<A: Aead, Kdf: KdfTrait, Kem: KemTrait>(
     // each time.
     for i in 0..1000 {
         // Clone the backing array, and make a slice into it that's msg_len long. This is the message
-        let mut tmp_backing_arr = msg_backing_arr.clone();
+        let mut tmp_backing_arr = msg_backing_arr;
         let buf = &mut tmp_backing_arr[..msg_len];
 
         // Encrypt the plaintext
         let tag = sender
-            .seal_inout_detached(InOutBuf::new(&msg, buf).unwrap(), &aad)
+            .seal_inout_detached(InOutBuf::new(msg, buf).unwrap(), aad)
             .unwrap_or_else(|_| panic!("seal() #{} failed", i));
 
         // Now to decrypt on the other side
         if receiver
-            .open_inout_detached(InOutBuf::from(&mut *buf), &aad, &tag)
+            .open_inout_detached(InOutBuf::from(&mut *buf), aad, &tag)
             .is_err()
         {
             // An error occurred in decryption. These encryption contexts are not identical.
@@ -160,4 +160,18 @@ pub(crate) fn aead_ctx_eq<A: Aead, Kdf: KdfTrait, Kem: KemTrait>(
     }
 
     true
+}
+
+// Dummy impls for testing purposes
+impl Serializable for core::convert::Infallible {
+    type OutputSize = hybrid_array::typenum::U0;
+
+    fn write_exact(&self, _: &mut [u8]) {
+        unimplemented!()
+    }
+}
+impl Deserializable for core::convert::Infallible {
+    fn from_bytes(_: &[u8]) -> Result<Self, crate::HpkeError> {
+        unimplemented!()
+    }
 }

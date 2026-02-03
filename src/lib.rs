@@ -33,7 +33,7 @@
 //! // knew, she'd be able to authenticate herself. See the OpModeS and OpModeR types for more
 //! // detail.
 //! let (encapsulated_key, mut encryption_context) =
-//!     hpke::setup_sender::<Aead, Kdf, Kem, _>(&OpModeS::Base, &bob_pk, info_str, &mut csprng)
+//!     hpke::setup_sender::<Aead, Kdf, Kem>(&OpModeS::Base, &bob_pk, info_str, &mut csprng)
 //!         .expect("invalid server pubkey!");
 //!
 //! // Alice encrypts a message to Bob. `aad` is authenticated associated data that is not
@@ -76,7 +76,8 @@
 //-------- no_std stuff --------//
 #![no_std]
 
-#[cfg(feature = "std")]
+// Known-answer tests need std for file IO
+#[cfg(feature = "kat")]
 #[macro_use]
 extern crate std;
 
@@ -90,16 +91,7 @@ pub(crate) use alloc::vec::Vec;
 
 //-------- Testing stuff --------//
 
-// kat_tests tests all the implemented ciphersuites, and thus needs all the dependencies. It also
-// needs std for file IO.
-#[cfg(all(
-    test,
-    feature = "std",
-    feature = "x25519",
-    feature = "p256",
-    feature = "p384",
-    feature = "p521"
-))]
+#[cfg(all(test, feature = "kat"))]
 mod kat_tests;
 
 #[cfg(test)]

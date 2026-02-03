@@ -16,14 +16,13 @@ macro_rules! impl_dhkem {
         pub(crate) mod $mod_name {
             use crate::{
                 dhkex::{DhKeyExchange, MAX_PUBKEY_SIZE},
-                kdf::{extract_and_expand, Kdf as KdfTrait},
+                kdf::Kdf as KdfTrait,
                 kem::{Kem as KemTrait, SharedSecret},
                 util::{enforce_outbuf_len, kem_suite_id},
                 Deserializable, HpkeError, Serializable,
             };
 
-            use digest::OutputSizeUser;
-            use rand_core::{CryptoRng, RngCore};
+            use rand_core::{CryptoRng};
 
             // Define convenience types
             type PublicKey = <$dhkex as DhKeyExchange>::PublicKey;
@@ -90,13 +89,9 @@ macro_rules! impl_dhkem {
             //   shared_secret = ExtractAndExpand(dh, kem_context)
             //   return shared_secret, enc
 
-            // The reason we define encap_with_eph() rather than just encap() is because we need to
-            // use deterministic ephemeral keys in the known-answer tests. So we define a function
-            // here, then use it to impl kem::Kem and kat_tests::TestableKem.
-
-            /// Derives a shared secret that the owner of the recipient's pubkey can use to derive
-            /// the same shared secret. If `sk_sender_id` is given, the sender's identity will be
-            /// tied to the shared secret.
+            /// Does a DH operation with `pk_recip`, using `sk_eph` as the ephemeral key share. If
+            /// `sk_sender_id` is given, the sender's identity will be tied to the resulting shared
+            /// secret.
             ///
             /// Return Value
             /// ============
@@ -155,7 +150,7 @@ macro_rules! impl_dhkem {
                     // 255x the digest size of the hash function. Since these values are fixed at
                     // compile time, we don't worry about it.
                     let mut buf = <SharedSecret<$kem_name> as Default>::default();
-                    extract_and_expand::<$kdf>(concatted_secrets, &suite_id, kem_context, &mut buf.0)
+                    <$kdf>::extract_and_expand(concatted_secrets, &suite_id, kem_context, &mut buf.0)
                         .expect("shared secret is way too big");
                     buf
                 } else {
@@ -174,7 +169,7 @@ macro_rules! impl_dhkem {
                     // output values are 255x the digest size of the hash function. Since these
                     // values are fixed at compile time, we don't worry about it.
                     let mut buf = <SharedSecret<$kem_name> as Default>::default();
-                    extract_and_expand::<$kdf>(
+                    <$kdf>::extract_and_expand(
                         &kex_res_eph.to_bytes(),
                         &suite_id,
                         kem_context,
@@ -195,7 +190,7 @@ macro_rules! impl_dhkem {
 
                 /// The size of the shared secret at the end of the key exchange process
                 #[doc(hidden)]
-                type NSecret = <<$kdf as KdfTrait>::HashImpl as OutputSizeUser>::OutputSize;
+                type NSecret = <$kdf as KdfTrait>::Nh;
 
                 type PublicKey = PublicKey;
                 type PrivateKey = PrivateKey;
@@ -221,10 +216,10 @@ macro_rules! impl_dhkem {
                 }
 
                 // Runs encap_with_eph using a random ephemeral key
-                fn encap<R: CryptoRng + RngCore>(
+                fn encap(
                     pk_recip: &Self::PublicKey,
                     sender_id_keypair: Option<(&Self::PrivateKey, &Self::PublicKey)>,
-                    csprng: &mut R,
+                    csprng: &mut impl CryptoRng,
                 ) -> Result<(SharedSecret<Self>, Self::EncappedKey), HpkeError> {
                     // Generate a new ephemeral key
                     let (sk_eph, _) = Self::gen_keypair(csprng);
@@ -312,7 +307,7 @@ macro_rules! impl_dhkem {
                         // 255x the digest size of the hash function. Since these values are fixed at
                         // compile time, we don't worry about it.
                         let mut shared_secret = <SharedSecret<Self> as Default>::default();
-                        extract_and_expand::<$kdf>(
+                        <$kdf>::extract_and_expand(
                             concatted_secrets,
                             &suite_id,
                             kem_context,
@@ -336,7 +331,7 @@ macro_rules! impl_dhkem {
                         // output values are 255x the digest size of the hash function. Since these
                         // values are fixed at compile time, we don't worry about it.
                         let mut shared_secret = <SharedSecret<Self> as Default>::default();
-                        extract_and_expand::<$kdf>(
+                        <$kdf>::extract_and_expand(
                             &kex_res_eph.to_bytes(),
                             &suite_id,
                             kem_context,
@@ -345,6 +340,38 @@ macro_rules! impl_dhkem {
                         .expect("shared secret is way too big");
                         Ok(shared_secret)
                     }
+                }
+            }
+
+            #[cfg(all(test, feature = "kat"))]
+            impl crate::kat_tests::TestableKem for $kem_name {
+                // In DHKEM, ephemeral keys and private keys are both scalars
+                type EphemeralKey = PrivateKey;
+
+                /// Encapsulates to the given public key, using `sk_eph` as the ephemeral secret
+                fn encap_with_eph(
+                    pk_recip: &Self::PublicKey,
+                    sender_id_keypair: Option<(&PrivateKey, &PublicKey)>,
+                    sk_eph: Self::EphemeralKey,
+                ) -> Result<(SharedSecret<Self>, Self::EncappedKey), HpkeError> {
+                    encap_with_eph(pk_recip, sender_id_keypair, sk_eph)
+                }
+
+                /// Encapsulates to the given public key, using `ikm` as the keying material for the
+                /// ephemeral keypair
+                fn encap_det(
+                    pk_recip: &Self::PublicKey,
+                    sender_id_keypair: Option<(&Self::PrivateKey, &Self::PublicKey)>,
+                    randomness: &[u8],
+                ) -> Result<(SharedSecret<Self>, Self::EncappedKey), HpkeError> {
+                    // Compute the ephemeral keypair from the keying material
+                    let suite_id = kem_suite_id::<$kem_name>();
+                    let (sk_eph, _pk_eph) = <$dhkex as DhKeyExchange>::derive_keypair::<$kdf>(
+                        &suite_id,
+                        randomness,
+                    );
+
+                    encap_with_eph(pk_recip, sender_id_keypair, sk_eph)
                 }
             }
         }

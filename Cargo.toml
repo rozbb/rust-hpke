@@ -16,26 +16,26 @@ rust-version = "1.85"
 # "p256" enables the use of ECDH-NIST-P256 as a KEM
 # "p384" enables the use of ECDH-NIST-P384 as a KEM
 # "x25519" enables the use of the X25519 as a KEM
+# "xwing" enables the use of X-Wing hybrid post-quantum KEM
 default = ["alloc", "p256", "x25519"]
 x25519 = ["dep:x25519-dalek"]
-p384 = ["dep:p384"]
 p256 = ["dep:p256"]
+p384 = ["dep:p384"]
 p521 = ["dep:p521"]
+xwing = ["dep:x-wing"]
 # Include allocating methods like open() and seal()
 alloc = []
-# Used to enable KAT tests. Also implies alloc
-std = ["alloc"]
+# Used to enable known-answer tests. Implies alloc and all other features
+kat = ["alloc", "x25519", "p256", "p384", "p521", "xwing"]
 hazmat-streaming-enc = []
 
 [dependencies]
-aead = { version = "0.6.0-rc.3", default-features = false }
-aes-gcm = { version = "0.11.0-rc.2", default-features = false, features = ["aes"] }
-chacha20poly1305 = { version = "0.11.0-rc.2", default-features = false }
+aead = { version = "0.6.0-rc.10", default-features = false }
+aes-gcm = { version = "=0.11.0-rc.3", default-features = false, features = ["aes"] }
+chacha20poly1305 = { version = "=0.11.0-rc.3", default-features = false }
 hybrid-array = "0.4"
-digest = { version = "0.11.0-rc.4", default-features = false }
-hkdf = { version = "0.13.0-rc.3", default-features = false }
-hmac = { version = "0.13.0-rc.3", default-features = false }
-rand_core = { version = "0.10.0-rc-2", default-features = false }
+hkdf = { version = "=0.13.0-rc.5", default-features = false }
+rand_core = { version = "0.10.0", default-features = false }
 p256 = { version = "0.13", default-features = false, features = [
     "arithmetic",
     "ecdh",
@@ -48,11 +48,13 @@ p521 = { version = "0.13", default-features = false, features = [
     "arithmetic",
     "ecdh",
 ], optional = true }
-sha2 = { version = "0.11.0-rc.3", default-features = false }
+sha2 = { version = "=0.11.0-rc.5", default-features = false }
+sha3 = { version = "=0.11.0-rc.7", default-features = false }
 subtle = { version = "2.6", default-features = false }
 x25519-dalek = { version = "2", default-features = false, features = [
     "static_secrets",
 ], optional = true }
+x-wing = { version = "0.1.0-pre.6", optional = true, default-features = false, features = ["hazmat"] }
 zeroize = { version = "1", default-features = false, features = [
     "zeroize_derive",
 ] }
@@ -63,7 +65,7 @@ hex = "0.4"
 hex-literal = "1"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-rand = { version = "0.10.0-rc.5", default-features = false, features = [ "thread_rng" ] }
+rand = { git = "https://github.com/rust-random/rand.git", rev = "9c98f59e8b042e5c7c714e933e49b384a4ce75a6", features = [ "thread_rng" ] }
 
 [[example]]
 name = "client_server"

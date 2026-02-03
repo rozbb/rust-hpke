@@ -9,8 +9,8 @@ pub(crate) type FullSuiteId = [u8; 10];
 
 /// Writes a u16 to a bytestring in big-endian order. `buf.len()` MUST be 2
 #[rustfmt::skip]
-pub(crate) fn write_u16_be(buf: &mut [u8], n: u16) {
-    assert_eq!(buf.len(), 2);
+pub(crate) const fn write_u16_be(buf: &mut [u8], n: u16) {
+    assert!(buf.len() == 2);
     buf[0] = ((n & 0xff00) >> 8) as u8;
     buf[1] =  (n & 0x00ff)       as u8;
 }
@@ -59,12 +59,15 @@ where
 // suite_id = concat("KEM", I2OSP(kem_id, 2))
 
 /// Constructs the `suite_id` used as binding context in all functions in `kem`
-pub(crate) fn kem_suite_id<Kem: KemTrait>() -> KemSuiteId {
+pub(crate) const fn kem_suite_id<Kem: KemTrait>() -> KemSuiteId {
     // XX is the KEM ID
     let mut suite_id = *b"KEMXX";
 
     // Write the KEM ID to the buffer. Forgive the explicit indexing.
-    write_u16_be(&mut suite_id[3..5], Kem::KEM_ID);
+    let kem_id_bytes = Kem::KEM_ID.to_be_bytes();
+    // Can't do write_u16_be(&mut suite_id[3..5], Kem::KEM_ID) because IndexMut isn't const
+    suite_id[3] = kem_id_bytes[0];
+    suite_id[4] = kem_id_bytes[1];
 
     suite_id
 }

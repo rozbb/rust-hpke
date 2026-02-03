@@ -31,10 +31,12 @@ Here are all the primitives listed in the spec. The primitives with checked boxe
     - [X] DHKEM(P-256, HKDF-SHA256)
     - [X] DHKEM(P-384, HKDF-SHA384)
     - [X] DHKEM(P-521, HKDF-SHA512)
+    - [X] X-Wing, aka MLKEM768-X25519
 * KDFs
     - [X] HKDF-SHA256
     - [X] HKDF-SHA384
     - [X] HKDF-SHA512
+    - [X] SHAKE256
 * AEADs
     - [X] AES-GCM-128
     - [X] AES-GCM-256
@@ -52,7 +54,8 @@ Feature flag list:
 * `p256` - Enables NIST P-256-based KEMs
 * `p384` - Enables NIST P-384-based KEMs
 * `p521` - Enables NIST P-521-based KEMs
-* `std` - Used only for testing (necessary for known-answer tests)
+* `xwing` - Enables the X-Wing (aka MLKEM768-X25519) hybrid post-quantum KEM
+* `kat` - Used only to enabled known-answer tests, which require `std`. Only use with `cargo test`
 
 For info on how to omit or include feature flags, see the [cargo docs on features](https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html#choosing-features).
 
@@ -93,7 +96,11 @@ See [CHANGELOG.md](CHANGELOG.md) for a list of changes made throughout past vers
 Tests
 -----
 
-To run all tests, execute `cargo test --all-features`. This includes known-answer tests, which test against `test-vector-COMMIT_ID.json`,where `COMMIT_ID` is the short commit of the version of the [spec](https://github.com/cfrg/draft-irtf-cfrg-hpke) that the test vectors came from. The finalized spec uses commit 5f503c5. See the [reference implementation](https://github.com/cisco/go-hpke) for information on how to generate a test vector.
+To run all tests, execute `cargo test --all-features`. This includes known-answer tests.
+
+Classical (i.e., non-post-quantum) ciphersuites test against `test-vector-COMMIT_ID.json`,where `COMMIT_ID` is the short commit of the version of the [spec](https://github.com/cfrg/draft-irtf-cfrg-hpke) that the test vectors came from. The finalized spec uses commit `5f503c5`. See the [reference implementation](https://github.com/cisco/go-hpke) for information on how to generate a test vector.
+
+Post-quantum ciphersuites (including hybrid), test against `test-vector-go-COMMIT_ID.json` in the same way. The commit ID corresponds to Filippo's [Go HPKE](https://github.com/FiloSottile/hpke) repo. The latest commit fetched was `8aa8a04`. The vectors in turn come from the [reference implementation](https://github.com/hpkewg/hpke-pq) repo of the PQ extension standard, at commit `c523f03`. The JSON file was trimmed to only include test vectors from ciphersuites implemented in this crate.
 
 Benchmarks
 ----------

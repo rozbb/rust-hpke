@@ -14,14 +14,14 @@ macro_rules! nistp_dhkex {
 
             use crate::{
                 dhkex::{DhError, DhKeyExchange},
-                kdf::{labeled_extract, Kdf as KdfTrait, LabeledExpand},
+                kdf::Kdf as KdfTrait,
                 util::{enforce_equal_len, enforce_outbuf_len, KemSuiteId},
                 Deserializable, HpkeError, Serializable,
             };
 
             use ::$curve as curve_crate;
             use curve_crate::elliptic_curve::{ecdh::diffie_hellman, sec1::ToEncodedPoint};
-            use hybrid_array::{typenum::Unsigned, Array};
+            use hybrid_array::{typenum::Unsigned};
             use subtle::{Choice, ConstantTimeEq};
 
             #[doc = concat!(
@@ -197,30 +197,24 @@ macro_rules! nistp_dhkex {
                     suite_id: &KemSuiteId,
                     ikm: &[u8],
                 ) -> (PrivateKey, PublicKey) {
-                    // Write the label into a byte buffer and extract from the IKM
-                    let (_, hkdf_ctx) = labeled_extract::<Kdf>(&[], suite_id, b"dkp_prk", ikm);
-
-                    // The buffer we hold the candidate scalar bytes in. This is the size of a
-                    // private key.
-                    let mut buf =
-                        Array::<u8, <PrivateKey as Serializable>::OutputSize>::default();
+                    type PrivateKeySize = <PrivateKey as Serializable>::OutputSize;
 
                     // Try to generate a key 256 times. Practically, this will succeed and return
                     // early on the first iteration.
                     for counter in 0u8..=255 {
-                        // This unwrap is fine. It only triggers if buf is way too big. It's only
-                        // 32 bytes.
-                        hkdf_ctx
-                            .labeled_expand(suite_id, b"candidate", &[counter], &mut buf)
-                            .unwrap();
+                        let mut candidate_bytes = Kdf::derive_nistp_sk_eph_bytes::<PrivateKeySize>(
+                            suite_id,
+                            ikm,
+                            counter,
+                        );
 
                         // Apply the bitmask
-                        buf[0] &= $keygen_bitmask;
+                        candidate_bytes[0] &= $keygen_bitmask;
 
                         // Try to convert to a valid secret key. If the conversion succeeded,
                         // return the keypair. Recall the invariant of PrivateKey: it is a value in
                         // the range [1,p).
-                        if let Ok(sk) = PrivateKey::from_bytes(&buf) {
+                        if let Ok(sk) = PrivateKey::from_bytes(&candidate_bytes) {
                             let pk = Self::sk_to_pk(&sk);
                             return (sk, pk);
                         }
@@ -409,8 +403,8 @@ mod tests {
         dh_res_xcoord_bytes: &[u8],
     ) {
         // Deserialize the pubkey and privkey and do a DH operation
-        let sk_recip = Kex::PrivateKey::from_bytes(&sk_recip_bytes).unwrap();
-        let pk_sender = Kex::PublicKey::from_bytes(&pk_sender_bytes).unwrap();
+        let sk_recip = Kex::PrivateKey::from_bytes(sk_recip_bytes).unwrap();
+        let pk_sender = Kex::PublicKey::from_bytes(pk_sender_bytes).unwrap();
         let derived_dh = Kex::dh(&sk_recip, &pk_sender).unwrap();
 
         // Assert that the derived DH result matches the test vector. Recall that the HPKE DH
@@ -428,7 +422,7 @@ mod tests {
         // serialize it, deserialize it, and test whether it's the same using impl Eq for
         // AffinePoint
 
-        let (_, pubkey) = dhkex_gen_keypair::<Kex, _>(&mut csprng);
+        let (_, pubkey) = dhkex_gen_keypair::<Kex>(&mut csprng);
         let pubkey_bytes = pubkey.to_bytes();
         let rederived_pubkey =
             <Kex as DhKeyExchange>::PublicKey::from_bytes(&pubkey_bytes).unwrap();
@@ -461,7 +455,7 @@ mod tests {
         let mut csprng = rand::rng();
 
         // Make a random keypair and serialize it
-        let (sk, pk) = dhkex_gen_keypair::<Kex, _>(&mut csprng);
+        let (sk, pk) = dhkex_gen_keypair::<Kex>(&mut csprng);
         let (sk_bytes, pk_bytes) = (sk.to_bytes(), pk.to_bytes());
 
         // Now deserialize those bytes
@@ -476,19 +470,19 @@ mod tests {
     #[cfg(feature = "p256")]
     #[test]
     fn test_vector_ecdh_p256() {
-        test_vector_ecdh::<DhP256>(&P256_PRIVKEYS[0], &P256_PUBKEYS[1], &P256_DH_RES_XCOORD);
+        test_vector_ecdh::<DhP256>(P256_PRIVKEYS[0], P256_PUBKEYS[1], P256_DH_RES_XCOORD);
     }
 
     #[cfg(feature = "p384")]
     #[test]
     fn test_vector_ecdh_p384() {
-        test_vector_ecdh::<DhP384>(&P384_PRIVKEYS[0], &P384_PUBKEYS[1], &P384_DH_RES_XCOORD);
+        test_vector_ecdh::<DhP384>(P384_PRIVKEYS[0], P384_PUBKEYS[1], P384_DH_RES_XCOORD);
     }
 
     #[cfg(feature = "p521")]
     #[test]
     fn test_vector_ecdh_p521() {
-        test_vector_ecdh::<DhP521>(&P521_PRIVKEYS[0], &P521_PUBKEYS[1], &P521_DH_RES_XCOORD);
+        test_vector_ecdh::<DhP521>(P521_PRIVKEYS[0], P521_PUBKEYS[1], P521_DH_RES_XCOORD);
     }
 
     #[cfg(feature = "p256")]
