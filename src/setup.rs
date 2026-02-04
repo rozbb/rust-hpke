@@ -158,6 +158,7 @@ mod test {
 
     /// This tests that `setup_sender` and `setup_receiver` derive the same context. We do this by
     /// testing that `gen_ctx_kem_pair` returns identical encryption contexts
+    #[cfg(feature = "chacha20poly1305")]
     macro_rules! test_setup_correctness {
         ($test_name:ident, $aead_ty:ty, $kdf_ty:ty, $kem_ty:ty) => {
             #[test]
@@ -211,6 +212,7 @@ mod test {
     }
 
     /// Tests that using different input data gives you different encryption contexts
+    #[cfg(feature = "chacha20poly1305")]
     macro_rules! test_setup_soundness {
         ($test_name:ident, $aead:ty, $kdf:ty, $kem:ty) => {
             #[test]
