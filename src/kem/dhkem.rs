@@ -22,8 +22,7 @@ macro_rules! impl_dhkem {
                 Deserializable, HpkeError, Serializable,
             };
 
-            use digest::OutputSizeUser;
-            use rand_core::{CryptoRng, RngCore};
+            use rand_core::{CryptoRng};
             use zeroize::Zeroize;
 
             // Define convenience types

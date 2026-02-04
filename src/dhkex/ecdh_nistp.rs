@@ -218,7 +218,7 @@ macro_rules! nistp_dhkex {
                         if let Ok(sk) = PrivateKey::from_bytes(&candidate_bytes) {
                             let pk = Self::sk_to_pk(&sk);
                             // Zeroize the buffer before returning, as it contains sensitive key material
-                            buf.zeroize();
+                            candidate_bytes.zeroize();
                             return (sk, pk);
                         }
                     }
