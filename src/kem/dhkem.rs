@@ -23,6 +23,7 @@ macro_rules! impl_dhkem {
             };
 
             use rand_core::{CryptoRng};
+            use zeroize::Zeroize;
 
             // Define convenience types
             type PublicKey = <$dhkex as DhKeyExchange>::PublicKey;
@@ -137,10 +138,14 @@ macro_rules! impl_dhkem {
 
                     // concatted_secrets = kex_res_eph || kex_res_identity
                     // Same no-alloc concat trick as above
-                    let (concatted_secrets_buf, concatted_secret_size) = concat_with_known_maxlen!(
+                    // Store serialized DH outputs in variables so we can zeroize them
+                    let mut kex_eph_bytes = kex_res_eph.to_bytes();
+                    let mut kex_identity_bytes = kex_res_identity.to_bytes();
+
+                    let (mut concatted_secrets_buf, concatted_secret_size) = concat_with_known_maxlen!(
                         MAX_PUBKEY_SIZE,
-                        &kex_res_eph.to_bytes(),
-                        &kex_res_identity.to_bytes()
+                        &kex_eph_bytes,
+                        &kex_identity_bytes
                     );
                     let concatted_secrets = &concatted_secrets_buf[..concatted_secret_size];
 
@@ -152,6 +157,12 @@ macro_rules! impl_dhkem {
                     let mut buf = <SharedSecret<$kem_name> as Default>::default();
                     <$kdf>::extract_and_expand(concatted_secrets, &suite_id, kem_context, &mut buf.0)
                         .expect("shared secret is way too big");
+
+                    // Zeroize all buffers containing sensitive DH outputs
+                    kex_eph_bytes.zeroize();
+                    kex_identity_bytes.zeroize();
+                    concatted_secrets_buf.zeroize();
+
                     buf
                 } else {
                     // kem_context = encapped_key || pk_recip
@@ -168,14 +179,22 @@ macro_rules! impl_dhkem {
                     // input with the recipient pubkey. The HKDF-Expand call only errors if the
                     // output values are 255x the digest size of the hash function. Since these
                     // values are fixed at compile time, we don't worry about it.
+
+                    // Store serialized DH output in a variable so we can zeroize it
+                    let mut kex_eph_bytes = kex_res_eph.to_bytes();
+
                     let mut buf = <SharedSecret<$kem_name> as Default>::default();
                     <$kdf>::extract_and_expand(
-                        &kex_res_eph.to_bytes(),
+                        &kex_eph_bytes,
                         &suite_id,
                         kem_context,
                         &mut buf.0,
                     )
                     .expect("shared secret is way too big");
+
+                    // Zeroize the buffer containing sensitive DH output
+                    kex_eph_bytes.zeroize();
+
                     buf
                 };
 
@@ -294,10 +313,13 @@ macro_rules! impl_dhkem {
 
                         // concatted_secrets = kex_res_eph || kex_res_identity
                         // Same no-alloc concat trick as above
-                        let (concatted_secrets_buf, concatted_secret_size) = concat_with_known_maxlen!(
+                        // Store serialized DH outputs in variables so we can zeroize them
+                        let mut kex_eph_bytes = kex_res_eph.to_bytes();
+                        let mut kex_identity_bytes = kex_res_identity.to_bytes();
+                        let (mut concatted_secrets_buf, concatted_secret_size) = concat_with_known_maxlen!(
                             MAX_PUBKEY_SIZE,
-                            &kex_res_eph.to_bytes(),
-                            &kex_res_identity.to_bytes()
+                            &kex_eph_bytes,
+                            &kex_identity_bytes
                         );
                         let concatted_secrets = &concatted_secrets_buf[..concatted_secret_size];
 
@@ -314,6 +336,12 @@ macro_rules! impl_dhkem {
                             &mut shared_secret.0,
                         )
                         .expect("shared secret is way too big");
+
+                        // Zeroize all buffers containing sensitive DH outputs
+                        kex_eph_bytes.zeroize();
+                        kex_identity_bytes.zeroize();
+                        concatted_secrets_buf.zeroize();
+
                         Ok(shared_secret)
                     } else {
                         // kem_context = encapped_key || pk_recip || pk_sender_id
@@ -330,14 +358,22 @@ macro_rules! impl_dhkem {
                         // input with the recipient pubkey. The HKDF-Expand call only errors if the
                         // output values are 255x the digest size of the hash function. Since these
                         // values are fixed at compile time, we don't worry about it.
+
+                        // Store serialized DH output in a variable so we can zeroize it
+                        let mut kex_eph_bytes = kex_res_eph.to_bytes();
+
                         let mut shared_secret = <SharedSecret<Self> as Default>::default();
                         <$kdf>::extract_and_expand(
-                            &kex_res_eph.to_bytes(),
+                            &kex_eph_bytes,
                             &suite_id,
                             kem_context,
                             &mut shared_secret.0,
                         )
                         .expect("shared secret is way too big");
+
+                        // Zeroize the buffer containing sensitive DH output
+                        kex_eph_bytes.zeroize();
+
                         Ok(shared_secret)
                     }
                 }

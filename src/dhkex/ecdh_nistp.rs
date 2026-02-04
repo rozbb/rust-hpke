@@ -23,6 +23,7 @@ macro_rules! nistp_dhkex {
             use curve_crate::elliptic_curve::{ecdh::diffie_hellman, sec1::ToEncodedPoint};
             use hybrid_array::{typenum::Unsigned};
             use subtle::{Choice, ConstantTimeEq};
+            use zeroize::Zeroize;
 
             #[doc = concat!(
                 "An ECDH ",
@@ -216,6 +217,8 @@ macro_rules! nistp_dhkex {
                         // the range [1,p).
                         if let Ok(sk) = PrivateKey::from_bytes(&candidate_bytes) {
                             let pk = Self::sk_to_pk(&sk);
+                            // Zeroize the buffer before returning, as it contains sensitive key material
+                            candidate_bytes.zeroize();
                             return (sk, pk);
                         }
                     }
