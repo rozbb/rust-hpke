@@ -33,7 +33,7 @@ type Kdf = HkdfSha384;
 // Initializes the server with a fresh keypair
 fn server_init() -> (<Kem as KemTrait>::PrivateKey, <Kem as KemTrait>::PublicKey) {
     let mut csprng = rand::rng();
-    Kem::gen_keypair(&mut csprng)
+    Kem::gen_keypair(&mut csprng).unwrap()
 }
 
 // Given a message and associated data, returns an encapsulated key, ciphertext, and tag. The

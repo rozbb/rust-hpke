@@ -23,7 +23,7 @@ use hpke::{
     Serializable,
 };
 
-use rand_core::{CryptoRng, Rng};
+use rand_core::{Rng, TryCryptoRng};
 
 trait AgileAeadCtxS {
     fn seal_inout_detached(
@@ -292,7 +292,7 @@ macro_rules! do_gen_keypair {
         let kem_alg = $kem_alg;
         let csprng = $csprng;
 
-        let (sk, pk) = Kem::gen_keypair(csprng);
+        let (sk, pk) = Kem::gen_keypair(csprng).unwrap();
         let sk = AgilePrivateKey {
             kem_alg,
             privkey_bytes: sk.to_bytes().to_vec(),
@@ -306,7 +306,7 @@ macro_rules! do_gen_keypair {
     }};
 }
 
-fn agile_gen_keypair(kem_alg: KemAlg, csprng: &mut impl CryptoRng) -> AgileKeypair {
+fn agile_gen_keypair(kem_alg: KemAlg, csprng: &mut impl TryCryptoRng) -> AgileKeypair {
     match kem_alg {
         KemAlg::X25519HkdfSha256 => do_gen_keypair!(X25519HkdfSha256, kem_alg, csprng),
         KemAlg::DhP256HkdfSha256 => do_gen_keypair!(DhP256HkdfSha256, kem_alg, csprng),
@@ -519,7 +519,7 @@ fn do_setup_sender<A, Kdf, Kem>(
     mode: &AgileOpModeS,
     pk_recip: &AgilePublicKey,
     info: &[u8],
-    csprng: &mut impl CryptoRng,
+    csprng: &mut impl TryCryptoRng,
 ) -> Result<(AgileEncappedKey, Box<dyn AgileAeadCtxS>), AgileHpkeError>
 where
     A: 'static + Aead,
@@ -546,7 +546,7 @@ fn agile_setup_sender(
     mode: &AgileOpModeS,
     pk_recip: &AgilePublicKey,
     info: &[u8],
-    csprng: &mut impl CryptoRng,
+    csprng: &mut impl TryCryptoRng,
 ) -> Result<(AgileEncappedKey, Box<dyn AgileAeadCtxS>), AgileHpkeError> {
     // Do all the necessary validation
     mode.validate()?;

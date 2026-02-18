@@ -6,7 +6,7 @@ use crate::{
     HpkeError,
 };
 
-use rand_core::CryptoRng;
+use rand_core::TryCryptoRng;
 use zeroize::Zeroize;
 
 /// Secret generated in `derive_enc_ctx` and stored in `AeadCtx`.
@@ -88,7 +88,7 @@ pub fn setup_sender<A, Kdf, Kem>(
     mode: &OpModeS<Kem>,
     pk_recip: &Kem::PublicKey,
     info: &[u8],
-    csprng: &mut impl CryptoRng,
+    csprng: &mut impl TryCryptoRng,
 ) -> Result<(Kem::EncappedKey, AeadCtxS<A, Kdf, Kem>), HpkeError>
 where
     A: Aead,
@@ -168,7 +168,7 @@ mod test {
                 let info = b"why would you think in a million years that that would actually work";
 
                 // Generate the receiver's long-term keypair
-                let (sk_recip, pk_recip) = Kem::gen_keypair(&mut csprng);
+                let (sk_recip, pk_recip) = Kem::gen_keypair(&mut csprng).unwrap();
 
                 // Try a full setup for all the op modes
                 for op_mode_kind in &[
@@ -221,7 +221,7 @@ mod test {
                 let info = b"why would you think in a million years that that would actually work";
 
                 // Generate the receiver's long-term keypair
-                let (sk_recip, pk_recip) = Kem::gen_keypair(&mut csprng);
+                let (sk_recip, pk_recip) = Kem::gen_keypair(&mut csprng).unwrap();
 
                 // Generate a mutually agreeing op mode pair
                 let (psk, psk_id) = (gen_rand_buf(), gen_rand_buf());
@@ -247,7 +247,7 @@ mod test {
 
                 // Now make a receiver with the wrong secret key and ensure it doesn't match the
                 // sender
-                let (bad_sk, _) = Kem::gen_keypair(&mut csprng);
+                let (bad_sk, _) = Kem::gen_keypair(&mut csprng).unwrap();
                 let mut aead_ctx2 =
                     setup_receiver::<_, _, Kem>(&receiver_mode, &bad_sk, &encapped_key, &info[..])
                         .unwrap();

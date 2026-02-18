@@ -5,7 +5,7 @@ use crate::{Deserializable, HpkeError, Serializable};
 use core::fmt::Debug;
 
 use hybrid_array::{Array, ArraySize};
-use rand_core::CryptoRng;
+use rand_core::TryCryptoRng;
 use subtle::ConstantTimeEq;
 use zeroize::Zeroize;
 
@@ -48,19 +48,24 @@ pub trait Kem: Sized {
     /// entropy.
     fn derive_keypair(ikm: &[u8]) -> (Self::PrivateKey, Self::PublicKey);
 
-    /// Generates a random keypair using the given RNG
-    fn gen_keypair(csprng: &mut impl CryptoRng) -> (Self::PrivateKey, Self::PublicKey) {
+    /// Generates a random keypair using the given RNG. Returns `HpkeError::RngError` if the RNG
+    /// fails.
+    fn gen_keypair(
+        csprng: &mut impl TryCryptoRng,
+    ) -> Result<(Self::PrivateKey, Self::PublicKey), HpkeError> {
         // Make some keying material that's the size of a private key
         let mut ikm: Array<u8, <Self::PrivateKey as Serializable>::OutputSize> = Array::default();
         // Fill it with randomness
-        csprng.fill_bytes(&mut ikm);
+        csprng
+            .try_fill_bytes(&mut ikm)
+            .map_err(|_| HpkeError::RngError)?;
         // Run derive_keypair using the KEM's KDF
         let keypair = Self::derive_keypair(&ikm);
 
         // Zeroize the IKM as it contains sensitive material used to derive the private key
         ikm.zeroize();
 
-        keypair
+        Ok(keypair)
     }
 
     /// Derives a shared secret given the encapsulated key and the recipients secret key. If
@@ -90,7 +95,7 @@ pub trait Kem: Sized {
     fn encap(
         pk_recip: &Self::PublicKey,
         sender_id_keypair: Option<(&Self::PrivateKey, &Self::PublicKey)>,
-        csprng: &mut impl CryptoRng,
+        csprng: &mut impl TryCryptoRng,
     ) -> Result<(SharedSecret<Self>, Self::EncappedKey), HpkeError>;
 }
 
@@ -131,7 +136,7 @@ mod tests {
                 type Kem = $kem_ty;
 
                 let mut csprng = rand::rng();
-                let (sk_recip, pk_recip) = Kem::gen_keypair(&mut csprng);
+                let (sk_recip, pk_recip) = Kem::gen_keypair(&mut csprng).unwrap();
 
                 // Encapsulate a random shared secret
                 let (auth_shared_secret, encapped_key) =
@@ -149,7 +154,7 @@ mod tests {
                 //
 
                 // Make a sender identity keypair
-                let (sk_sender_id, pk_sender_id) = Kem::gen_keypair(&mut csprng);
+                let (sk_sender_id, pk_sender_id) = Kem::gen_keypair(&mut csprng).unwrap();
 
                 // Encapsulate a random shared secret
                 let (auth_shared_secret, encapped_key) = Kem::encap(
@@ -179,7 +184,7 @@ mod tests {
                 // Encapsulate a random shared secret
                 let encapped_key = {
                     let mut csprng = rand::rng();
-                    let (_, pk_recip) = Kem::gen_keypair(&mut csprng);
+                    let (_, pk_recip) = Kem::gen_keypair(&mut csprng).unwrap();
                     Kem::encap(&pk_recip, None, &mut csprng).unwrap().1
                 };
                 // Serialize it

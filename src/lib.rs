@@ -22,7 +22,7 @@
 //! type Kdf = HkdfSha384;
 //!
 //! let mut csprng = rand::rng();
-//! # let (bob_sk, bob_pk) = Kem::gen_keypair(&mut csprng);
+//! # let (bob_sk, bob_pk) = Kem::gen_keypair(&mut csprng).unwrap();
 //!
 //! // This is a description string for the session. Both Alice and Bob need to know this value.
 //! // It's not secret.
@@ -157,6 +157,8 @@ pub enum HpkeError {
     IncorrectInputLength(usize, usize),
     /// A preshared key bundle was constructed incorrectly
     InvalidPskBundle,
+    /// An error occurred while generating cryptographic randomness
+    RngError,
 }
 
 impl core::fmt::Display for HpkeError {
@@ -177,6 +179,7 @@ impl core::fmt::Display for HpkeError {
             HpkeError::InvalidPskBundle => {
                 write!(f, "Preshared key bundle is missing a key or key ID")
             }
+            HpkeError::RngError => write!(f, "Randomness generation failed"),
         }
     }
 }

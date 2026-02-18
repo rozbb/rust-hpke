@@ -8,7 +8,7 @@ use crate::{
 };
 
 use aead::inout::InOutBuf;
-use rand_core::CryptoRng;
+use rand_core::TryCryptoRng;
 
 // RFC 9180 §6.1
 // def SealAuthPSK(pkR, info, aad, pt, psk, psk_id, skS):
@@ -32,7 +32,7 @@ pub fn single_shot_seal_inout_detached<A, Kdf, Kem>(
     info: &[u8],
     buffer: InOutBuf<'_, '_, u8>,
     aad: &[u8],
-    csprng: &mut impl CryptoRng,
+    csprng: &mut impl TryCryptoRng,
 ) -> Result<(Kem::EncappedKey, AeadTag<A>), HpkeError>
 where
     A: Aead,
@@ -62,7 +62,7 @@ pub fn single_shot_seal<A, Kdf, Kem>(
     info: &[u8],
     plaintext: &[u8],
     aad: &[u8],
-    csprng: &mut impl CryptoRng,
+    csprng: &mut impl TryCryptoRng,
 ) -> Result<(Kem::EncappedKey, crate::Vec<u8>), HpkeError>
 where
     A: Aead,
@@ -175,8 +175,8 @@ mod test {
                 let psk_bundle = PskBundle::new(&psk, &psk_id).unwrap();
 
                 // Generate the sender's and receiver's long-term keypairs
-                let (sk_sender_id, pk_sender_id) = Kem::gen_keypair(&mut csprng);
-                let (sk_recip, pk_recip) = Kem::gen_keypair(&mut csprng);
+                let (sk_sender_id, pk_sender_id) = Kem::gen_keypair(&mut csprng).unwrap();
+                let (sk_recip, pk_recip) = Kem::gen_keypair(&mut csprng).unwrap();
 
                 // Construct the sender's and receiver's operation modes
                 let sender_mode = if $use_auth {

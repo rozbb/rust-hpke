@@ -10,7 +10,8 @@ use crate::{
 
 use aead::inout::InOutBuf;
 use hybrid_array::Array;
-use rand::{CryptoRng, Rng, RngExt};
+use rand::{Rng, RngExt};
+use rand_core::TryCryptoRng;
 
 /// Returns a random 32-byte buffer
 pub(crate) fn gen_rand_buf() -> [u8; 32] {
@@ -22,12 +23,12 @@ pub(crate) fn gen_rand_buf() -> [u8; 32] {
 
 /// Generates a keypair without the need of a KEM
 pub(crate) fn dhkex_gen_keypair<Kex: DhKeyExchange>(
-    csprng: &mut impl CryptoRng,
+    csprng: &mut impl TryCryptoRng,
 ) -> (Kex::PrivateKey, Kex::PublicKey) {
     // Make some keying material that's the size of a private key
     let mut ikm: Array<u8, <Kex::PrivateKey as Serializable>::OutputSize> = Array::default();
     // Fill it with randomness
-    csprng.fill_bytes(&mut ikm);
+    csprng.try_fill_bytes(&mut ikm).unwrap();
     // Run derive_keypair with a nonsense ciphersuite. We use SHA-512 to satisfy any security level
     Kex::derive_keypair::<crate::kdf::HkdfSha512>(b"31337", &ikm)
 }
@@ -79,7 +80,7 @@ pub(crate) fn new_op_mode_pair<'a, Kem: KemTrait>(
     psk_id: &'a [u8],
 ) -> (OpModeS<'a, Kem>, OpModeR<'a, Kem>) {
     let mut csprng = rand::rng();
-    let (sk_sender, pk_sender) = Kem::gen_keypair(&mut csprng);
+    let (sk_sender, pk_sender) = Kem::gen_keypair(&mut csprng).unwrap();
     let psk_bundle = PskBundle::new(psk, psk_id).unwrap();
 
     match kind {
