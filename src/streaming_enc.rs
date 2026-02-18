@@ -119,10 +119,7 @@ mod test {
     use super::{
         create_receiver_context, create_sender_context, AeadKey, AeadNonce, ExporterSecret,
     };
-    use crate::{
-        aead::{AesGcm128, AesGcm256, ChaCha20Poly1305},
-        kdf::HkdfSha256,
-    };
+    use crate::kdf::HkdfSha256;
     use rand_core::Rng;
 
     /// Tests that `open()` can decrypt things properly encrypted with `seal()`
@@ -194,9 +191,10 @@ mod test {
         };
     }
 
-    #[cfg(all(feature = "x25519", feature = "alloc"))]
-    mod x25519_tests {
+    #[cfg(all(feature = "x25519", feature = "alloc", feature = "aes"))]
+    mod x25519_aes_tests {
         use super::*;
+        use crate::aead::{AesGcm128, AesGcm256};
 
         test_create_ctx_correctness!(
             test_create_ctx_correctness_aes128_x25519,
@@ -208,6 +206,13 @@ mod test {
             AesGcm256,
             crate::kem::X25519HkdfSha256
         );
+    }
+
+    #[cfg(all(feature = "x25519", feature = "alloc", feature = "chacha"))]
+    mod x25519_chacha_tests {
+        use super::*;
+        use crate::aead::ChaCha20Poly1305;
+
         test_create_ctx_correctness!(
             test_create_ctx_correctness_chacha_x25519,
             ChaCha20Poly1305,
@@ -215,9 +220,10 @@ mod test {
         );
     }
 
-    #[cfg(all(feature = "p256", feature = "alloc"))]
-    mod p256_tests {
+    #[cfg(all(feature = "p256", feature = "alloc", feature = "aes"))]
+    mod p256_aes_tests {
         use super::*;
+        use crate::aead::{AesGcm128, AesGcm256};
 
         test_create_ctx_correctness!(
             test_create_ctx_correctness_aes128_p256,
@@ -229,6 +235,13 @@ mod test {
             AesGcm256,
             crate::kem::DhP256HkdfSha256
         );
+    }
+
+    #[cfg(all(feature = "p256", feature = "alloc", feature = "chacha"))]
+    mod p256_chacha_tests {
+        use super::*;
+        use crate::aead::ChaCha20Poly1305;
+
         test_create_ctx_correctness!(
             test_create_ctx_correctness_chacha_p256,
             ChaCha20Poly1305,
@@ -236,9 +249,10 @@ mod test {
         );
     }
 
-    #[cfg(all(feature = "p384", feature = "alloc"))]
-    mod p384_tests {
+    #[cfg(all(feature = "p384", feature = "alloc", feature = "aes"))]
+    mod p384_aes_tests {
         use super::*;
+        use crate::aead::{AesGcm128, AesGcm256};
         test_create_ctx_correctness!(
             test_create_ctx_correctness_aes128_p384,
             AesGcm128,
@@ -249,6 +263,13 @@ mod test {
             AesGcm256,
             crate::kem::DhP384HkdfSha384
         );
+    }
+
+    #[cfg(all(feature = "p384", feature = "alloc", feature = "chacha"))]
+    mod p384_chacha_tests {
+        use super::*;
+        use crate::aead::ChaCha20Poly1305;
+
         test_create_ctx_correctness!(
             test_create_ctx_correctness_chacha_p384,
             ChaCha20Poly1305,

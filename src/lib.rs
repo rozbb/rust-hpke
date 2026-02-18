@@ -8,7 +8,7 @@
 //!
 //! ```
 //! # #[cfg(feature = "alloc")] {
-//! # #[cfg(all(feature = "x25519", feature = "chacha20poly1305"))]
+//! # #[cfg(all(feature = "x25519", feature = "chacha"))]
 //! # {
 //! # use hpke::{
 //! #     aead::ChaCha20Poly1305,

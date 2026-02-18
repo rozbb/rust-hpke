@@ -478,15 +478,15 @@ impl<A: Aead, Kdf: KdfTrait, Kem: KemTrait> AeadCtxS<A, Kdf, Kem> {
 }
 
 // Export all the AEAD implementations
-#[cfg(feature = "aes-gcm")]
+#[cfg(feature = "aes")]
 mod aes_gcm;
-#[cfg(feature = "chacha20poly1305")]
+#[cfg(feature = "chacha")]
 mod chacha20_poly1305;
 mod export_only;
-#[cfg(feature = "aes-gcm")]
+#[cfg(feature = "aes")]
 #[doc(inline)]
 pub use crate::aead::aes_gcm::*;
-#[cfg(feature = "chacha20poly1305")]
+#[cfg(feature = "chacha")]
 #[doc(inline)]
 pub use crate::aead::chacha20_poly1305::*;
 #[doc(inline)]
@@ -496,10 +496,10 @@ pub use crate::aead::export_only::*;
 mod test {
     use super::{Aead as AeadTrait, AeadTag, BaseAeadCore, ExportOnlyAead, Seq};
 
-    #[cfg(feature = "aes-gcm")]
+    #[cfg(feature = "aes")]
     use super::{AesGcm128, AesGcm256};
 
-    #[cfg(feature = "chacha20poly1305")]
+    #[cfg(feature = "chacha")]
     use super::ChaCha20Poly1305;
 
     use crate::{
@@ -715,14 +715,14 @@ mod test {
         };
     }
 
-    #[cfg(feature = "aes-gcm")]
+    #[cfg(feature = "aes")]
     test_invalid_nonce!(test_invalid_nonce_aes128, AesGcm128);
-    #[cfg(feature = "aes-gcm")]
+    #[cfg(feature = "aes")]
     test_invalid_nonce!(test_invalid_nonce_aes256, AesGcm128);
-    #[cfg(feature = "chacha20poly1305")]
+    #[cfg(feature = "chacha")]
     test_invalid_nonce!(test_invalid_nonce_chacha, ChaCha20Poly1305);
 
-    #[cfg(all(feature = "x25519", feature = "alloc", feature = "chacha20poly1305"))]
+    #[cfg(all(feature = "x25519", feature = "alloc", feature = "chacha"))]
     mod x25519_tests {
         use super::*;
 
@@ -734,13 +734,13 @@ mod test {
         );
         test_overflow!(test_overflow_x25519, crate::kem::X25519HkdfSha256);
 
-        #[cfg(feature = "aes-gcm")]
+        #[cfg(feature = "aes")]
         test_ctx_correctness!(
             test_ctx_correctness_aes128_x25519,
             AesGcm128,
             crate::kem::X25519HkdfSha256
         );
-        #[cfg(feature = "aes-gcm")]
+        #[cfg(feature = "aes")]
         test_ctx_correctness!(
             test_ctx_correctness_aes256_x25519,
             AesGcm256,
@@ -753,7 +753,7 @@ mod test {
         );
     }
 
-    #[cfg(all(feature = "p256", feature = "alloc", feature = "chacha20poly1305"))]
+    #[cfg(all(feature = "p256", feature = "alloc", feature = "chacha"))]
     mod p256_tests {
         use super::*;
 
@@ -765,13 +765,13 @@ mod test {
         );
         test_overflow!(test_overflow_p256, crate::kem::DhP256HkdfSha256);
 
-        #[cfg(feature = "aes-gcm")]
+        #[cfg(feature = "aes")]
         test_ctx_correctness!(
             test_ctx_correctness_aes128_p256,
             AesGcm128,
             crate::kem::DhP256HkdfSha256
         );
-        #[cfg(feature = "aes-gcm")]
+        #[cfg(feature = "aes")]
         test_ctx_correctness!(
             test_ctx_correctness_aes256_p256,
             AesGcm256,
@@ -784,7 +784,7 @@ mod test {
         );
     }
 
-    #[cfg(all(feature = "p384", feature = "alloc", feature = "chacha20poly1305"))]
+    #[cfg(all(feature = "p384", feature = "alloc", feature = "chacha"))]
     mod p384_tests {
         use super::*;
 
@@ -796,13 +796,13 @@ mod test {
         );
         test_overflow!(test_overflow_p384, crate::kem::DhP384HkdfSha384);
 
-        #[cfg(feature = "aes-gcm")]
+        #[cfg(feature = "aes")]
         test_ctx_correctness!(
             test_ctx_correctness_aes128_p384,
             AesGcm128,
             crate::kem::DhP384HkdfSha384
         );
-        #[cfg(feature = "aes-gcm")]
+        #[cfg(feature = "aes")]
         test_ctx_correctness!(
             test_ctx_correctness_aes256_p384,
             AesGcm256,
@@ -818,7 +818,7 @@ mod test {
     /// Tests that Serialize::write_exact() panics when given a buffer of incorrect length
     #[should_panic]
     #[test]
-    #[cfg(feature = "aes-gcm")]
+    #[cfg(feature = "aes")]
     fn test_write_exact() {
         // Make an AES-GCM-128 tag (16 bytes) and try to serialize it to a buffer of 17 bytes. It
         // shouldn't matter that this is sufficient room, since write_exact needs exactly the write

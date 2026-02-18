@@ -45,7 +45,7 @@ Here are all the primitives listed in the spec. The primitives with checked boxe
 Crate Features
 --------------
 
-Default features flags: `alloc`, `x25519`, `p256`, `aes-gcm`, `chacha20poly1305`.
+Default features flags: `alloc`, `x25519`, `p256`, `aes`, `chacha`.
 
 Feature flag list:
 
@@ -54,8 +54,8 @@ Feature flag list:
 * `p256` - Enables NIST P-256-based KEMs
 * `p384` - Enables NIST P-384-based KEMs
 * `p521` - Enables NIST P-521-based KEMs
-* `aes-gcm` - Enables AES-GCM-128 and AES-GCM-256 AEAD algorithms
-* `chacha20poly1305` - Enables ChaCha20-Poly1305 AEAD algorithm
+* `aes` - Enables AES-GCM-128 and AES-GCM-256 AEAD algorithms
+* `chacha` - Enables ChaCha20-Poly1305 AEAD algorithm
 * `xwing` - Enables the X-Wing (aka MLKEM768-X25519) hybrid post-quantum KEM
 * `kat` - Used only to enabled known-answer tests, which require `std`. Only use with `cargo test`
 

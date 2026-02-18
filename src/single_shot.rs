@@ -151,7 +151,7 @@ mod test {
         test_util::gen_rand_buf,
     };
 
-    #[cfg(feature = "chacha20poly1305")]
+    #[cfg(feature = "chacha")]
     use crate::aead::ChaCha20Poly1305;
 
     macro_rules! test_single_shot_correctness {
@@ -224,7 +224,7 @@ mod test {
         };
     }
 
-    #[cfg(all(feature = "x25519", feature = "chacha20poly1305"))]
+    #[cfg(all(feature = "x25519", feature = "chacha"))]
     test_single_shot_correctness!(
         test_single_shot_correctness_x25519,
         ChaCha20Poly1305,
@@ -233,7 +233,7 @@ mod test {
         true
     );
 
-    #[cfg(all(feature = "p256", feature = "chacha20poly1305"))]
+    #[cfg(all(feature = "p256", feature = "chacha"))]
     test_single_shot_correctness!(
         test_single_shot_correctness_p256,
         ChaCha20Poly1305,
@@ -242,7 +242,7 @@ mod test {
         true
     );
 
-    #[cfg(all(feature = "p384", feature = "chacha20poly1305"))]
+    #[cfg(all(feature = "p384", feature = "chacha"))]
     test_single_shot_correctness!(
         test_single_shot_correctness_p384,
         ChaCha20Poly1305,
@@ -251,7 +251,7 @@ mod test {
         true
     );
 
-    #[cfg(all(feature = "p521", feature = "chacha20poly1305"))]
+    #[cfg(all(feature = "p521", feature = "chacha"))]
     test_single_shot_correctness!(
         test_single_shot_correctness_p521,
         ChaCha20Poly1305,
