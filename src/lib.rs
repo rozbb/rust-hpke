@@ -20,7 +20,8 @@
 //! type Aead = ChaCha20Poly1305;
 //! type Kdf = HkdfSha384;
 //!
-//! # let (bob_sk, bob_pk) = Kem::gen_keypair();
+//! // Bob generates his keypair
+//! let (bob_sk, bob_pk) = Kem::gen_keypair();
 //!
 //! // This is a description string for the session. Both Alice and Bob need to know this value.
 //! // It's not secret.

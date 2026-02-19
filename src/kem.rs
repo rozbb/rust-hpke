@@ -56,7 +56,7 @@ pub trait Kem: Sized {
     ///
     /// Panics
     /// ======
-    /// Panics if system randomness generation fails.
+    /// Panics if `getrandom::SysRng` fails to generate random bytes.
     #[cfg(feature = "getrandom")]
     fn gen_keypair() -> (Self::PrivateKey, Self::PublicKey) {
         // The unwrap here isn't doing anything, since the only possible error is an RngError, which
