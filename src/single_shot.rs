@@ -4,6 +4,7 @@ use crate::{
     kem::Kem as KemTrait,
     op_mode::{OpModeR, OpModeS},
     setup::{setup_receiver, setup_sender_with_rng},
+    util::panic_on_rng_error,
     HpkeError,
 };
 
@@ -43,19 +44,14 @@ where
     Kdf: KdfTrait,
     Kem: KemTrait,
 {
-    let mut csprng = SysRng;
-    match single_shot_seal_inout_detached_with_rng::<A, Kdf, Kem>(
+    panic_on_rng_error(single_shot_seal_inout_detached_with_rng::<A, Kdf, Kem>(
         mode,
         pk_recip,
         info,
         buffer,
         aad,
-        &mut csprng,
-    ) {
-        Ok(res) => Ok(res),
-        Err(HpkeError::RngError) => panic!("Randomness generation failed"),
-        Err(e) => Err(e),
-    }
+        &mut SysRng,
+    ))
 }
 
 /// Does a [`setup_sender`] and
@@ -116,19 +112,14 @@ where
     Kdf: KdfTrait,
     Kem: KemTrait,
 {
-    let mut csprng = SysRng;
-    match single_shot_seal_with_rng::<A, Kdf, Kem>(
+    panic_on_rng_error(single_shot_seal_with_rng::<A, Kdf, Kem>(
         mode,
         pk_recip,
         info,
         plaintext,
         aad,
-        &mut csprng,
-    ) {
-        Ok(res) => Ok(res),
-        Err(HpkeError::RngError) => panic!("Randomness generation failed"),
-        Err(e) => Err(e),
-    }
+        &mut SysRng,
+    ))
 }
 
 /// Does a [`setup_sender`] and [`AeadCtxS::seal`](crate::aead::AeadCtxS::seal) in one shot. That

@@ -3,6 +3,7 @@ use crate::{
     kdf::{DigestArray, Kdf as KdfTrait},
     kem::Kem as KemTrait,
     op_mode::{OpModeR, OpModeS},
+    util::panic_on_rng_error,
     HpkeError,
 };
 
@@ -96,12 +97,12 @@ where
     Kdf: KdfTrait,
     Kem: KemTrait,
 {
-    let mut csprng = SysRng;
-    match setup_sender_with_rng::<A, Kdf, Kem>(mode, pk_recip, info, &mut csprng) {
-        Ok(res) => Ok(res),
-        Err(HpkeError::RngError) => panic!("Randomness generation failed"),
-        Err(e) => Err(e),
-    }
+    panic_on_rng_error(setup_sender_with_rng::<A, Kdf, Kem>(
+        mode,
+        pk_recip,
+        info,
+        &mut SysRng,
+    ))
 }
 
 /// Initiates an encryption context to the given recipient public key. `info` is a domain separator.

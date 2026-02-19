@@ -1,6 +1,6 @@
 //! Traits and structs for key encapsulation mechanisms
 
-use crate::{Deserializable, HpkeError, Serializable};
+use crate::{util::panic_on_rng_error, Deserializable, HpkeError, Serializable};
 
 use core::fmt::Debug;
 
@@ -51,14 +51,13 @@ pub trait Kem: Sized {
 
     /// Generates a random keypair using the system RNG.
     ///
+    /// Panics
+    /// ======
     /// Panics if system randomness generation fails.
     fn gen_keypair() -> (Self::PrivateKey, Self::PublicKey) {
-        let mut csprng = SysRng;
-        match Self::gen_keypair_with_rng(&mut csprng) {
-            Ok(res) => res,
-            Err(HpkeError::RngError) => panic!("Randomness generation failed"),
-            Err(_) => unreachable!(),
-        }
+        // The unwrap here isn't doing anything, since the only possible error is an RngError, which
+        // is already panicked on by panic_on_rng_error
+        panic_on_rng_error(Self::gen_keypair_with_rng(&mut SysRng)).unwrap()
     }
 
     /// Generates a random keypair using the given RNG. Returns `HpkeError::RngError` if the RNG
@@ -112,12 +111,11 @@ pub trait Kem: Sized {
         pk_recip: &Self::PublicKey,
         sender_id_keypair: Option<(&Self::PrivateKey, &Self::PublicKey)>,
     ) -> Result<(SharedSecret<Self>, Self::EncappedKey), HpkeError> {
-        let mut csprng = SysRng;
-        match Self::encap_with_rng(pk_recip, sender_id_keypair, &mut csprng) {
-            Ok(res) => Ok(res),
-            Err(HpkeError::RngError) => panic!("Randomness generation failed"),
-            Err(e) => Err(e),
-        }
+        panic_on_rng_error(Self::encap_with_rng(
+            pk_recip,
+            sender_id_keypair,
+            &mut SysRng,
+        ))
     }
 
     /// Derives a shared secret and an ephemeral pubkey that the owner of the reciepint's pubkey
