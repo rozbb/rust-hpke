@@ -67,7 +67,7 @@ where
 /// Returns `Ok((encapped_key, auth_tag))` on success. If an error happened during key
 /// encapsulation, returns `Err(HpkeError::EncapError)`. If an error happened during encryption,
 /// returns `Err(HpkeError::SealError)`. In this case, the contents of `plaintext` is undefined. If
-/// an error happened during random byte generation, returns `Err(HpkeError::Rng)`.
+/// an error happened during random byte generation, returns `Err(HpkeError::RngError)`.
 pub fn single_shot_seal_inout_detached_with_rng<A, Kdf, Kem>(
     mode: &OpModeS<Kem>,
     pk_recip: &Kem::PublicKey,
@@ -132,7 +132,8 @@ where
 /// ============
 /// Returns `Ok((encapped_key, ciphertext))` on success. If an error happened during key
 /// encapsulation, returns `Err(HpkeError::EncapError)`. If an error happened during encryption,
-/// returns `Err(HpkeError::SealError)`. If an error happened during RngErro
+/// returns `Err(HpkeError::SealError)`. If an error happened during random byte generation,
+/// returns `Err(HpkeError::RngError)`.
 #[cfg(feature = "alloc")]
 pub fn single_shot_seal_with_rng<A, Kdf, Kem>(
     mode: &OpModeS<Kem>,
@@ -225,11 +226,13 @@ where
 mod test {
     use super::*;
     use crate::{
-        aead::ChaCha20Poly1305,
         kem::Kem as KemTrait,
         op_mode::{OpModeR, OpModeS, PskBundle},
         test_util::gen_rand_buf,
     };
+
+    #[cfg(feature = "chacha")]
+    use crate::aead::ChaCha20Poly1305;
 
     macro_rules! test_single_shot_correctness {
         ($test_name:ident, $aead:ty, $kdf:ty, $kem:ty, $use_auth:expr) => {
@@ -301,7 +304,7 @@ mod test {
         };
     }
 
-    #[cfg(feature = "x25519")]
+    #[cfg(all(feature = "x25519", feature = "chacha"))]
     test_single_shot_correctness!(
         test_single_shot_correctness_x25519,
         ChaCha20Poly1305,
@@ -310,7 +313,7 @@ mod test {
         true
     );
 
-    #[cfg(feature = "p256")]
+    #[cfg(all(feature = "p256", feature = "chacha"))]
     test_single_shot_correctness!(
         test_single_shot_correctness_p256,
         ChaCha20Poly1305,
@@ -319,7 +322,7 @@ mod test {
         true
     );
 
-    #[cfg(feature = "p384")]
+    #[cfg(all(feature = "p384", feature = "chacha"))]
     test_single_shot_correctness!(
         test_single_shot_correctness_p384,
         ChaCha20Poly1305,
@@ -328,7 +331,7 @@ mod test {
         true
     );
 
-    #[cfg(feature = "p521")]
+    #[cfg(all(feature = "p521", feature = "chacha"))]
     test_single_shot_correctness!(
         test_single_shot_correctness_p521,
         ChaCha20Poly1305,

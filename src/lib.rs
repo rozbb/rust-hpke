@@ -7,7 +7,8 @@
 //! public key they know. Here's an example of Alice and Bob, where Alice knows Bob's public key:
 //!
 //! ```
-//! # #[cfg(all(feature = "alloc", feature = "x25519", feature = "getrandom"))] {
+//! # #[cfg(all(feature = "alloc", feature = "x25519", feature = "chacha", feature = "getrandom"))]
+//! # {
 //! # use hpke::{
 //! #     aead::ChaCha20Poly1305,
 //! #     kdf::HkdfSha384,
