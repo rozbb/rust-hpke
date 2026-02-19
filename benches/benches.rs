@@ -3,10 +3,11 @@ use hpke::{
     inout::InOutBuf,
     kdf::Kdf as KdfTrait,
     kem::Kem as KemTrait,
-    setup_receiver, setup_sender_with_rng, OpModeR, OpModeS, PskBundle,
+    setup_receiver, setup_sender, OpModeR, OpModeS, PskBundle,
 };
 
 use criterion::{criterion_main, Criterion};
+use rand::random;
 use rand_core::Rng;
 use std::time::Instant;
 
@@ -24,8 +25,6 @@ where
     Kdf: KdfTrait,
     Kem: KemTrait,
 {
-    let mut csprng = rand::rng();
-
     let mut group = c.benchmark_group(group_name);
 
     // Bench keypair generation
@@ -35,10 +34,8 @@ where
     let (sk_recip, pk_recip) = Kem::gen_keypair();
 
     // Make a PSK bundle for OpModePsk and OpModeAuthPsk
-    let mut psk = [0u8; PSK_LEN];
-    let mut psk_id = [0u8; 8];
-    csprng.fill_bytes(&mut psk);
-    csprng.fill_bytes(&mut psk_id);
+    let psk = random::<[u8; PSK_LEN]>();
+    let psk_id = random::<[u8; 8]>();
     let psk_bundle = PskBundle::new(&psk, &psk_id).unwrap();
 
     // Make a sender keypair for OpModeAuth and OpModeAuthPsk
@@ -63,28 +60,16 @@ where
     for (mode, opmode_s) in opmodes.iter().zip(opmodes_s.iter()) {
         let bench_name = format!("setup_sender[mode={}]", mode);
         group.bench_function(bench_name, |b| {
-            b.iter(|| {
-                setup_sender_with_rng::<Aead, Kdf, Kem>(
-                    opmode_s,
-                    &pk_recip,
-                    b"bench setup sender",
-                    &mut csprng,
-                )
-            })
+            b.iter(|| setup_sender::<Aead, Kdf, Kem>(opmode_s, &pk_recip, b"bench setup sender"))
         });
     }
 
     // Collect the encapsulated keys from each setup_sender under each opmode. We will pass these
     // to setup_receiver in a moment
     let encapped_keys = opmodes_s.iter().map(|opmode_s| {
-        setup_sender_with_rng::<Aead, Kdf, Kem>(
-            opmode_s,
-            &pk_recip,
-            b"bench setup receiver",
-            &mut csprng,
-        )
-        .unwrap()
-        .0
+        setup_sender::<Aead, Kdf, Kem>(opmode_s, &pk_recip, b"bench setup receiver")
+            .unwrap()
+            .0
     });
 
     // Bench setup_receiver for each opmode
@@ -104,22 +89,15 @@ where
     }
 
     // Make the encryption context so we can benchmark seal()
-    let (_, mut encryption_ctx) = setup_sender_with_rng::<Aead, Kdf, Kem>(
-        &OpModeS::Base,
-        &pk_recip,
-        b"bench seal",
-        &mut csprng,
-    )
-    .unwrap();
+    let (_, mut encryption_ctx) =
+        setup_sender::<Aead, Kdf, Kem>(&OpModeS::Base, &pk_recip, b"bench seal").unwrap();
 
     // Bench seal_inout_detached() on a MSG_LEN-byte plaintext and AAD_LEN-byte AAD
     let bench_name = format!("seal_inout_detached[msglen={},aadlen={}]", MSG_LEN, AAD_LEN);
     group.bench_function(bench_name, |b| {
         // Pick random inputs
-        let mut plaintext = [0u8; MSG_LEN];
-        let mut aad = [0u8; AAD_LEN];
-        csprng.fill_bytes(&mut plaintext);
-        csprng.fill_bytes(&mut aad);
+        let mut plaintext = random::<[u8; MSG_LEN]>();
+        let aad = random::<[u8; AAD_LEN]>();
 
         b.iter(|| {
             encryption_ctx
@@ -171,13 +149,8 @@ where
 
     // Make up the recipient's keypair and setup an encryption context
     let (sk_recip, pk_recip) = Kem::gen_keypair();
-    let (encapped_key, mut encryption_ctx) = setup_sender_with_rng::<Aead, Kdf, Kem>(
-        &OpModeS::Base,
-        &pk_recip,
-        b"bench seal",
-        &mut csprng,
-    )
-    .unwrap();
+    let (encapped_key, mut encryption_ctx) =
+        setup_sender::<Aead, Kdf, Kem>(&OpModeS::Base, &pk_recip, b"bench seal").unwrap();
 
     // Construct num_ciphertext many (plaintext, aad) pairs and pass them through seal()
     let mut ciphertext_aad_tags = Vec::with_capacity(num_ciphertexts);

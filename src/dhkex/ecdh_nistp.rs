@@ -269,7 +269,9 @@ nistp_dhkex!(
 
 #[cfg(test)]
 mod tests {
-    use crate::{dhkex::DhKeyExchange, test_util::dhkex_gen_keypair, Deserializable, Serializable};
+    use crate::{
+        dhkex::DhKeyExchange, test_util::dhkex_gen_keypair_with_rng, Deserializable, Serializable,
+    };
 
     #[cfg(feature = "p256")]
     use super::p256::DhP256;
@@ -425,7 +427,7 @@ mod tests {
         // serialize it, deserialize it, and test whether it's the same using impl Eq for
         // AffinePoint
 
-        let (_, pubkey) = dhkex_gen_keypair::<Kex>(&mut csprng);
+        let (_, pubkey) = dhkex_gen_keypair_with_rng::<Kex>(&mut csprng);
         let pubkey_bytes = pubkey.to_bytes();
         let rederived_pubkey =
             <Kex as DhKeyExchange>::PublicKey::from_bytes(&pubkey_bytes).unwrap();
@@ -458,7 +460,7 @@ mod tests {
         let mut csprng = rand::rng();
 
         // Make a random keypair and serialize it
-        let (sk, pk) = dhkex_gen_keypair::<Kex>(&mut csprng);
+        let (sk, pk) = dhkex_gen_keypair_with_rng::<Kex>(&mut csprng);
         let (sk_bytes, pk_bytes) = (sk.to_bytes(), pk.to_bytes());
 
         // Now deserialize those bytes

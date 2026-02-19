@@ -22,7 +22,7 @@ pub(crate) fn gen_rand_buf() -> [u8; 32] {
 }
 
 /// Generates a keypair without the need of a KEM
-pub(crate) fn dhkex_gen_keypair<Kex: DhKeyExchange>(
+pub(crate) fn dhkex_gen_keypair_with_rng<Kex: DhKeyExchange>(
     csprng: &mut impl TryCryptoRng,
 ) -> (Kex::PrivateKey, Kex::PublicKey) {
     // Make some keying material that's the size of a private key

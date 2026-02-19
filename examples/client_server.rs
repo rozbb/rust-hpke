@@ -42,17 +42,11 @@ fn client_encrypt_msg(
     associated_data: &[u8],
     server_pk: &<Kem as KemTrait>::PublicKey,
 ) -> (<Kem as KemTrait>::EncappedKey, Vec<u8>, AeadTag<Aead>) {
-    let mut csprng = rand::rng();
-
     // Encapsulate a key and use the resulting shared secret to encrypt a message. The AEAD context
     // is what you use to encrypt.
-    let (encapped_key, mut sender_ctx) = hpke::setup_sender_with_rng::<Aead, Kdf, Kem>(
-        &OpModeS::Base,
-        server_pk,
-        INFO_STR,
-        &mut csprng,
-    )
-    .expect("invalid server pubkey!");
+    let (encapped_key, mut sender_ctx) =
+        hpke::setup_sender::<Aead, Kdf, Kem>(&OpModeS::Base, server_pk, INFO_STR)
+            .expect("invalid server pubkey!");
 
     // On success, seal_inout_detached() will encrypt the plaintext in place
     let mut msg_copy = msg.to_vec();
