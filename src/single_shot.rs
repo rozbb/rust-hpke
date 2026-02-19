@@ -1,14 +1,16 @@
+#[cfg(feature = "getrandom")]
+use crate::util::panic_on_rng_error;
 use crate::{
     aead::{Aead, AeadTag},
     kdf::Kdf as KdfTrait,
     kem::Kem as KemTrait,
     op_mode::{OpModeR, OpModeS},
     setup::{setup_receiver, setup_sender_with_rng},
-    util::panic_on_rng_error,
     HpkeError,
 };
 
 use aead::inout::InOutBuf;
+#[cfg(feature = "getrandom")]
 use getrandom::SysRng;
 use rand_core::TryCryptoRng;
 
@@ -32,6 +34,7 @@ use rand_core::TryCryptoRng;
 /// Panics
 /// ======
 /// Panics if `getrandom::SysRng` fails to generate random bytes.
+#[cfg(feature = "getrandom")]
 pub fn single_shot_seal_inout_detached<A, Kdf, Kem>(
     mode: &OpModeS<Kem>,
     pk_recip: &Kem::PublicKey,
@@ -99,7 +102,7 @@ where
 /// Panics
 /// ======
 /// Panics if `getrandom::SysRng` fails to generate random bytes.
-#[cfg(feature = "alloc")]
+#[cfg(all(feature = "alloc", feature = "getrandom"))]
 pub fn single_shot_seal<A, Kdf, Kem>(
     mode: &OpModeS<Kem>,
     pk_recip: &Kem::PublicKey,
@@ -130,6 +133,7 @@ where
 /// Returns `Ok((encapped_key, ciphertext))` on success. If an error happened during key
 /// encapsulation, returns `Err(HpkeError::EncapError)`. If an error happened during encryption,
 /// returns `Err(HpkeError::SealError)`. If an error happened during RngErro
+#[cfg(feature = "alloc")]
 pub fn single_shot_seal_with_rng<A, Kdf, Kem>(
     mode: &OpModeS<Kem>,
     pk_recip: &Kem::PublicKey,
@@ -250,8 +254,8 @@ mod test {
                 let psk_bundle = PskBundle::new(&psk, &psk_id).unwrap();
 
                 // Generate the sender's and receiver's long-term keypairs
-                let (sk_sender_id, pk_sender_id) = Kem::gen_keypair();
-                let (sk_recip, pk_recip) = Kem::gen_keypair();
+                let (sk_sender_id, pk_sender_id) = Kem::gen_keypair_with_rng(&mut csprng).unwrap();
+                let (sk_recip, pk_recip) = Kem::gen_keypair_with_rng(&mut csprng).unwrap();
 
                 // Construct the sender's and receiver's operation modes
                 let sender_mode = if $use_auth {

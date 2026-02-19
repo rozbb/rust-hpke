@@ -1,9 +1,12 @@
 //! Traits and structs for key encapsulation mechanisms
 
-use crate::{util::panic_on_rng_error, Deserializable, HpkeError, Serializable};
+#[cfg(feature = "getrandom")]
+use crate::util::panic_on_rng_error;
+use crate::{Deserializable, HpkeError, Serializable};
 
 use core::fmt::Debug;
 
+#[cfg(feature = "getrandom")]
 use getrandom::SysRng;
 use hybrid_array::{Array, ArraySize};
 use rand_core::TryCryptoRng;
@@ -54,6 +57,7 @@ pub trait Kem: Sized {
     /// Panics
     /// ======
     /// Panics if system randomness generation fails.
+    #[cfg(feature = "getrandom")]
     fn gen_keypair() -> (Self::PrivateKey, Self::PublicKey) {
         // The unwrap here isn't doing anything, since the only possible error is an RngError, which
         // is already panicked on by panic_on_rng_error
@@ -107,6 +111,7 @@ pub trait Kem: Sized {
     /// Panics
     /// ======
     /// Panics if `getrandom::SysRng` fails to generate random bytes.
+    #[cfg(feature = "getrandom")]
     fn encap(
         pk_recip: &Self::PublicKey,
         sender_id_keypair: Option<(&Self::PrivateKey, &Self::PublicKey)>,

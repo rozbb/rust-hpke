@@ -1,12 +1,14 @@
+#[cfg(feature = "getrandom")]
+use crate::util::panic_on_rng_error;
 use crate::{
     aead::{Aead, AeadCtxR, AeadCtxS},
     kdf::{DigestArray, Kdf as KdfTrait},
     kem::Kem as KemTrait,
     op_mode::{OpModeR, OpModeS},
-    util::panic_on_rng_error,
     HpkeError,
 };
 
+#[cfg(feature = "getrandom")]
 use getrandom::SysRng;
 use rand_core::TryCryptoRng;
 use zeroize::Zeroize;
@@ -87,6 +89,7 @@ impl<K: KdfTrait> Drop for ExporterSecret<K> {
 /// Panics if `mode` is not [`Base`](crate::OpModeS::Base) or [`Psk`](crate::OpModeS::Psk), or if
 /// `info.len() + mode.get_psk_id().len() + 5` ≥ 2¹⁶, or if `getrandom::SysRng` fails to generate
 /// random bytes.
+#[cfg(feature = "getrandom")]
 pub fn setup_sender<A, Kdf, Kem>(
     mode: &OpModeS<Kem>,
     pk_recip: &Kem::PublicKey,
