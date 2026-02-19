@@ -132,8 +132,8 @@ where
 /// ============
 /// Returns `Ok((encapped_key, ciphertext))` on success. If an error happened during key
 /// encapsulation, returns `Err(HpkeError::EncapError)`. If an error happened during encryption,
-/// returns `Err(HpkeError::SealError)`. If an error happened during random byte generation,
-/// returns `Err(HpkeError::RngError)`.
+/// returns `Err(HpkeError::SealError)`. If an error happened during random byte generation, returns
+/// `Err(HpkeError::RngError)`.
 #[cfg(feature = "alloc")]
 pub fn single_shot_seal_with_rng<A, Kdf, Kem>(
     mode: &OpModeS<Kem>,
