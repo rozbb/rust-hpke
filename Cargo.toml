@@ -39,7 +39,7 @@ hazmat-streaming-enc = []
 aead = { version = "0.6.0-rc.10", default-features = false }
 aes-gcm = { version = "=0.11.0-rc.3", default-features = false, features = ["aes"], optional = true }
 chacha20poly1305 = { version = "=0.11.0-rc.3", default-features = false, optional = true }
-getrandom = { version = "0.4", default-features = false, optional = true }
+getrandom = { version = "0.4", default-features = false, features = ["sys_rng"], optional = true }
 hybrid-array = "0.4"
 hkdf = { version = "=0.13.0-rc.5", default-features = false }
 rand_core = { version = "0.10.0", default-features = false }
