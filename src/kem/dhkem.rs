@@ -235,13 +235,13 @@ macro_rules! impl_dhkem {
                 }
 
                 // Runs encap_with_eph using a random ephemeral key
-                fn encap(
+                fn encap_with_rng(
                     pk_recip: &Self::PublicKey,
                     sender_id_keypair: Option<(&Self::PrivateKey, &Self::PublicKey)>,
                     csprng: &mut impl TryCryptoRng,
                 ) -> Result<(SharedSecret<Self>, Self::EncappedKey), HpkeError> {
                     // Generate a new ephemeral key
-                    let (sk_eph, _) = Self::gen_keypair(csprng)?;
+                    let (sk_eph, _) = Self::gen_keypair_with_rng(csprng)?;
                     // Now pass to encap_with_eph()
                     encap_with_eph(pk_recip, sender_id_keypair, sk_eph)
                 }

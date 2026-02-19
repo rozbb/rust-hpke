@@ -19,7 +19,7 @@ use hpke::{
     kem::{
         DhP256HkdfSha256, DhP384HkdfSha384, DhP521HkdfSha512, Kem as KemTrait, X25519HkdfSha256,
     },
-    setup_receiver, setup_sender, Deserializable, HpkeError, OpModeR, OpModeS, PskBundle,
+    setup_receiver, setup_sender_with_rng, Deserializable, HpkeError, OpModeR, OpModeS, PskBundle,
     Serializable,
 };
 
@@ -292,7 +292,7 @@ macro_rules! do_gen_keypair {
         let kem_alg = $kem_alg;
         let csprng = $csprng;
 
-        let (sk, pk) = Kem::gen_keypair(csprng).unwrap();
+        let (sk, pk) = Kem::gen_keypair_with_rng(csprng).unwrap();
         let sk = AgilePrivateKey {
             kem_alg,
             privkey_bytes: sk.to_bytes().to_vec(),
@@ -530,7 +530,8 @@ where
     let mode = mode.clone().try_lift::<Kem, Kdf>()?;
     let pk_recip = pk_recip.try_lift::<Kem>()?;
 
-    let (encapped_key, aead_ctx) = setup_sender::<A, Kdf, Kem>(&mode, &pk_recip, info, csprng)?;
+    let (encapped_key, aead_ctx) =
+        setup_sender_with_rng::<A, Kdf, Kem>(&mode, &pk_recip, info, csprng)?;
     let encapped_key = AgileEncappedKey {
         kem_alg,
         encapped_key_bytes: encapped_key.to_bytes().to_vec(),

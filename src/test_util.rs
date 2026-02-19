@@ -79,8 +79,7 @@ pub(crate) fn new_op_mode_pair<'a, Kem: KemTrait>(
     psk: &'a [u8],
     psk_id: &'a [u8],
 ) -> (OpModeS<'a, Kem>, OpModeR<'a, Kem>) {
-    let mut csprng = rand::rng();
-    let (sk_sender, pk_sender) = Kem::gen_keypair(&mut csprng).unwrap();
+    let (sk_sender, pk_sender) = Kem::gen_keypair();
     let psk_bundle = PskBundle::new(psk, psk_id).unwrap();
 
     match kind {

@@ -22,7 +22,7 @@
 //! type Kdf = HkdfSha384;
 //!
 //! let mut csprng = rand::rng();
-//! # let (bob_sk, bob_pk) = Kem::gen_keypair(&mut csprng).unwrap();
+//! # let (bob_sk, bob_pk) = Kem::gen_keypair();
 //!
 //! // This is a description string for the session. Both Alice and Bob need to know this value.
 //! // It's not secret.
@@ -33,7 +33,7 @@
 //! // knew, she'd be able to authenticate herself. See the OpModeS and OpModeR types for more
 //! // detail.
 //! let (encapsulated_key, mut encryption_context) =
-//!     hpke::setup_sender::<Aead, Kdf, Kem>(&OpModeS::Base, &bob_pk, info_str, &mut csprng)
+//!     hpke::setup_sender_with_rng::<Aead, Kdf, Kem>(&OpModeS::Base, &bob_pk, info_str, &mut csprng)
 //!         .expect("invalid server pubkey!");
 //!
 //! // Alice encrypts a message to Bob. `aad` is authenticated associated data that is not
@@ -123,13 +123,16 @@ pub use kem::Kem;
 #[doc(inline)]
 pub use op_mode::{OpModeR, OpModeS, PskBundle};
 #[doc(inline)]
-pub use setup::{setup_receiver, setup_sender};
+pub use setup::{setup_receiver, setup_sender, setup_sender_with_rng};
 #[doc(inline)]
-pub use single_shot::{single_shot_open_inout_detached, single_shot_seal_inout_detached};
+pub use single_shot::{
+    single_shot_open_inout_detached, single_shot_seal_inout_detached,
+    single_shot_seal_inout_detached_with_rng,
+};
 
 #[doc(inline)]
 #[cfg(feature = "alloc")]
-pub use single_shot::{single_shot_open, single_shot_seal};
+pub use single_shot::{single_shot_open, single_shot_seal, single_shot_seal_with_rng};
 
 //-------- Top-level types --------//
 

@@ -174,7 +174,7 @@ impl KemTrait for XWing {
     ///
     /// # Panics
     /// Panics if `sender_id_keypair` is `Some`.
-    fn encap(
+    fn encap_with_rng(
         pk_recip: &PublicKey,
         sender_id_keypair: Option<(&PrivateKey, &PublicKey)>,
         csprng: &mut impl TryCryptoRng,
@@ -228,9 +228,9 @@ mod tests {
     #[test]
     fn test_roundtrip() {
         let mut csprng = rand::rng();
-        let (sk, pk) = XWing::gen_keypair(&mut csprng).unwrap();
+        let (sk, pk) = XWing::gen_keypair();
         let (shared_secret, encapped_key) =
-            XWing::encap(&pk, None, &mut csprng).expect("encapsulation failed");
+            XWing::encap_with_rng(&pk, None, &mut csprng).expect("encapsulation failed");
         let shared_secret_recipient =
             XWing::decap(&sk, None, &EncappedKey(encapped_key.0)).expect("decapsulation failed");
         assert_eq!(shared_secret.0, shared_secret_recipient.0);
