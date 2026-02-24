@@ -112,8 +112,7 @@ where
 /// ============
 /// On success, returns an encapsulated public key (intended to be sent to the recipient), and an
 /// encryption context. If an error happened during key encapsulation, returns
-/// `Err(HpkeError::EncapError)`. If an error happened during random bytes generation, returns
-/// `Err(HpkeError::RngError)`.
+/// `Err(HpkeError::EncapError)`.
 ///
 /// Panics
 /// ======

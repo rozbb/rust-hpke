@@ -66,8 +66,7 @@ where
 /// ============
 /// Returns `Ok((encapped_key, auth_tag))` on success. If an error happened during key
 /// encapsulation, returns `Err(HpkeError::EncapError)`. If an error happened during encryption,
-/// returns `Err(HpkeError::SealError)`. In this case, the contents of `plaintext` is undefined. If
-/// an error happened during random byte generation, returns `Err(HpkeError::RngError)`.
+/// returns `Err(HpkeError::SealError)`. In this case, the contents of `plaintext` is undefined.
 pub fn single_shot_seal_inout_detached_with_rng<A, Kdf, Kem>(
     mode: &OpModeS<Kem>,
     pk_recip: &Kem::PublicKey,
@@ -132,8 +131,7 @@ where
 /// ============
 /// Returns `Ok((encapped_key, ciphertext))` on success. If an error happened during key
 /// encapsulation, returns `Err(HpkeError::EncapError)`. If an error happened during encryption,
-/// returns `Err(HpkeError::SealError)`. If an error happened during random byte generation, returns
-/// `Err(HpkeError::RngError)`.
+/// returns `Err(HpkeError::SealError)`.
 #[cfg(feature = "alloc")]
 pub fn single_shot_seal_with_rng<A, Kdf, Kem>(
     mode: &OpModeS<Kem>,

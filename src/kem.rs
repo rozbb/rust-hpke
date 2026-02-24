@@ -59,14 +59,10 @@ pub trait Kem: Sized {
     /// Panics if `getrandom::SysRng` fails to generate random bytes.
     #[cfg(feature = "getrandom")]
     fn gen_keypair() -> (Self::PrivateKey, Self::PublicKey) {
-        // The unwrap here isn't doing anything, since the only possible error is an RngError, which
-        // is already panicked on by panic_on_rng_error
-
         Self::gen_keypair_with_rng(&mut UnwrapErr(SysRng))
     }
 
-    /// Generates a random keypair using the given RNG. Returns `HpkeError::RngError` if the RNG
-    /// fails.
+    /// Generates a random keypair using the given RNG
     fn gen_keypair_with_rng(csprng: &mut impl CryptoRng) -> (Self::PrivateKey, Self::PublicKey) {
         // Make some keying material that's the size of a private key
         let mut ikm: Array<u8, <Self::PrivateKey as Serializable>::OutputSize> = Array::default();
@@ -124,8 +120,7 @@ pub trait Kem: Sized {
     /// Return Value
     /// ============
     /// Returns a shared secret and encapped key on success. If an error happened during key
-    /// exchange, returns `Err(HpkeError::EncapError)`. If an error happened during random bytes
-    /// generation, returns `Err(HpkeError::RngError)`
+    /// exchange, returns `Err(HpkeError::EncapError)`.
     fn encap_with_rng(
         pk_recip: &Self::PublicKey,
         sender_id_keypair: Option<(&Self::PrivateKey, &Self::PublicKey)>,
