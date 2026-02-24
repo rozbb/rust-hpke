@@ -1,7 +1,5 @@
 //! Traits and structs for key encapsulation mechanisms
 
-#[cfg(feature = "getrandom")]
-use crate::util::panic_on_rng_error;
 use crate::{Deserializable, HpkeError, Serializable};
 
 use core::fmt::Debug;
@@ -9,7 +7,9 @@ use core::fmt::Debug;
 #[cfg(feature = "getrandom")]
 use getrandom::SysRng;
 use hybrid_array::{Array, ArraySize};
-use rand_core::TryCryptoRng;
+use rand_core::CryptoRng;
+#[cfg(feature = "getrandom")]
+use rand_core::UnwrapErr;
 use subtle::ConstantTimeEq;
 use zeroize::Zeroize;
 
@@ -61,27 +61,24 @@ pub trait Kem: Sized {
     fn gen_keypair() -> (Self::PrivateKey, Self::PublicKey) {
         // The unwrap here isn't doing anything, since the only possible error is an RngError, which
         // is already panicked on by panic_on_rng_error
-        panic_on_rng_error(Self::gen_keypair_with_rng(&mut SysRng)).unwrap()
+
+        Self::gen_keypair_with_rng(&mut UnwrapErr(SysRng))
     }
 
     /// Generates a random keypair using the given RNG. Returns `HpkeError::RngError` if the RNG
     /// fails.
-    fn gen_keypair_with_rng(
-        csprng: &mut impl TryCryptoRng,
-    ) -> Result<(Self::PrivateKey, Self::PublicKey), HpkeError> {
+    fn gen_keypair_with_rng(csprng: &mut impl CryptoRng) -> (Self::PrivateKey, Self::PublicKey) {
         // Make some keying material that's the size of a private key
         let mut ikm: Array<u8, <Self::PrivateKey as Serializable>::OutputSize> = Array::default();
         // Fill it with randomness
-        csprng
-            .try_fill_bytes(&mut ikm)
-            .map_err(|_| HpkeError::RngError)?;
+        csprng.fill_bytes(&mut ikm);
         // Run derive_keypair using the KEM's KDF
         let keypair = Self::derive_keypair(&ikm);
 
         // Zeroize the IKM as it contains sensitive material used to derive the private key
         ikm.zeroize();
 
-        Ok(keypair)
+        keypair
     }
 
     /// Derives a shared secret given the encapsulated key and the recipients secret key. If
@@ -116,11 +113,7 @@ pub trait Kem: Sized {
         pk_recip: &Self::PublicKey,
         sender_id_keypair: Option<(&Self::PrivateKey, &Self::PublicKey)>,
     ) -> Result<(SharedSecret<Self>, Self::EncappedKey), HpkeError> {
-        panic_on_rng_error(Self::encap_with_rng(
-            pk_recip,
-            sender_id_keypair,
-            &mut SysRng,
-        ))
+        Self::encap_with_rng(pk_recip, sender_id_keypair, &mut UnwrapErr(SysRng))
     }
 
     /// Derives a shared secret and an ephemeral pubkey that the owner of the reciepint's pubkey
@@ -136,7 +129,7 @@ pub trait Kem: Sized {
     fn encap_with_rng(
         pk_recip: &Self::PublicKey,
         sender_id_keypair: Option<(&Self::PrivateKey, &Self::PublicKey)>,
-        csprng: &mut impl TryCryptoRng,
+        csprng: &mut impl CryptoRng,
     ) -> Result<(SharedSecret<Self>, Self::EncappedKey), HpkeError>;
 }
 
@@ -177,7 +170,7 @@ mod tests {
                 type Kem = $kem_ty;
 
                 let mut csprng = rand::rng();
-                let (sk_recip, pk_recip) = Kem::gen_keypair_with_rng(&mut csprng).unwrap();
+                let (sk_recip, pk_recip) = Kem::gen_keypair_with_rng(&mut csprng);
 
                 // Encapsulate a random shared secret
                 let (auth_shared_secret, encapped_key) =
@@ -195,7 +188,7 @@ mod tests {
                 //
 
                 // Make a sender identity keypair
-                let (sk_sender_id, pk_sender_id) = Kem::gen_keypair_with_rng(&mut csprng).unwrap();
+                let (sk_sender_id, pk_sender_id) = Kem::gen_keypair_with_rng(&mut csprng);
 
                 // Encapsulate a random shared secret
                 let (auth_shared_secret, encapped_key) = Kem::encap_with_rng(
@@ -225,7 +218,7 @@ mod tests {
                 // Encapsulate a random shared secret
                 let encapped_key = {
                     let mut csprng = rand::rng();
-                    let (_, pk_recip) = Kem::gen_keypair_with_rng(&mut csprng).unwrap();
+                    let (_, pk_recip) = Kem::gen_keypair_with_rng(&mut csprng);
                     Kem::encap_with_rng(&pk_recip, None, &mut csprng).unwrap().1
                 };
                 // Serialize it

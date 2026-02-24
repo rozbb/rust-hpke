@@ -9,7 +9,7 @@ use crate::{
 };
 
 use hybrid_array::typenum::{Prod, Sum, Unsigned, U1024, U3, U32, U64};
-use rand_core::TryCryptoRng;
+use rand_core::CryptoRng;
 use sha3::Shake256;
 use subtle::{Choice, ConstantTimeEq};
 use x_wing::{kem::Decapsulate, KeyExport, TryKeyInit};
@@ -177,7 +177,7 @@ impl KemTrait for XWing {
     fn encap_with_rng(
         pk_recip: &PublicKey,
         sender_id_keypair: Option<(&PrivateKey, &PublicKey)>,
-        csprng: &mut impl TryCryptoRng,
+        csprng: &mut impl CryptoRng,
     ) -> Result<(SharedSecret<Self>, EncappedKey), HpkeError> {
         assert!(
             sender_id_keypair.is_none(),
@@ -186,9 +186,7 @@ impl KemTrait for XWing {
 
         // Generate randomness and call encap_deterministic
         let mut randomness = [0u8; XWING_ENCAP_RANDOMNESS_SIZE];
-        csprng
-            .try_fill_bytes(&mut randomness)
-            .map_err(|_| HpkeError::RngError)?;
+        csprng.fill_bytes(&mut randomness);
         let res = Self::encap_deterministic(pk_recip, &randomness);
         randomness.zeroize();
         res

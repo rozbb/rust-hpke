@@ -129,14 +129,3 @@ pub(crate) fn enforce_outbuf_len<T: Serializable>(buf: &[u8]) {
         buf_len,
     );
 }
-
-/// Panics if the result is an `Err(HpkeError::RngError)`, otherwise is the identity. Only used when
-/// the `getrandom` feature is enabled.
-#[cfg(feature = "getrandom")]
-pub(crate) fn panic_on_rng_error<T>(result: Result<T, HpkeError>) -> Result<T, HpkeError> {
-    if let Err(HpkeError::RngError) = result {
-        panic!("Randomness generation failed");
-    } else {
-        result
-    }
-}

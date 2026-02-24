@@ -1,5 +1,3 @@
-#[cfg(feature = "getrandom")]
-use crate::util::panic_on_rng_error;
 use crate::{
     aead::{Aead, AeadTag},
     kdf::Kdf as KdfTrait,
@@ -12,7 +10,9 @@ use crate::{
 use aead::inout::InOutBuf;
 #[cfg(feature = "getrandom")]
 use getrandom::SysRng;
-use rand_core::TryCryptoRng;
+use rand_core::CryptoRng;
+#[cfg(feature = "getrandom")]
+use rand_core::UnwrapErr;
 
 // RFC 9180 §6.1
 // def SealAuthPSK(pkR, info, aad, pt, psk, psk_id, skS):
@@ -47,14 +47,14 @@ where
     Kdf: KdfTrait,
     Kem: KemTrait,
 {
-    panic_on_rng_error(single_shot_seal_inout_detached_with_rng::<A, Kdf, Kem>(
+    single_shot_seal_inout_detached_with_rng::<A, Kdf, Kem>(
         mode,
         pk_recip,
         info,
         buffer,
         aad,
-        &mut SysRng,
-    ))
+        &mut UnwrapErr(SysRng),
+    )
 }
 
 /// Does a [`setup_sender`] and
@@ -74,7 +74,7 @@ pub fn single_shot_seal_inout_detached_with_rng<A, Kdf, Kem>(
     info: &[u8],
     buffer: InOutBuf<'_, '_, u8>,
     aad: &[u8],
-    csprng: &mut impl TryCryptoRng,
+    csprng: &mut impl CryptoRng,
 ) -> Result<(Kem::EncappedKey, AeadTag<A>), HpkeError>
 where
     A: Aead,
@@ -115,14 +115,14 @@ where
     Kdf: KdfTrait,
     Kem: KemTrait,
 {
-    panic_on_rng_error(single_shot_seal_with_rng::<A, Kdf, Kem>(
+    single_shot_seal_with_rng::<A, Kdf, Kem>(
         mode,
         pk_recip,
         info,
         plaintext,
         aad,
-        &mut SysRng,
-    ))
+        &mut UnwrapErr(SysRng),
+    )
 }
 
 /// Does a [`setup_sender`] and [`AeadCtxS::seal`](crate::aead::AeadCtxS::seal) in one shot. That
@@ -141,7 +141,7 @@ pub fn single_shot_seal_with_rng<A, Kdf, Kem>(
     info: &[u8],
     plaintext: &[u8],
     aad: &[u8],
-    csprng: &mut impl TryCryptoRng,
+    csprng: &mut impl CryptoRng,
 ) -> Result<(Kem::EncappedKey, crate::Vec<u8>), HpkeError>
 where
     A: Aead,
@@ -257,8 +257,8 @@ mod test {
                 let psk_bundle = PskBundle::new(&psk, &psk_id).unwrap();
 
                 // Generate the sender's and receiver's long-term keypairs
-                let (sk_sender_id, pk_sender_id) = Kem::gen_keypair_with_rng(&mut csprng).unwrap();
-                let (sk_recip, pk_recip) = Kem::gen_keypair_with_rng(&mut csprng).unwrap();
+                let (sk_sender_id, pk_sender_id) = Kem::gen_keypair_with_rng(&mut csprng);
+                let (sk_recip, pk_recip) = Kem::gen_keypair_with_rng(&mut csprng);
 
                 // Construct the sender's and receiver's operation modes
                 let sender_mode = if $use_auth {

@@ -22,7 +22,7 @@ macro_rules! impl_dhkem {
                 Deserializable, HpkeError, Serializable,
             };
 
-            use rand_core::TryCryptoRng;
+            use rand_core::CryptoRng;
             use zeroize::Zeroize;
 
             // Define convenience types
@@ -238,10 +238,10 @@ macro_rules! impl_dhkem {
                 fn encap_with_rng(
                     pk_recip: &Self::PublicKey,
                     sender_id_keypair: Option<(&Self::PrivateKey, &Self::PublicKey)>,
-                    csprng: &mut impl TryCryptoRng,
+                    csprng: &mut impl CryptoRng,
                 ) -> Result<(SharedSecret<Self>, Self::EncappedKey), HpkeError> {
                     // Generate a new ephemeral key
-                    let (sk_eph, _) = Self::gen_keypair_with_rng(csprng)?;
+                    let (sk_eph, _) = Self::gen_keypair_with_rng(csprng);
                     // Now pass to encap_with_eph()
                     encap_with_eph(pk_recip, sender_id_keypair, sk_eph)
                 }

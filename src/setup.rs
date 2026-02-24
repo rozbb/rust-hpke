@@ -1,5 +1,3 @@
-#[cfg(feature = "getrandom")]
-use crate::util::panic_on_rng_error;
 use crate::{
     aead::{Aead, AeadCtxR, AeadCtxS},
     kdf::{DigestArray, Kdf as KdfTrait},
@@ -10,7 +8,9 @@ use crate::{
 
 #[cfg(feature = "getrandom")]
 use getrandom::SysRng;
-use rand_core::TryCryptoRng;
+use rand_core::CryptoRng;
+#[cfg(feature = "getrandom")]
+use rand_core::UnwrapErr;
 use zeroize::Zeroize;
 
 /// Secret generated in `derive_enc_ctx` and stored in `AeadCtx`.
@@ -100,12 +100,7 @@ where
     Kdf: KdfTrait,
     Kem: KemTrait,
 {
-    panic_on_rng_error(setup_sender_with_rng::<A, Kdf, Kem>(
-        mode,
-        pk_recip,
-        info,
-        &mut SysRng,
-    ))
+    setup_sender_with_rng::<A, Kdf, Kem>(mode, pk_recip, info, &mut UnwrapErr(SysRng))
 }
 
 /// Initiates an encryption context to the given recipient public key. `info` is a domain separator.
@@ -128,7 +123,7 @@ pub fn setup_sender_with_rng<A, Kdf, Kem>(
     mode: &OpModeS<Kem>,
     pk_recip: &Kem::PublicKey,
     info: &[u8],
-    csprng: &mut impl TryCryptoRng,
+    csprng: &mut impl CryptoRng,
 ) -> Result<(Kem::EncappedKey, AeadCtxS<A, Kdf, Kem>), HpkeError>
 where
     A: Aead,
@@ -212,7 +207,7 @@ mod test {
                 let info = b"why would you think in a million years that that would actually work";
 
                 // Generate the receiver's long-term keypair
-                let (sk_recip, pk_recip) = Kem::gen_keypair_with_rng(&mut csprng).unwrap();
+                let (sk_recip, pk_recip) = Kem::gen_keypair_with_rng(&mut csprng);
 
                 // Try a full setup for all the op modes
                 for op_mode_kind in &[
@@ -266,7 +261,7 @@ mod test {
                 let info = b"why would you think in a million years that that would actually work";
 
                 // Generate the receiver's long-term keypair
-                let (sk_recip, pk_recip) = Kem::gen_keypair_with_rng(&mut csprng).unwrap();
+                let (sk_recip, pk_recip) = Kem::gen_keypair_with_rng(&mut csprng);
 
                 // Generate a mutually agreeing op mode pair
                 let (psk, psk_id) = (gen_rand_buf(), gen_rand_buf());
@@ -296,7 +291,7 @@ mod test {
 
                 // Now make a receiver with the wrong secret key and ensure it doesn't match the
                 // sender
-                let (bad_sk, _) = Kem::gen_keypair_with_rng(&mut csprng).unwrap();
+                let (bad_sk, _) = Kem::gen_keypair_with_rng(&mut csprng);
                 let mut aead_ctx2 =
                     setup_receiver::<_, _, Kem>(&receiver_mode, &bad_sk, &encapped_key, &info[..])
                         .unwrap();
