@@ -9,7 +9,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changes
 
-* Replaced `rand_core::CryptoRng` with `rand_core::TryCryptoRng` everywhere
 * Renamed every function that took an RNG to `*_with_rng`, and removed the `rng` parameter from the function with the original name (gated by `getrandom`)
 * Feature-gated AES-GCM and ChaCha20Poly1305 behind `aes` and `chacha` features, respectively
 * Added zeroizing for more intermediate secrets, and improved no-std support

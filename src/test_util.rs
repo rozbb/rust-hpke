@@ -11,7 +11,7 @@ use crate::{
 use aead::inout::InOutBuf;
 use hybrid_array::Array;
 use rand::{Rng, RngExt};
-use rand_core::TryCryptoRng;
+use rand_core::CryptoRng;
 
 /// Returns a random 32-byte buffer
 pub(crate) fn gen_rand_buf() -> [u8; 32] {
@@ -23,12 +23,12 @@ pub(crate) fn gen_rand_buf() -> [u8; 32] {
 
 /// Generates a keypair without the need of a KEM
 pub(crate) fn dhkex_gen_keypair_with_rng<Kex: DhKeyExchange>(
-    csprng: &mut impl TryCryptoRng,
+    csprng: &mut impl CryptoRng,
 ) -> (Kex::PrivateKey, Kex::PublicKey) {
     // Make some keying material that's the size of a private key
     let mut ikm: Array<u8, <Kex::PrivateKey as Serializable>::OutputSize> = Array::default();
     // Fill it with randomness
-    csprng.try_fill_bytes(&mut ikm).unwrap();
+    csprng.fill_bytes(&mut ikm);
     // Run derive_keypair with a nonsense ciphersuite. We use SHA-512 to satisfy any security level
     Kex::derive_keypair::<crate::kdf::HkdfSha512>(b"31337", &ikm)
 }
