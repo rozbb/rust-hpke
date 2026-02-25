@@ -70,6 +70,11 @@ See the [client-server](examples/client_server.rs) example for an idea of how to
 Breaking changes
 ----------------
 
+## Breaking changes in v0.14.0-pre.2
+
+* Renamed every function that took an RNG to `*_with_rng`, and removed the `rng` parameter from the function with the original name (gated by `getrandom`)
+* Feature-gated AES-GCM and ChaCha20Poly1305 behind `aes` and `chacha` features, respectively
+
 ## Breaking changes in v0.14.0-pre.1
 
 * Updated `rand` and `rand_core` dependencies
