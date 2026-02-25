@@ -45,11 +45,12 @@ Here are all the primitives listed in the spec. The primitives with checked boxe
 Crate Features
 --------------
 
-Default features flags: `alloc`, `x25519`, `p256`, `aes`, `chacha`.
+Default features flags: `getrandom`, `alloc`, `x25519`, `p256`, `aes`, `chacha`.
 
 Feature flag list:
 
 * `alloc` - Includes allocating methods like `AeadCtxR::open()` and `AeadCtxS::seal()`
+* `getrandom` - Enables top-level functions that use `getrandom` for random number generation, rather than taking in an explicit RNG
 * `x25519` - Enables X25519-based KEMs
 * `p256` - Enables NIST P-256-based KEMs
 * `p384` - Enables NIST P-384-based KEMs

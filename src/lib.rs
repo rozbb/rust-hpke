@@ -7,8 +7,7 @@
 //! public key they know. Here's an example of Alice and Bob, where Alice knows Bob's public key:
 //!
 //! ```
-//! # #[cfg(feature = "alloc")] {
-//! # #[cfg(all(feature = "x25519", feature = "chacha"))]
+//! # #[cfg(all(feature = "alloc", feature = "x25519", feature = "chacha", feature = "getrandom"))]
 //! # {
 //! # use hpke::{
 //! #     aead::ChaCha20Poly1305,
@@ -21,8 +20,8 @@
 //! type Aead = ChaCha20Poly1305;
 //! type Kdf = HkdfSha384;
 //!
-//! let mut csprng = rand::rng();
-//! # let (bob_sk, bob_pk) = Kem::gen_keypair(&mut csprng);
+//! // Bob generates his keypair
+//! let (bob_sk, bob_pk) = Kem::gen_keypair();
 //!
 //! // This is a description string for the session. Both Alice and Bob need to know this value.
 //! // It's not secret.
@@ -33,7 +32,7 @@
 //! // knew, she'd be able to authenticate herself. See the OpModeS and OpModeR types for more
 //! // detail.
 //! let (encapsulated_key, mut encryption_context) =
-//!     hpke::setup_sender::<Aead, Kdf, Kem>(&OpModeS::Base, &bob_pk, info_str, &mut csprng)
+//!     hpke::setup_sender::<Aead, Kdf, Kem>(&OpModeS::Base, &bob_pk, info_str)
 //!         .expect("invalid server pubkey!");
 //!
 //! // Alice encrypts a message to Bob. `aad` is authenticated associated data that is not
@@ -67,7 +66,6 @@
 //! let plaintext = decryption_context.open(&ciphertext, aad).expect("invalid ciphertext!");
 //!
 //! assert_eq!(&plaintext, b"fronthand or backhand?");
-//! # }
 //! # }
 //! ```
 
@@ -122,14 +120,23 @@ pub mod streaming_enc;
 pub use kem::Kem;
 #[doc(inline)]
 pub use op_mode::{OpModeR, OpModeS, PskBundle};
+#[cfg(feature = "getrandom")]
 #[doc(inline)]
-pub use setup::{setup_receiver, setup_sender};
+pub use setup::setup_sender;
 #[doc(inline)]
-pub use single_shot::{single_shot_open_inout_detached, single_shot_seal_inout_detached};
+pub use setup::{setup_receiver, setup_sender_with_rng};
+#[cfg(feature = "getrandom")]
+#[doc(inline)]
+pub use single_shot::single_shot_seal_inout_detached;
+#[doc(inline)]
+pub use single_shot::{single_shot_open_inout_detached, single_shot_seal_inout_detached_with_rng};
 
+#[cfg(all(feature = "alloc", feature = "getrandom"))]
+#[doc(inline)]
+pub use single_shot::single_shot_seal;
 #[doc(inline)]
 #[cfg(feature = "alloc")]
-pub use single_shot::{single_shot_open, single_shot_seal};
+pub use single_shot::{single_shot_open, single_shot_seal_with_rng};
 
 //-------- Top-level types --------//
 

@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+
+## Unreleased
+
+### Changes
+
+* Renamed every function that took an RNG to `*_with_rng`, and removed the `rng` parameter from the function with the original name (gated by `getrandom`)
+* Feature-gated AES-GCM and ChaCha20Poly1305 behind `aes` and `chacha` features, respectively
+* Added zeroizing for more intermediate secrets, and improved no-std support
+
+### Additions
+
+* Implemented the X-Wing (aka MLKEM768-X25519) hybrid post-quantum KEM, gated by the `xwing` feature
+* Added `streaming_enc` module for creating streaming encryption contexts, gated by the `hazmat-streaming-enc` feature
+
 ## [0.14.0-pre.1] — 2025-11-24
 
 ### Changes

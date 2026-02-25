@@ -12,7 +12,7 @@ use hybrid_array::typenum::{Prod, Sum, Unsigned, U1024, U3, U32, U64};
 use rand_core::CryptoRng;
 use sha3::Shake256;
 use subtle::{Choice, ConstantTimeEq};
-use x_wing::{kem::Decapsulate, Kem, KeyExport, TryKeyInit, XWingKem};
+use x_wing::{kem::Decapsulate, KeyExport, TryKeyInit};
 use zeroize::Zeroize;
 
 // Type-level size constants for X-Wing
@@ -129,11 +129,6 @@ impl KemTrait for XWing {
     type PrivateKey = PrivateKey;
     type EncappedKey = EncappedKey;
 
-    fn gen_keypair(csprng: &mut impl CryptoRng) -> (PrivateKey, PublicKey) {
-        let (sk, pk) = XWingKem::generate_keypair_from_rng(csprng);
-        (PrivateKey(sk), PublicKey(pk))
-    }
-
     fn sk_to_pk(sk: &PrivateKey) -> PublicKey {
         PublicKey(sk.0.as_ref().clone())
     }
@@ -179,7 +174,7 @@ impl KemTrait for XWing {
     ///
     /// # Panics
     /// Panics if `sender_id_keypair` is `Some`.
-    fn encap(
+    fn encap_with_rng(
         pk_recip: &PublicKey,
         sender_id_keypair: Option<(&PrivateKey, &PublicKey)>,
         csprng: &mut impl CryptoRng,
@@ -231,9 +226,9 @@ mod tests {
     #[test]
     fn test_roundtrip() {
         let mut csprng = rand::rng();
-        let (sk, pk) = XWing::gen_keypair(&mut csprng);
+        let (sk, pk) = XWing::gen_keypair();
         let (shared_secret, encapped_key) =
-            XWing::encap(&pk, None, &mut csprng).expect("encapsulation failed");
+            XWing::encap_with_rng(&pk, None, &mut csprng).expect("encapsulation failed");
         let shared_secret_recipient =
             XWing::decap(&sk, None, &EncappedKey(encapped_key.0)).expect("decapsulation failed");
         assert_eq!(shared_secret.0, shared_secret_recipient.0);

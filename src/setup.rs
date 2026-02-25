@@ -6,7 +6,11 @@ use crate::{
     HpkeError,
 };
 
+#[cfg(feature = "getrandom")]
+use getrandom::SysRng;
 use rand_core::CryptoRng;
+#[cfg(feature = "getrandom")]
+use rand_core::UnwrapErr;
 use zeroize::Zeroize;
 
 /// Secret generated in `derive_enc_ctx` and stored in `AeadCtx`.
@@ -83,8 +87,38 @@ impl<K: KdfTrait> Drop for ExporterSecret<K> {
 /// Panics
 /// ======
 /// Panics if `mode` is not [`Base`](crate::OpModeS::Base) or [`Psk`](crate::OpModeS::Psk), or if
-/// `info.len() + mode.get_psk_id().len() + 5` ≥ 2¹⁶.
+/// `info.len() + mode.get_psk_id().len() + 5` ≥ 2¹⁶, or if `getrandom::SysRng` fails to generate
+/// random bytes.
+#[cfg(feature = "getrandom")]
 pub fn setup_sender<A, Kdf, Kem>(
+    mode: &OpModeS<Kem>,
+    pk_recip: &Kem::PublicKey,
+    info: &[u8],
+) -> Result<(Kem::EncappedKey, AeadCtxS<A, Kdf, Kem>), HpkeError>
+where
+    A: Aead,
+    Kdf: KdfTrait,
+    Kem: KemTrait,
+{
+    setup_sender_with_rng::<A, Kdf, Kem>(mode, pk_recip, info, &mut UnwrapErr(SysRng))
+}
+
+/// Initiates an encryption context to the given recipient public key. `info` is a domain separator.
+///
+/// NOTE: The `XWing` KEM does not support authenticated encapsulation, so `mode` MUST be
+/// [`Base`](crate::OpModeS::Base) or [`Psk`](crate::OpModeS::Psk).
+///
+/// Return Value
+/// ============
+/// On success, returns an encapsulated public key (intended to be sent to the recipient), and an
+/// encryption context. If an error happened during key encapsulation, returns
+/// `Err(HpkeError::EncapError)`.
+///
+/// Panics
+/// ======
+/// Panics if `mode` is not [`Base`](crate::OpModeS::Base) or [`Psk`](crate::OpModeS::Psk), or if
+/// `info.len() + mode.get_psk_id().len() + 5` ≥ 2¹⁶.
+pub fn setup_sender_with_rng<A, Kdf, Kem>(
     mode: &OpModeS<Kem>,
     pk_recip: &Kem::PublicKey,
     info: &[u8],
@@ -98,7 +132,7 @@ where
     // If the identity key is set, use it
     let sender_id_keypair = mode.get_sender_id_keypair();
     // Do the encapsulation
-    let (shared_secret, encapped_key) = Kem::encap(pk_recip, sender_id_keypair, csprng)?;
+    let (shared_secret, encapped_key) = Kem::encap_with_rng(pk_recip, sender_id_keypair, csprng)?;
     // Use everything to derive an encryption context
     let enc_ctx = Kdf::combine_secrets(mode, shared_secret, info);
 
@@ -149,7 +183,7 @@ where
 
 #[cfg(test)]
 mod test {
-    use super::{setup_receiver, setup_sender};
+    use super::{setup_receiver, setup_sender_with_rng};
     use crate::test_util::{aead_ctx_eq, gen_rand_buf, new_op_mode_pair, OpModeKind};
     use crate::{kdf::HkdfSha256, kem::Kem as KemTrait};
 
@@ -172,7 +206,7 @@ mod test {
                 let info = b"why would you think in a million years that that would actually work";
 
                 // Generate the receiver's long-term keypair
-                let (sk_recip, pk_recip) = Kem::gen_keypair(&mut csprng);
+                let (sk_recip, pk_recip) = Kem::gen_keypair_with_rng(&mut csprng);
 
                 // Try a full setup for all the op modes
                 for op_mode_kind in &[
@@ -187,7 +221,7 @@ mod test {
                         new_op_mode_pair::<Kem>(*op_mode_kind, &psk, &psk_id);
 
                     // Construct the sender's encryption context, and get an encapped key
-                    let (encapped_key, mut aead_ctx1) = setup_sender::<A, Kdf, Kem>(
+                    let (encapped_key, mut aead_ctx1) = setup_sender_with_rng::<A, Kdf, Kem>(
                         &sender_mode,
                         &pk_recip,
                         &info[..],
@@ -226,7 +260,7 @@ mod test {
                 let info = b"why would you think in a million years that that would actually work";
 
                 // Generate the receiver's long-term keypair
-                let (sk_recip, pk_recip) = Kem::gen_keypair(&mut csprng);
+                let (sk_recip, pk_recip) = Kem::gen_keypair_with_rng(&mut csprng);
 
                 // Generate a mutually agreeing op mode pair
                 let (psk, psk_id) = (gen_rand_buf(), gen_rand_buf());
@@ -234,9 +268,13 @@ mod test {
                     new_op_mode_pair::<Kem>(OpModeKind::Base, &psk, &psk_id);
 
                 // Construct the sender's encryption context normally
-                let (encapped_key, sender_ctx) =
-                    setup_sender::<A, Kdf, Kem>(&sender_mode, &pk_recip, &info[..], &mut csprng)
-                        .unwrap();
+                let (encapped_key, sender_ctx) = setup_sender_with_rng::<A, Kdf, Kem>(
+                    &sender_mode,
+                    &pk_recip,
+                    &info[..],
+                    &mut csprng,
+                )
+                .unwrap();
 
                 // Now make a receiver with the wrong info string and ensure it doesn't match the
                 // sender
@@ -252,7 +290,7 @@ mod test {
 
                 // Now make a receiver with the wrong secret key and ensure it doesn't match the
                 // sender
-                let (bad_sk, _) = Kem::gen_keypair(&mut csprng);
+                let (bad_sk, _) = Kem::gen_keypair_with_rng(&mut csprng);
                 let mut aead_ctx2 =
                     setup_receiver::<_, _, Kem>(&receiver_mode, &bad_sk, &encapped_key, &info[..])
                         .unwrap();
@@ -261,9 +299,13 @@ mod test {
                 // Now make a receiver with the wrong encapped key and ensure it doesn't match the
                 // sender. The reason `bad_encapped_key` is bad is because its underlying key is
                 // uniformly random, and therefore different from the key that the sender sent.
-                let (bad_encapped_key, _) =
-                    setup_sender::<A, Kdf, Kem>(&sender_mode, &pk_recip, &info[..], &mut csprng)
-                        .unwrap();
+                let (bad_encapped_key, _) = setup_sender_with_rng::<A, Kdf, Kem>(
+                    &sender_mode,
+                    &pk_recip,
+                    &info[..],
+                    &mut csprng,
+                )
+                .unwrap();
                 let mut aead_ctx2 = setup_receiver::<_, _, Kem>(
                     &receiver_mode,
                     &sk_recip,

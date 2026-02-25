@@ -10,7 +10,8 @@ use crate::{
 
 use aead::inout::InOutBuf;
 use hybrid_array::Array;
-use rand::{CryptoRng, Rng, RngExt};
+use rand::{Rng, RngExt};
+use rand_core::CryptoRng;
 
 /// Returns a random 32-byte buffer
 pub(crate) fn gen_rand_buf() -> [u8; 32] {
@@ -21,7 +22,7 @@ pub(crate) fn gen_rand_buf() -> [u8; 32] {
 }
 
 /// Generates a keypair without the need of a KEM
-pub(crate) fn dhkex_gen_keypair<Kex: DhKeyExchange>(
+pub(crate) fn dhkex_gen_keypair_with_rng<Kex: DhKeyExchange>(
     csprng: &mut impl CryptoRng,
 ) -> (Kex::PrivateKey, Kex::PublicKey) {
     // Make some keying material that's the size of a private key
@@ -78,8 +79,7 @@ pub(crate) fn new_op_mode_pair<'a, Kem: KemTrait>(
     psk: &'a [u8],
     psk_id: &'a [u8],
 ) -> (OpModeS<'a, Kem>, OpModeR<'a, Kem>) {
-    let mut csprng = rand::rng();
-    let (sk_sender, pk_sender) = Kem::gen_keypair(&mut csprng);
+    let (sk_sender, pk_sender) = Kem::gen_keypair_with_rng(&mut rand::rng());
     let psk_bundle = PskBundle::new(psk, psk_id).unwrap();
 
     match kind {
