@@ -20,7 +20,7 @@ use rand_core::UnwrapErr;
 //   ct = ctx.Seal(aad, pt)
 //   return enc, ct
 
-/// Does a [`setup_sender`] and
+/// Does a [`crate::setup_sender`] and
 /// [`AeadCtxS::seal_inout_detached`](crate::aead::AeadCtxS::seal_inout_detached) in one shot. That
 /// is, it does a key encapsulation to the specified recipient and encrypts the provided plaintext
 /// in place.
@@ -57,7 +57,7 @@ where
     )
 }
 
-/// Does a [`setup_sender`] and
+/// Does a [`setup_sender_with_rng`] and
 /// [`AeadCtxS::seal_inout_detached`](crate::aead::AeadCtxS::seal_inout_detached) in one shot. That
 /// is, it does a key encapsulation to the specified recipient and encrypts the provided plaintext
 /// in place.
@@ -89,8 +89,9 @@ where
     Ok((encapped_key, tag))
 }
 
-/// Does a [`setup_sender`] and [`AeadCtxS::seal`](crate::aead::AeadCtxS::seal) in one shot. That
-/// is, it does a key encapsulation to the specified recipient and encrypts the provided plaintext.
+/// Does a [`crate::setup_sender`] and [`AeadCtxS::seal`](crate::aead::AeadCtxS::seal) in one shot.
+/// That is, it does a key encapsulation to the specified recipient and encrypts the provided
+/// plaintext.
 ///
 /// Return Value
 /// ============
@@ -124,8 +125,9 @@ where
     )
 }
 
-/// Does a [`setup_sender`] and [`AeadCtxS::seal`](crate::aead::AeadCtxS::seal) in one shot. That
-/// is, it does a key encapsulation to the specified recipient and encrypts the provided plaintext.
+/// Does a [`crate::setup_sender`] and [`AeadCtxS::seal`](crate::aead::AeadCtxS::seal) in one shot.
+/// That is, it does a key encapsulation to the specified recipient and encrypts the provided
+/// plaintext.
 ///
 /// Return Value
 /// ============
