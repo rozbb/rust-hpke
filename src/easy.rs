@@ -1,15 +1,16 @@
-//! Easy generics-free interfaces for users of HPKE. See example code in the root of this crate for
-//! usage.
+//! Easy low-code-noise interfaces for users of HPKE. For usage, see the example code in the root of
+//! this crate.
 
 macro_rules! impl_easy {
-    ($kem:ident,  $kdf:ident, $aead:ident, $kem_name:literal, $kdf_name:literal, $aead_name:literal, $mod_name:ident) => {
-        #[doc = concat!("Easy interface for users of the (", $kem_name, ", ", $kdf_name, ", ", $aead_name, ") ciphersuite.")]
+    ($kem_dep:literal, $aead_dep:literal, $kem:ident,  $kdf:ident, $aead:ident, $kem_name:literal, $kdf_name:literal, $aead_name:literal, $mod_name:ident) => {
+        #[cfg(all(feature = $kem_dep, feature = $aead_dep))]
+        #[doc = concat!("Easy HPKE interface for the (", $kem_name, ", ", $kdf_name, ", ", $aead_name, ") ciphersuite.")]
         pub mod $mod_name {
             use crate::{
                 aead::{$aead as Aead, AeadCtxR, AeadCtxS},
                 kdf::$kdf as Kdf,
                 kem::{$kem as Kem, Kem as KemTrait},
-                HpkeError, OpModeR, OpModeS,
+                HpkeError, OpModeR, OpModeS, Vec,
             };
 
             pub use crate::Serializable;
@@ -42,39 +43,64 @@ macro_rules! impl_easy {
             pub fn gen_keypair() -> (PrivateKey, PublicKey) {
                 Kem::gen_keypair()
             }
+
+            #[doc = concat!("Does a [`crate::single_shot_seal`] with [`OpModeS::Base`], using the (", $kem_name, ", ", $kdf_name, ", ", $aead_name, ") ciphersuite.")]
+            pub fn single_shot_seal(
+                pk_recip: &PublicKey,
+                info: &[u8],
+                plaintext: &[u8],
+                aad: &[u8],
+            ) -> Result<(EncappedKey, Vec<u8>), HpkeError> {
+                crate::single_shot_seal::<Aead, Kdf, Kem>(&OpModeS::Base, pk_recip, info, plaintext, aad)
+            }
+
+            #[doc = concat!("Does a [`crate::single_shot_open`] with [`OpModeR::Base`], using the (", $kem_name, ", ", $kdf_name, ", ", $aead_name, ") ciphersuite.")]
+            pub fn single_shot_open(
+                sk_recip: &PrivateKey,
+                encapped_key: &EncappedKey,
+                info: &[u8],
+                ciphertext: &[u8],
+                aad: &[u8],
+            ) -> Result<Vec<u8>, HpkeError> {
+                crate::single_shot_open::<Aead, Kdf, Kem>(&OpModeR::Base, sk_recip, encapped_key, info, ciphertext, aad)
+            }
         }
     };
 }
 
 #[cfg(all(feature = "x25519", feature = "chacha"))]
 impl_easy!(
-    X25519HkdfSha256,
-    HkdfSha256,
-    ChaCha20Poly1305,
-    "DHKEM(X25519, HKDF-SHA256)",
-    "HKDF-SHA256",
-    "ChaCha20Poly1305",
-    x25519_chacha
+    "x25519",                     // KEM feature
+    "chacha",                     // AEAD feature
+    X25519HkdfSha256,             // KEM type
+    HkdfSha256,                   // KDF type
+    ChaCha20Poly1305,             // AEAD type
+    "DHKEM(X25519, HKDF-SHA256)", // Ciphersuite name
+    "HKDF-SHA256",                // KDF name
+    "ChaCha20Poly1305",           // AEAD name
+    x25519_chacha                 // Module name
 );
 
-#[cfg(all(feature = "p256", feature = "aes"))]
 impl_easy!(
-    DhP256HkdfSha256,
-    HkdfSha256,
-    AesGcm128,
-    "DHKEM(P-256, HKDF-SHA256)",
-    "HKDF-SHA256",
-    "AES-128-GCM",
-    p256_aes
+    "p256",                      // KEM feature
+    "aes",                       // AEAD feature
+    DhP256HkdfSha256,            // KEM type
+    HkdfSha256,                  // KDF type
+    AesGcm128,                   // AEAD type
+    "DHKEM(P-256, HKDF-SHA256)", // Ciphersuite name
+    "HKDF-SHA256",               // KDF name
+    "AES-128-GCM",               // AEAD name
+    p256_aes                     // Module name
 );
 
-#[cfg(all(feature = "xwing", feature = "chacha"))]
 impl_easy!(
-    XWing,
-    KdfShake256,
-    ChaCha20Poly1305,
-    "X-Wing",
-    "SHA-256",
-    "ChaCha20Poly1305",
-    xwing_chacha
+    "xwing",            // KEM feature
+    "chacha",           // AEAD feature
+    XWing,              // KEM type
+    KdfShake256,        // KDF type
+    ChaCha20Poly1305,   // AEAD type
+    "X-Wing",           // Ciphersuite name
+    "SHAKE-256",        // KDF name
+    "ChaCha20Poly1305", // AEAD name
+    xwing_chacha        // Module name
 );

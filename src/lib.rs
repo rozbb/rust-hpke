@@ -6,7 +6,7 @@
 //! # Example
 //!
 //! Here's an example of Alice sending an encrypted message to Bob. The example uses the
-//! `easy` module, which removes a lot of the code noise. To do things the harder way, see
+//! [`easy`] module, which removes a lot of the code noise. To do things the harder way, see
 //! [`examples/client_server.rs`](https://github.com/rozbb/rust-hpke/blob/main/examples/client_server.rs).
 //!
 //! ```
@@ -101,7 +101,7 @@ mod util;
 
 pub mod aead;
 mod dhkex;
-#[cfg(feature = "getrandom")]
+#[cfg(all(feature = "getrandom", feature = "alloc"))]
 pub mod easy;
 pub mod kdf;
 pub mod kem;
