@@ -220,6 +220,11 @@ macro_rules! nistp_dhkex {
                             // Zeroize the buffer before returning, as it contains sensitive key material
                             candidate_bytes.zeroize();
                             return (sk, pk);
+                        } else {
+                            // Zeroize the rejected key material. This is done because `ikm` is
+                            // technically allowed to be low-entropy, so leaking a KDF of `ikm`
+                            // might leak some information about it.
+                            candidate_bytes.zeroize();
                         }
                     }
 
