@@ -204,19 +204,19 @@ fn test_case<A: Aead, Kdf: KdfTrait, Kem: TestableKem>(tv: MainTestVector) {
         assert_serializable_eq!(recip_keypair.0, derived_kp.0, "sk recip doesn't match");
         assert_serializable_eq!(recip_keypair.1, derived_kp.1, "pk recip doesn't match");
     }
-    if let Some(sks) = sender_keypair.as_ref() {
+    if let Some(kp) = sender_keypair.as_ref() {
         let derived_kp = Kem::derive_keypair(&tv.ikm_sender.unwrap());
-        assert_serializable_eq!(sks.0, derived_kp.0, "sk sender doesn't match");
-        assert_serializable_eq!(sks.1, derived_kp.1, "pk sender doesn't match");
+        assert_serializable_eq!(kp.0, derived_kp.0, "sk sender doesn't match");
+        assert_serializable_eq!(kp.1, derived_kp.1, "pk sender doesn't match");
     }
 
     let (sk_recip, pk_recip) = recip_keypair;
 
     // Now derive the encapped key with the deterministic encap function, using ikm_eph as the
     // ephemeral keying material
-    let sender_keypair_ref = sender_keypair.as_ref().map(|&(ref sk, ref pk)| (sk, pk));
+    let sender_keypair = sender_keypair.as_ref().map(|(sk, pk)| (sk, pk)); // &(_, _) -> (&_, &_)
     let (shared_secret, encapped_key) =
-        Kem::encap_det(&pk_recip, sender_keypair_ref, tv.ikm_eph.as_slice()).expect("encap failed");
+        Kem::encap_det(&pk_recip, sender_keypair, tv.ikm_eph.as_slice()).expect("encap failed");
 
     // Check that encap_with_eph is the same as encap_det when the ephemeral secret key (DHKEM only)
     // is given
@@ -225,7 +225,7 @@ fn test_case<A: Aead, Kdf: KdfTrait, Kem: TestableKem>(tv: MainTestVector) {
         .map(|b| Kem::EphemeralKey::from_bytes(&b).unwrap())
     {
         let (other_shared_secret, other_encapped_key) =
-            Kem::encap_with_eph(&pk_recip, sender_keypair_ref, sk_eph).expect("encap failed");
+            Kem::encap_with_eph(&pk_recip, sender_keypair, sk_eph).expect("encap failed");
 
         assert!(
             shared_secret.0 == other_shared_secret.0,
@@ -259,7 +259,7 @@ fn test_case<A: Aead, Kdf: KdfTrait, Kem: TestableKem>(tv: MainTestVector) {
     // We're going to test the encryption contexts. First, construct the appropriate OpMode.
     let mode = make_op_mode_r(
         tv.mode,
-        sender_keypair.map(|(_, pk)| pk),
+        sender_keypair.map(|(_, pk)| pk.clone()),
         tv.psk.as_deref(),
         tv.psk_id.as_deref(),
     );

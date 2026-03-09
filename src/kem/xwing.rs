@@ -56,6 +56,13 @@ impl ConstantTimeEq for PrivateKey {
     }
 }
 
+impl PartialEq for PrivateKey {
+    fn eq(&self, other: &Self) -> bool {
+        self.ct_eq(other).into()
+    }
+}
+impl Eq for PrivateKey {}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PublicKey(x_wing::EncapsulationKey);
 
@@ -146,6 +153,7 @@ impl KemTrait for XWing {
         // Parse the sk. Can unwrap bc from_bytes only requires that the input len is OutputSize
         let sk = PrivateKey::from_bytes(&sk_bytes).unwrap();
         let pk = Self::sk_to_pk(&sk);
+        sk_bytes.zeroize();
 
         (sk, pk)
     }
