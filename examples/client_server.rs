@@ -44,6 +44,11 @@ fn client_encrypt_msg(
 ) -> (<Kem as KemTrait>::EncappedKey, Vec<u8>, AeadTag<Aead>) {
     // Encapsulate a key and use the resulting shared secret to encrypt a message. The AEAD context
     // is what you use to encrypt.
+    //
+    // `OpModeS::Base` means that the client is not authenticating themselves at all. If the client
+    // had a public key or a pre-shared secret that the server also knew, the client would be able
+    // to authenticate themselves using the `Auth` or `Psk` op-mode variants. See the `OpModeS` and
+    // `OpModeR` types for more detail.
     let (encapped_key, mut sender_ctx) =
         hpke::setup_sender::<Aead, Kdf, Kem>(&OpModeS::Base, server_pk, INFO_STR)
             .expect("invalid server pubkey!");
