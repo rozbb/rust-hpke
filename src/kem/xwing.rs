@@ -12,7 +12,7 @@ use hybrid_array::typenum::{Prod, Sum, Unsigned, U1024, U3, U32, U64};
 use rand_core::CryptoRng;
 use sha3::Shake256;
 use subtle::{Choice, ConstantTimeEq};
-use x_wing::{kem::Decapsulate, KeyExport, TryKeyInit};
+use x_wing::{kem::Decapsulate, Decapsulator, KeyExport, TryKeyInit};
 use zeroize::Zeroize;
 
 // Type-level size constants for X-Wing
@@ -137,7 +137,7 @@ impl KemTrait for XWing {
     type EncappedKey = EncappedKey;
 
     fn sk_to_pk(sk: &PrivateKey) -> PublicKey {
-        PublicKey(sk.0.as_ref().clone())
+        PublicKey(sk.0.encapsulation_key().clone())
     }
 
     // From https://www.ietf.org/archive/id/draft-ietf-hpke-pq-03.html#section-4-5
