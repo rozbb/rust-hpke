@@ -2,8 +2,8 @@ use crate::{
     aead::{Aead, AesGcm128, AesGcm256, ChaCha20Poly1305, ExportOnlyAead},
     kdf::{HkdfSha256, HkdfSha384, HkdfSha512, Kdf as KdfTrait, KdfShake256},
     kem::{
-        DhP256HkdfSha256, DhP384HkdfSha384, DhP521HkdfSha512, Kem as KemTrait, SharedSecret,
-        X25519HkdfSha256, XWing,
+        DhP256HkdfSha256, DhP384HkdfSha384, DhP521HkdfSha512, Kem as KemTrait, MlKem768P256,
+        SharedSecret, X25519HkdfSha256, XWing,
     },
     op_mode::{OpModeR, PskBundle},
     setup::setup_receiver,
@@ -355,13 +355,14 @@ fn kat_test() {
     };
 
     for tv in ref_tvs.into_iter().chain(pq_tvs.into_iter()) {
-        // Ignore everything that doesn't use X25519, P256, P384, P521, or XWing, since that's all
-        // we support right now
+        // Ignore everything that doesn't use X25519, P256, P384, P521, XWing, or
+        // MLKEM768-P256, since that's all we support right now
         if tv.kem_id != X25519HkdfSha256::KEM_ID
             && tv.kem_id != DhP256HkdfSha256::KEM_ID
             && tv.kem_id != DhP384HkdfSha384::KEM_ID
             && tv.kem_id != DhP521HkdfSha512::KEM_ID
             && tv.kem_id != XWing::KEM_ID
+            && tv.kem_id != MlKem768P256::KEM_ID
         {
             continue;
         }
@@ -376,7 +377,8 @@ fn kat_test() {
                 DhP256HkdfSha256,
                 DhP384HkdfSha384,
                 DhP521HkdfSha512,
-                XWing
+                XWing,
+                MlKem768P256
             )
         );
 
