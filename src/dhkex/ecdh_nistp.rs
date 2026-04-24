@@ -20,7 +20,7 @@ macro_rules! nistp_dhkex {
             };
 
             use ::$curve as curve_crate;
-            use curve_crate::elliptic_curve::{ecdh::diffie_hellman, sec1::ToEncodedPoint};
+            use curve_crate::elliptic_curve::{ecdh::diffie_hellman, sec1::ToSec1Point};
             use hybrid_array::{typenum::Unsigned};
             use subtle::{Choice, ConstantTimeEq};
             use zeroize::Zeroize;
@@ -62,7 +62,7 @@ macro_rules! nistp_dhkex {
                     enforce_outbuf_len::<Self>(buf);
 
                     // Get the uncompressed pubkey encoding
-                    let encoded = self.0.as_affine().to_encoded_point(false);
+                    let encoded = self.0.as_affine().to_sec1_point(false);
                     // Serialize it
                     buf.copy_from_slice(encoded.as_bytes());
                 }
@@ -109,7 +109,7 @@ macro_rules! nistp_dhkex {
                     //   its submethod,
                     // * ScalarCore::from_be_bytes() checks that the value doesn't exceed the
                     //   modulus.
-                    let sk = curve_crate::SecretKey::from_bytes(encoded.into())
+                    let sk = curve_crate::SecretKey::from_bytes(encoded.try_into().expect("checked above"))
                         .map_err(|_| HpkeError::ValidationError)?;
 
                     Ok(PrivateKey(sk))

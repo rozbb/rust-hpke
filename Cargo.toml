@@ -36,32 +36,32 @@ kat = ["alloc", "x25519", "p256", "p384", "p521", "xwing"]
 hazmat-streaming-enc = []
 
 [dependencies]
-aead = { version = "0.6.0-rc.10", default-features = false }
+aead = { version = "=0.6.0-rc.10", default-features = false }
 aes-gcm = { version = "=0.11.0-rc.3", default-features = false, features = ["aes"], optional = true }
 chacha20poly1305 = { version = "=0.11.0-rc.3", default-features = false, optional = true }
 getrandom = { version = "0.4", default-features = false, features = ["sys_rng"], optional = true }
 hybrid-array = "0.4"
-hkdf = { version = "=0.13.0-rc.5", default-features = false }
+hkdf = { version = "0.13", default-features = false }
 rand_core = { version = "0.10.0", default-features = false }
-p256 = { version = "0.13", default-features = false, features = [
+p256 = { version = "=0.14.0-rc.9", default-features = false, features = [
     "arithmetic",
     "ecdh",
 ], optional = true }
-p384 = { version = "0.13", default-features = false, features = [
+p384 = { version = "=0.14.0-rc.9", default-features = false, features = [
     "arithmetic",
     "ecdh",
 ], optional = true }
-p521 = { version = "0.13", default-features = false, features = [
+p521 = { version = "=0.14.0-rc.9", default-features = false, features = [
     "arithmetic",
     "ecdh",
 ], optional = true }
-sha2 = { version = "=0.11.0-rc.5", default-features = false }
-sha3 = { version = "=0.11.0-rc.7", default-features = false }
+sha2 = { version = "0.11", default-features = false }
+sha3 = { version = "0.11", default-features = false }
 subtle = { version = "2.6", default-features = false }
-x25519-dalek = { version = "2", default-features = false, features = [
+x25519-dalek = { version = "=3.0.0-pre.6", default-features = false, features = [
     "static_secrets",
 ], optional = true }
-x-wing = { version = "0.1.0-pre.6", optional = true, default-features = false, features = ["hazmat"] }
+x-wing = { version = "=0.1.0-rc.0", optional = true, default-features = false, features = ["hazmat"] }
 zeroize = { version = "1", default-features = false, features = [
     "zeroize_derive",
 ] }
