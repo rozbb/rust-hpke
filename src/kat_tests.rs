@@ -1,6 +1,6 @@
 use crate::{
     aead::{Aead, AesGcm128, AesGcm256, ChaCha20Poly1305, ExportOnlyAead},
-    kdf::{HkdfSha256, HkdfSha384, HkdfSha512, Kdf as KdfTrait, KdfShake256},
+    kdf::{HkdfSha256, HkdfSha384, HkdfSha512, Kdf as KdfTrait, KdfShake128, KdfShake256},
     kem::{
         DhP256HkdfSha256, DhP384HkdfSha384, DhP521HkdfSha512, Kem as KemTrait, MlKem768P256,
         SharedSecret, X25519HkdfSha256, XWing,
@@ -345,12 +345,12 @@ macro_rules! dispatch_testcase {
 #[test]
 fn kat_test() {
     let ref_tvs: Vec<MainTestVector> = {
-        let file = File::open("test-vectors-5f503c5.json").unwrap();
+        let file = File::open("test-vectors/origrfc-5f503c5.json").unwrap();
         serde_json::from_reader(file).unwrap()
     };
 
     let pq_tvs: Vec<MainTestVector> = {
-        let file = File::open("test-vectors-go-8aa8a04.json").unwrap();
+        let file = File::open("test-vectors/pq-53273fb.json").unwrap();
         serde_json::from_reader(file).unwrap()
     };
 
@@ -371,7 +371,7 @@ fn kat_test() {
         dispatch_testcase!(
             tv,
             (AesGcm128, AesGcm256, ChaCha20Poly1305, ExportOnlyAead),
-            (HkdfSha256, HkdfSha384, HkdfSha512, KdfShake256),
+            (HkdfSha256, HkdfSha384, HkdfSha512, KdfShake128, KdfShake256),
             (
                 X25519HkdfSha256,
                 DhP256HkdfSha256,

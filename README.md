@@ -36,6 +36,7 @@ Here are all the primitives listed in the spec. The primitives with checked boxe
     - [X] HKDF-SHA256
     - [X] HKDF-SHA384
     - [X] HKDF-SHA512
+    - [X] SHAKE128
     - [X] SHAKE256
 * AEADs
     - [X] AES-GCM-128
@@ -106,9 +107,9 @@ Tests
 
 To run all tests, execute `cargo test --all-features`. This includes known-answer tests.
 
-Classical (i.e., non-post-quantum) ciphersuites test against `test-vector-COMMIT_ID.json`,where `COMMIT_ID` is the short commit of the version of the [spec](https://github.com/cfrg/draft-irtf-cfrg-hpke) that the test vectors came from. The finalized spec uses commit `5f503c5`. See the [reference implementation](https://github.com/cisco/go-hpke) for information on how to generate a test vector.
+Classical (i.e., non-post-quantum) ciphersuites test against `test-vectors/origrfc-COMMIT_ID.json`,where `COMMIT_ID` is the short commit of the version of the [spec](https://github.com/cfrg/draft-irtf-cfrg-hpke) that the test vectors came from. The finalized spec uses commit `5f503c5`. See the [reference implementation](https://github.com/cisco/go-hpke) for information on how to generate a test vector.
 
-Post-quantum ciphersuites (including hybrid), test against `test-vectors-go-COMMIT_ID.json` in the same way. The commit ID corresponds to Filippo's [Go HPKE](https://github.com/FiloSottile/hpke) repo. The latest commit fetched was `8aa8a04`. The vectors in turn come from the [reference implementation](https://github.com/hpkewg/hpke-pq) repo of the PQ extension standard, at commit `c523f03`. The JSON file was trimmed to only include test vectors from ciphersuites implemented in this crate.
+Post-quantum ciphersuites (including hybrid), test against `test-vectors/pq-COMMIT_ID.json` in the same way. The commit ID refers to the [reference implementation](https://github.com/hpkewg/hpke-pq) repo of the PQ extension standard, at commit `53273fb`. The JSON file was trimmed to only include test vectors from ciphersuites implemented in this crate.
 
 Benchmarks
 ----------
