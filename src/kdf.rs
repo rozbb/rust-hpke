@@ -89,7 +89,7 @@ pub trait Kdf: Sized {
 }
 
 // We use Kdf as a type parameter, so this is to avoid ambiguity.
-use sha3::Shake256;
+use sha3::{Shake128, Shake256};
 use Kdf as KdfTrait;
 
 // Convenience types for the functions below
@@ -258,12 +258,64 @@ impl KdfTrait for HkdfSha512 {
 }
 
 /// The implementation of SHAKE256 KDF
+pub struct KdfShake128 {}
+
+impl KdfTrait for KdfShake128 {
+    // https://datatracker.ietf.org/doc/html/draft-ietf-hpke-pq-03#section-5
+    const KDF_ID: u16 = 0x0010;
+    type Nh = U32;
+
+    fn combine_secrets<A, Kem, O>(
+        mode: &O,
+        shared_secret: SharedSecret<Kem>,
+        info: &[u8],
+    ) -> AeadCtx<A, Self, Kem>
+    where
+        A: Aead,
+        Kem: KemTrait,
+        O: OpMode<Kem>,
+    {
+        one_stage_kdf::combine_secrets::<_, Shake128, _, _, _>(mode, shared_secret, info)
+    }
+
+    fn extract_and_expand(
+        ikm: &[u8],
+        suite_id: &[u8],
+        info: &[u8],
+        out: &mut [u8],
+    ) -> Result<(), hkdf::InvalidLength> {
+        one_stage_kdf::extract_and_expand::<Shake128>(ikm, suite_id, info, out);
+        Ok(())
+    }
+
+    fn derive_x25519_sk_eph_bytes(suite_id: &KemSuiteId, ikm: &[u8]) -> [u8; 32] {
+        one_stage_kdf::derive_x25519_sk_eph_bytes::<Shake128>(suite_id, ikm)
+    }
+
+    fn derive_nistp_sk_eph_bytes<PrivateKeySize: ArraySize>(
+        suite_id: &KemSuiteId,
+        ikm: &[u8],
+        counter: u8,
+    ) -> Array<u8, PrivateKeySize> {
+        one_stage_kdf::derive_nistp_sk_eph_bytes::<Shake128, PrivateKeySize>(suite_id, ikm, counter)
+    }
+
+    fn export(
+        exporter_secret: &[u8],
+        suite_id: &[u8],
+        exporter_ctx: &[u8],
+        out_buf: &mut [u8],
+    ) -> Result<(), HpkeError> {
+        one_stage_kdf::export::<Shake128>(exporter_secret, suite_id, exporter_ctx, out_buf)
+    }
+}
+
+/// The implementation of SHAKE256 KDF
 pub struct KdfShake256 {}
 
 impl KdfTrait for KdfShake256 {
     // https://datatracker.ietf.org/doc/html/draft-ietf-hpke-pq-03#section-5
     const KDF_ID: u16 = 0x0011;
-
     type Nh = U64;
 
     fn combine_secrets<A, Kem, O>(

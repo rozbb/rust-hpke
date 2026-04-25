@@ -19,6 +19,7 @@ rust-version = "1.85"
 # "aes" enables AES-GCM AEAD algorithms (AES-128-GCM and AES-256-GCM)
 # "chacha" enables ChaCha20-Poly1305 AEAD algorithm
 # "xwing" enables the use of X-Wing hybrid post-quantum KEM
+# "mlkem768p256" enables the use of MLKEM768-P256 hybrid post-quantum KEM
 default = ["getrandom", "alloc", "p256", "x25519", "aes", "chacha"]
 x25519 = ["dep:x25519-dalek"]
 p256 = ["dep:p256"]
@@ -27,12 +28,13 @@ p521 = ["dep:p521"]
 aes = ["dep:aes-gcm"]
 chacha = ["dep:chacha20poly1305"]
 xwing = ["dep:x-wing"]
+mlkem768p256 = ["dep:ml-kem", "dep:p256"]
 # Include allocating methods like open() and seal()
 alloc = []
 # Enable RNG-less top-level functions
 getrandom = ["dep:getrandom"]
 # Used to enable known-answer tests. Implies alloc and all other features
-kat = ["alloc", "x25519", "p256", "p384", "p521", "xwing"]
+kat = ["alloc", "x25519", "p256", "p384", "p521", "xwing", "mlkem768p256"]
 hazmat-streaming-enc = []
 
 [dependencies]
@@ -40,9 +42,10 @@ aead = { version = "=0.6.0-rc.10", default-features = false }
 aes-gcm = { version = "=0.11.0-rc.3", default-features = false, features = ["aes"], optional = true }
 chacha20poly1305 = { version = "=0.11.0-rc.3", default-features = false, optional = true }
 getrandom = { version = "0.4", default-features = false, features = ["sys_rng"], optional = true }
-hybrid-array = "0.4"
+hybrid-array = "0.4.11" # Adds HPKE Hybrid KEM sizes
 hkdf = { version = "0.13", default-features = false }
 rand_core = { version = "0.10.0", default-features = false }
+ml-kem = { version = "=0.3.0-rc.2", default-features = false, optional = true }
 p256 = { version = "=0.14.0-rc.9", default-features = false, features = [
     "arithmetic",
     "ecdh",

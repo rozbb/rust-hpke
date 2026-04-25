@@ -1,9 +1,9 @@
 use crate::{
     aead::{Aead, AesGcm128, AesGcm256, ChaCha20Poly1305, ExportOnlyAead},
-    kdf::{HkdfSha256, HkdfSha384, HkdfSha512, Kdf as KdfTrait, KdfShake256},
+    kdf::{HkdfSha256, HkdfSha384, HkdfSha512, Kdf as KdfTrait, KdfShake128, KdfShake256},
     kem::{
-        DhP256HkdfSha256, DhP384HkdfSha384, DhP521HkdfSha512, Kem as KemTrait, SharedSecret,
-        X25519HkdfSha256, XWing,
+        DhP256HkdfSha256, DhP384HkdfSha384, DhP521HkdfSha512, Kem as KemTrait, MlKem768P256,
+        SharedSecret, X25519HkdfSha256, XWing,
     },
     op_mode::{OpModeR, PskBundle},
     setup::setup_receiver,
@@ -12,6 +12,7 @@ use crate::{
 
 use std::{fs::File, string::String, vec::Vec};
 
+use ml_kem::KeyExport;
 use serde::{de::Error as SError, Deserialize, Deserializer};
 
 // For known-answer tests we need to be able to encap with fixed randomness. This allows that.
@@ -342,26 +343,29 @@ macro_rules! dispatch_testcase {
     };
 }
 
+// This known-answer test uses the test vectors from the original RFC and the PQ/hybrid spec (see
+// README for more info)
 #[test]
-fn kat_test() {
+fn classical_pq_and_hybrid() {
     let ref_tvs: Vec<MainTestVector> = {
-        let file = File::open("test-vectors-5f503c5.json").unwrap();
+        let file = File::open("test-vectors/origrfc-5f503c5.json").unwrap();
         serde_json::from_reader(file).unwrap()
     };
 
     let pq_tvs: Vec<MainTestVector> = {
-        let file = File::open("test-vectors-go-8aa8a04.json").unwrap();
+        let file = File::open("test-vectors/pq-53273fb.json").unwrap();
         serde_json::from_reader(file).unwrap()
     };
 
     for tv in ref_tvs.into_iter().chain(pq_tvs.into_iter()) {
-        // Ignore everything that doesn't use X25519, P256, P384, P521, or XWing, since that's all
-        // we support right now
+        // Ignore everything that doesn't use X25519, P256, P384, P521, XWing, or
+        // MLKEM768-P256, since that's all we support right now
         if tv.kem_id != X25519HkdfSha256::KEM_ID
             && tv.kem_id != DhP256HkdfSha256::KEM_ID
             && tv.kem_id != DhP384HkdfSha384::KEM_ID
             && tv.kem_id != DhP521HkdfSha512::KEM_ID
             && tv.kem_id != XWing::KEM_ID
+            && tv.kem_id != MlKem768P256::KEM_ID
         {
             continue;
         }
@@ -370,13 +374,14 @@ fn kat_test() {
         dispatch_testcase!(
             tv,
             (AesGcm128, AesGcm256, ChaCha20Poly1305, ExportOnlyAead),
-            (HkdfSha256, HkdfSha384, HkdfSha512, KdfShake256),
+            (HkdfSha256, HkdfSha384, HkdfSha512, KdfShake128, KdfShake256),
             (
                 X25519HkdfSha256,
                 DhP256HkdfSha256,
                 DhP384HkdfSha384,
                 DhP521HkdfSha512,
-                XWing
+                XWing,
+                MlKem768P256
             )
         );
 
@@ -386,5 +391,98 @@ fn kat_test() {
             "Unrecognized (AEAD ID, KDF ID, KEM ID) combo: ({}, {}, {})",
             tv.aead_id, tv.kdf_id, tv.kem_id
         );
+    }
+}
+
+//
+// We have additional test vectors for hybrid constructions
+//
+
+#[derive(Clone, serde::Deserialize, Debug)]
+struct HybridTestVector {
+    #[serde(skip, deserialize_with = "bytes_from_hex")]
+    _seed: Vec<u8>,
+    #[serde(deserialize_with = "bytes_from_hex")]
+    randomness: Vec<u8>,
+    #[serde(deserialize_with = "bytes_from_hex")]
+    encapsulation_key: Vec<u8>,
+    #[serde(deserialize_with = "bytes_from_hex")]
+    decapsulation_key: Vec<u8>,
+    #[serde(deserialize_with = "bytes_from_hex")]
+    decapsulation_key_pq: Vec<u8>,
+    #[serde(deserialize_with = "bytes_from_hex")]
+    decapsulation_key_t: Vec<u8>,
+    #[serde(deserialize_with = "bytes_from_hex")]
+    ciphertext: Vec<u8>,
+    #[serde(deserialize_with = "bytes_from_hex")]
+    shared_secret: Vec<u8>,
+}
+
+#[derive(Clone, serde::Deserialize, Debug)]
+struct HybridTestVectors {
+    mlkem768_p256: Vec<HybridTestVector>,
+    mlkem768_x25519: Vec<HybridTestVector>,
+    #[serde(skip)] // We don't support these yet
+    _mlkem1024_p384: Vec<HybridTestVector>,
+}
+
+// This known-answer test uses the test vectors from the concrete hybrid spec (see README for more
+// info)
+#[test]
+fn hybrid() {
+    let hybrid_tvs: HybridTestVectors = {
+        let file = File::open("test-vectors/hybrid-defafa2.json").unwrap();
+        serde_json::from_reader(file).unwrap()
+    };
+
+    // Test MLKEM768-P256
+    for tv in hybrid_tvs.mlkem768_p256 {
+        let dk = <MlKem768P256 as KemTrait>::PrivateKey::from_bytes(&tv.decapsulation_key).unwrap();
+        assert_eq!(
+            dk.dk_t.to_bytes().as_slice(),
+            tv.decapsulation_key_t.as_slice()
+        );
+        assert_eq!(
+            dk.dk_pq.to_bytes().as_slice(),
+            tv.decapsulation_key_pq.as_slice()
+        );
+
+        let ek = <MlKem768P256 as KemTrait>::PublicKey::from_bytes(&tv.encapsulation_key).unwrap();
+        assert_eq!(MlKem768P256::sk_to_pk(&dk), ek);
+
+        let (ss, ct) = MlKem768P256::encap_det(&ek, None, &tv.randomness).unwrap();
+        assert_eq!(ss.0.as_slice(), tv.shared_secret.as_slice());
+        assert_eq!(ct.to_bytes().as_slice(), tv.ciphertext);
+
+        let enc = <MlKem768P256 as KemTrait>::EncappedKey::from_bytes(&tv.ciphertext).unwrap();
+        let ss = MlKem768P256::decap(&dk, None, &enc).unwrap();
+        assert_eq!(ss.0.as_slice(), tv.shared_secret.as_slice());
+    }
+
+    // Test XWing
+    for tv in hybrid_tvs.mlkem768_x25519 {
+        let dk = <XWing as KemTrait>::PrivateKey::from_bytes(&tv.decapsulation_key).unwrap();
+        /* We need to skip these asserts because we can't introspect into the XWing secret key from
+         * this crate
+        assert_eq!(
+            dk.dk_t.to_bytes().as_slice(),
+            tv.decapsulation_key_t.as_slice()
+        );
+        assert_eq!(
+            dk.dk_pq.to_bytes().as_slice(),
+            tv.decapsulation_key_pq.as_slice()
+        );
+        */
+
+        let ek = <XWing as KemTrait>::PublicKey::from_bytes(&tv.encapsulation_key).unwrap();
+        assert_eq!(XWing::sk_to_pk(&dk), ek);
+
+        let (ss, ct) = XWing::encap_det(&ek, None, &tv.randomness).unwrap();
+        assert_eq!(ss.0.as_slice(), tv.shared_secret.as_slice());
+        assert_eq!(ct.to_bytes().as_slice(), tv.ciphertext);
+
+        let enc = <XWing as KemTrait>::EncappedKey::from_bytes(&tv.ciphertext).unwrap();
+        let ss = XWing::decap(&dk, None, &enc).unwrap();
+        assert_eq!(ss.0.as_slice(), tv.shared_secret.as_slice());
     }
 }
