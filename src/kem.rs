@@ -22,7 +22,7 @@ pub use mlkem768p256::MlKem768P256;
 #[cfg(feature = "xwing")]
 pub mod xwing;
 #[cfg(feature = "xwing")]
-pub use xwing::*;
+pub use xwing::XWing;
 
 /// Represents authenticated encryption functionality
 pub trait Kem: Sized {

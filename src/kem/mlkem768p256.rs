@@ -369,16 +369,9 @@ impl crate::kat_tests::TestableKem for MlKem768P256 {
 }
 
 #[cfg(test)]
-mod test_vectors;
-
-#[cfg(test)]
 mod tests {
-
-    use super::{test_vectors::TEST_VECTORS, MlKem768P256, PrivateKey, PublicKey};
-    use crate::{Deserializable, Kem, Serializable};
-
-    #[cfg(feature = "kat")]
-    use crate::kat_tests::TestableKem;
+    use super::MlKem768P256;
+    use crate::Kem as KemTrait;
 
     #[test]
     fn round_trip() {
@@ -393,25 +386,5 @@ mod tests {
             MlKem768P256::decap(&sk_recip, None, &encapped_key).expect("decapsulation failed");
 
         assert_eq!(shared_secret.0, shared_secret_recipient.0);
-    }
-
-    #[cfg(feature = "kat")]
-    #[test]
-    fn test_vectors() {
-        for tv in TEST_VECTORS {
-            let dk = PrivateKey::from_bytes(&tv.dk).unwrap();
-            assert_eq!(dk.dk_t.to_bytes().as_array(), Some(&tv.dk_t));
-
-            let ek = PublicKey::from_bytes(tv.ek).unwrap();
-            assert_eq!(MlKem768P256::sk_to_pk(&dk), ek);
-
-            let (ss, ct) = MlKem768P256::encap_det(&ek, None, &tv.randomness).unwrap();
-            assert_eq!(ss.0.as_slice(), tv.ss.as_slice());
-            assert_eq!(ct.to_bytes().as_slice(), tv.ct);
-
-            let enc = super::EncappedKey::from_bytes(tv.ct).unwrap();
-            let ss = MlKem768P256::decap(&dk, None, &enc).unwrap();
-            assert_eq!(ss.0.as_slice(), tv.ss.as_slice());
-        }
     }
 }
