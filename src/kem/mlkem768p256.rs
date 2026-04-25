@@ -30,8 +30,9 @@ type GroupNelem = U65;
 #[derive(Clone)]
 pub struct PrivateKey {
     seed: [u8; 32],
-    dk_pq: <MlKem768 as KemCore>::DecapsulationKey,
-    dk_t: p256::SecretKey,
+    // These are only pub(crate) so they can be checked in kat_tests.rs
+    pub(crate) dk_pq: <MlKem768 as KemCore>::DecapsulationKey,
+    pub(crate) dk_t: p256::SecretKey,
 }
 
 impl ConstantTimeEq for PrivateKey {

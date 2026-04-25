@@ -109,7 +109,10 @@ To run all tests, execute `cargo test --all-features`. This includes known-answe
 
 Classical (i.e., non-post-quantum) ciphersuites test against `test-vectors/origrfc-COMMIT_ID.json`,where `COMMIT_ID` is the short commit of the version of the [spec](https://github.com/cfrg/draft-irtf-cfrg-hpke) that the test vectors came from. The finalized spec uses commit `5f503c5`. See the [reference implementation](https://github.com/cisco/go-hpke) for information on how to generate a test vector.
 
-Post-quantum ciphersuites (including hybrid), test against `test-vectors/pq-COMMIT_ID.json` in the same way. The commit ID refers to the [reference implementation](https://github.com/hpkewg/hpke-pq) repo of the PQ extension standard, at commit `53273fb`. The JSON file was trimmed to only include test vectors from ciphersuites implemented in this crate.
+Post-quantum ciphersuites (including hybrid), test against `test-vectors/pq-COMMIT_ID.json` in the same way. The commit ID refers to the [reference implementation](https://github.com/hpkewg/hpke-pq) repo of the PQ extension standard. The JSON file was trimmed to only include test vectors from ciphersuites implemented in this crate.
+
+Hybrid ciphersuites are additionally tested against `test-vectors/hybrid-COMMIT_ID.json`. The commit ID refers to the concrete hybrid HPKE spec [repo](https://github.com/cfrg/draft-irtf-cfrg-concrete-hybrid-kems).
+In addition
 
 Benchmarks
 ----------
