@@ -257,7 +257,7 @@ impl KdfTrait for HkdfSha512 {
     }
 }
 
-/// The implementation of SHAKE256 KDF
+/// The implementation of SHAKE128 KDF
 pub struct KdfShake128 {}
 
 impl KdfTrait for KdfShake128 {

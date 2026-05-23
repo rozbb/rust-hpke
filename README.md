@@ -31,7 +31,8 @@ Here are all the primitives listed in the spec. The primitives with checked boxe
     - [X] DHKEM(P-256, HKDF-SHA256)
     - [X] DHKEM(P-384, HKDF-SHA384)
     - [X] DHKEM(P-521, HKDF-SHA512)
-    - [X] X-Wing, aka MLKEM768-X25519
+    - [X] MLKEM768-X25519, aka X-Wing
+    - [X] MLKEM768-P256
 * KDFs
     - [X] HKDF-SHA256
     - [X] HKDF-SHA384
@@ -59,6 +60,7 @@ Feature flag list:
 * `aes` - Enables AES-GCM-128 and AES-GCM-256 AEAD algorithms
 * `chacha` - Enables ChaCha20-Poly1305 AEAD algorithm
 * `xwing` - Enables the X-Wing (aka MLKEM768-X25519) hybrid post-quantum KEM
+* `mlkem768p256` - Enables the MLKEM768-P256 hybrid post-quantum KEM
 * `kat` - Used only to enabled known-answer tests, which require `std`. Only use with `cargo test`
 
 For info on how to omit or include feature flags, see the [cargo docs on features](https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html#choosing-features).

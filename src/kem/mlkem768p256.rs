@@ -2,8 +2,9 @@
 //! which itself derives from <https://datatracker.ietf.org/doc/html/draft-ietf-hpke-pq-03>
 
 use crate::{
+    kdf::one_stage_kdf,
     kem::{KemTrait, SharedSecret},
-    util::{enforce_equal_len, enforce_outbuf_len},
+    util::{enforce_equal_len, enforce_outbuf_len, kem_suite_id},
     Deserializable, HpkeError, Serializable,
 };
 
@@ -16,8 +17,8 @@ use p256::elliptic_curve::sec1::{FromSec1Point, ToSec1Point};
 use rand_core::CryptoRng;
 use sha2::digest::XofReader;
 use sha3::{
-    digest::{ExtendableOutput, FixedOutput, OutputSizeUser, Update},
-    Sha3_256, Shake256,
+    digest::{self, ExtendableOutput, FixedOutput, OutputSizeUser, Update},
+    Digest, Sha3_256, Shake256,
 };
 use subtle::{Choice, ConstantTimeEq};
 use zeroize::Zeroize;
@@ -172,7 +173,18 @@ impl KemTrait for MlKem768P256 {
     const KEM_ID: u16 = 0x0050;
 
     fn derive_keypair(ikm: &[u8]) -> (Self::PrivateKey, Self::PublicKey) {
-        let seed = shake256_labeled_derive::<32>(ikm, Self::KEM_ID, b"DeriveKeyPair", b"");
+        let seed = {
+            let mut buf = [0u8; 32];
+            let suite_id = kem_suite_id::<Self>();
+            one_stage_kdf::labeled_derive::<Shake256>(
+                &suite_id,
+                &[ikm],
+                b"DeriveKeyPair",
+                &[b""],
+                &mut buf,
+            );
+            buf
+        };
         let (ek_pq, ek_t, dk_pq, dk_t) = expand_key(&seed);
         (PrivateKey { seed, dk_pq, dk_t }, PublicKey { ek_pq, ek_t })
     }
@@ -278,40 +290,14 @@ fn p256_random_scalar(seed: &[u8; 128]) -> p256::SecretKey {
     panic!("Rejection sampling failed");
 }
 
-fn shake256_labeled_derive<const L: usize>(
-    ikm: &[u8],
-    kem_id: u16,
-    label: &[u8],
-    context: &[u8],
-) -> [u8; L] {
-    let mut out = [0; L];
-    Shake256::default()
-        .chain(ikm)
-        .chain(b"HPKE-v1")
-        // suite_id
-        .chain(b"KEM")
-        .chain(kem_id.to_be_bytes())
-        // prefixed_label
-        .chain(
-            u16::try_from(label.len())
-                .expect("short enough")
-                .to_be_bytes(),
-        )
-        .chain(label)
-        .chain(u16::try_from(L).expect("short enough").to_be_bytes())
-        .chain(context)
-        .finalize_xof_into(&mut out);
-    out
-}
-
-fn ss(ss_pq: &[u8], ss_t: &[u8], ct_t: &[u8], ek_t: &[u8]) -> sha3::digest::Output<Sha3_256> {
-    let mut h = Sha3_256::default();
-    h.update(ss_pq);
-    h.update(ss_t);
-    h.update(ct_t);
-    h.update(ek_t);
-    h.update(LABEL);
-    h.finalize_fixed()
+fn ss(ss_pq: &[u8], ss_t: &[u8], ct_t: &[u8], ek_t: &[u8]) -> digest::Output<Sha3_256> {
+    Sha3_256::default()
+        .chain_update(ss_pq)
+        .chain_update(ss_t)
+        .chain_update(ct_t)
+        .chain_update(ek_t)
+        .chain_update(LABEL)
+        .finalize_fixed()
 }
 
 #[cfg(all(test, feature = "kat"))]
