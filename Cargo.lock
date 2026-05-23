@@ -663,6 +663,7 @@ dependencies = [
  "module-lattice",
  "rand_core",
  "sha3",
+ "zeroize",
 ]
 
 [[package]]
@@ -674,6 +675,7 @@ dependencies = [
  "ctutils",
  "hybrid-array",
  "num-traits",
+ "zeroize",
 ]
 
 [[package]]
