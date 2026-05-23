@@ -284,7 +284,6 @@ impl KemTrait for MlKem768P256 {
     ///
     /// # Panics
     /// Panics if `sender_id_keypair` is `Some`.
-
     // From <https://www.ietf.org/archive/id/draft-irtf-cfrg-hybrid-kems-11.html#section-5.5>:
     //   def Encaps(ek):
     //       (ek_PQ, ek_T) = split(KEM_PQ.Nek, Group_T.Nelem, ek)
