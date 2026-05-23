@@ -400,8 +400,6 @@ fn classical_pq_and_hybrid() {
 
 #[derive(Clone, serde::Deserialize, Debug)]
 struct HybridTestVector {
-    #[serde(skip, deserialize_with = "bytes_from_hex")]
-    _seed: Vec<u8>,
     #[serde(deserialize_with = "bytes_from_hex")]
     randomness: Vec<u8>,
     #[serde(deserialize_with = "bytes_from_hex")]

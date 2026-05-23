@@ -278,7 +278,7 @@ impl KemTrait for MlKem768P256 {
         Ok(SharedSecret(ss))
     }
 
-    /// Derives a shared secret and an ephemeral pubkey that the owner of the reciepint's pubkey
+    /// Derives a shared secret and an ephemeral pubkey that the owner of the recipient's pubkey
     /// can use to derive the same shared secret.This DOES NOT support authenticated encapsulation,
     /// i.e., `sender_id_keypair` MUST be `None`.
     ///
