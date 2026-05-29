@@ -45,7 +45,7 @@ getrandom = { version = "0.4", default-features = false, features = ["sys_rng"],
 hybrid-array = "0.4.11"
 hkdf = { version = "0.13", default-features = false }
 rand_core = { version = "0.10.0", default-features = false }
-ml-kem = { version = "=0.3.0-rc.2", default-features = false, features = ["zeroize"], optional = true }
+ml-kem = { version = "0.3", default-features = false, features = ["zeroize"], optional = true }
 p256 = { version = "=0.14.0-rc.9", default-features = false, features = [
     "arithmetic",
     "ecdh",
