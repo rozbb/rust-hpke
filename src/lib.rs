@@ -1,39 +1,37 @@
-//! # hpke
-//! **WARNING:** This code has not been audited. Use at your own discretion.
-//!
 //! This is a pure Rust implementation of the
 //! [HPKE](https://datatracker.ietf.org/doc/rfc9180/) hybrid encryption scheme (RFC 9180). The
 //! purpose of hybrid encryption is to use allow someone to send secure messages to an entity whose
-//! public key they know. Here's an example of Alice and Bob, where Alice knows Bob's public key:
+//! public key they know.
+//!
+//! # Example
+//!
+//! Here's an example of Alice sending an encrypted message to Bob. The example uses the
+//! [`easy`] module, which removes a lot of the code noise. To do things the harder way, see
+//! [`examples/client_server.rs`](https://github.com/rozbb/rust-hpke/blob/main/examples/client_server.rs).
 //!
 //! ```
 //! # #[cfg(all(feature = "alloc", feature = "x25519", feature = "chacha", feature = "getrandom"))]
 //! # {
-//! # use hpke::{
-//! #     aead::ChaCha20Poly1305,
-//! #     kdf::HkdfSha384,
-//! #     kem::X25519HkdfSha256,
-//! #     Kem as KemTrait, OpModeR, OpModeS, setup_receiver, setup_sender,
-//! # };
-//! // These types define the ciphersuite Alice and Bob will be using
-//! type Kem = X25519HkdfSha256;
-//! type Aead = ChaCha20Poly1305;
-//! type Kdf = HkdfSha384;
+//! // We will be using the "easy" interface for the ciphersuite
+//! // (DHKEM(X25519, HKDF-SHA256), HKDF-SHA256, ChaCha20Poly1305)
+//! use hpke::{
+//!     easy::x25519_chacha::{
+//!         gen_keypair, setup_receiver, setup_sender, AeadTag, EncappedKey, PrivateKey, PublicKey,
+//!     },
+//!     Deserializable, Serializable,
+//! };
+//! // Alternatively, you can just `use hpke::easy::x25519_chacha::*;`
 //!
 //! // Bob generates his keypair
-//! let (bob_sk, bob_pk) = Kem::gen_keypair();
+//! let (bob_sk, bob_pk) = gen_keypair();
 //!
 //! // This is a description string for the session. Both Alice and Bob need to know this value.
 //! // It's not secret.
 //! let info_str = b"Alice and Bob's weekly chat";
 //!
-//! // Alice initiates a session with Bob. OpModeS::Base means that Alice is not authenticating
-//! // herself at all. If she had a public key herself, or a pre-shared secret that Bob also
-//! // knew, she'd be able to authenticate herself. See the OpModeS and OpModeR types for more
-//! // detail.
+//! // Alice creates an encryption context that only Bob can derive a copy of
 //! let (encapsulated_key, mut encryption_context) =
-//!     hpke::setup_sender::<Aead, Kdf, Kem>(&OpModeS::Base, &bob_pk, info_str)
-//!         .expect("invalid server pubkey!");
+//!     setup_sender(&bob_pk, info_str).expect("invalid server pubkey!");
 //!
 //! // Alice encrypts a message to Bob. `aad` is authenticated associated data that is not
 //! // encrypted.
@@ -53,12 +51,7 @@
 //!
 //! // Somewhere far away, Bob receives the data and makes a decryption session
 //! let mut decryption_context =
-//!     hpke::setup_receiver::<Aead, Kdf, Kem>(
-//!         &OpModeR::Base,
-//!         &bob_sk,
-//!         &encapsulated_key,
-//!         info_str,
-//!     ).expect("failed to set up receiver!");
+//!     setup_receiver(&bob_sk, &encapsulated_key, info_str).expect("failed to set up receiver!");
 //! // To open without allocating:
 //! //   use hpke::inout::InOutBuf;
 //! //   decryption_context.open_inout_detached(InOutBuf::from(&mut ciphertext), aad, &auth_tag)
@@ -108,6 +101,8 @@ mod util;
 
 pub mod aead;
 mod dhkex;
+#[cfg(all(feature = "getrandom", feature = "alloc"))]
+pub mod easy;
 pub mod kdf;
 pub mod kem;
 mod op_mode;

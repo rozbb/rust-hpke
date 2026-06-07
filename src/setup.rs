@@ -146,7 +146,7 @@ where
 //                       psk, psk_id)
 
 /// Initiates a decryption context given a private key `sk_recip` and an encapsulated key which was
-/// encapsulated to `sk_recip`'s corresponding public key.   `info` is a domain separator.
+/// encapsulated to `sk_recip`'s corresponding public key. `info` is a domain separator.
 ///
 /// NOTE: The `XWing` KEM does not support authenticated encapsulation, so `mode` MUST be
 /// [`Base`](crate::OpModeR::Base) or [`Psk`](crate::OpModeR::Psk).
