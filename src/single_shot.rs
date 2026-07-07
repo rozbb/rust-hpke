@@ -306,74 +306,95 @@ mod test {
     }
 
     #[cfg(all(feature = "x25519", feature = "chacha"))]
-    test_single_shot_correctness!(
-        test_single_shot_correctness_x25519,
-        ChaCha20Poly1305,
-        HkdfSha256,
-        X25519HkdfSha256,
-        true
-    );
+    mod x25519_tests {
+        use super::*;
+
+        test_single_shot_correctness!(
+            test_single_shot_correctness_x25519,
+            ChaCha20Poly1305,
+            HkdfSha256,
+            X25519HkdfSha256,
+            true
+        );
+    }
 
     #[cfg(all(feature = "nistp", feature = "chacha"))]
-    test_single_shot_correctness!(
-        test_single_shot_correctness_p256,
-        ChaCha20Poly1305,
-        HkdfSha256,
-        DhP256HkdfSha256,
-        true
-    );
+    mod nistp_tests {
+        use super::*;
 
-    #[cfg(all(feature = "nistp", feature = "chacha"))]
-    test_single_shot_correctness!(
-        test_single_shot_correctness_p384,
-        ChaCha20Poly1305,
-        HkdfSha384,
-        DhP384HkdfSha384,
-        true
-    );
-
-    #[cfg(all(feature = "nistp", feature = "chacha"))]
-    test_single_shot_correctness!(
-        test_single_shot_correctness_p521,
-        ChaCha20Poly1305,
-        HkdfSha512,
-        DhP521HkdfSha512,
-        true
-    );
+        test_single_shot_correctness!(
+            test_single_shot_correctness_p256,
+            ChaCha20Poly1305,
+            HkdfSha256,
+            DhP256HkdfSha256,
+            true
+        );
+        test_single_shot_correctness!(
+            test_single_shot_correctness_p384,
+            ChaCha20Poly1305,
+            HkdfSha384,
+            DhP384HkdfSha384,
+            true
+        );
+        test_single_shot_correctness!(
+            test_single_shot_correctness_p521,
+            ChaCha20Poly1305,
+            HkdfSha512,
+            DhP521HkdfSha512,
+            true
+        );
+    }
 
     #[cfg(all(feature = "mlkem", feature = "chacha"))]
-    test_single_shot_correctness!(
-        test_single_shot_correctness_mlkem768,
-        ChaCha20Poly1305,
-        KdfShake128,
-        MlKem768,
-        false
-    );
+    mod mlkem_tests {
+        use super::*;
 
-    #[cfg(all(feature = "mlkem", feature = "chacha"))]
-    test_single_shot_correctness!(
-        test_single_shot_correctness_mlkem1024,
-        ChaCha20Poly1305,
-        KdfShake256,
-        MlKem1024,
-        false
-    );
+        test_single_shot_correctness!(
+            test_single_shot_correctness_mlkem768,
+            ChaCha20Poly1305,
+            KdfShake128,
+            MlKem768,
+            false
+        );
+        test_single_shot_correctness!(
+            test_single_shot_correctness_mlkem1024,
+            ChaCha20Poly1305,
+            KdfShake256,
+            MlKem1024,
+            false
+        );
+    }
 
     #[cfg(all(feature = "mlkem", feature = "nistp", feature = "chacha"))]
-    test_single_shot_correctness!(
-        test_single_shot_correctness_mlkem1024p384,
-        ChaCha20Poly1305,
-        KdfShake256,
-        MlKem1024P384,
-        false
-    );
+    mod mlkem_nistp_tests {
+        use super::*;
+
+        test_single_shot_correctness!(
+            test_single_shot_correctness_mlkem768p256,
+            ChaCha20Poly1305,
+            KdfShake128,
+            MlKem768P256,
+            false
+        );
+        test_single_shot_correctness!(
+            test_single_shot_correctness_mlkem1024p384,
+            ChaCha20Poly1305,
+            KdfShake256,
+            MlKem1024P384,
+            false
+        );
+    }
 
     #[cfg(all(feature = "mlkem", feature = "x25519", feature = "chacha"))]
-    test_single_shot_correctness!(
-        test_single_shot_correctness_xwing,
-        ChaCha20Poly1305,
-        KdfTurboShake128,
-        XWing,
-        false
-    );
+    mod xwing_tests {
+        use super::*;
+
+        test_single_shot_correctness!(
+            test_single_shot_correctness_xwing,
+            ChaCha20Poly1305,
+            KdfTurboShake128,
+            XWing,
+            false
+        );
+    }
 }

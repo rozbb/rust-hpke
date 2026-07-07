@@ -502,8 +502,6 @@ mod test {
     #[cfg(feature = "chacha")]
     use super::ChaCha20Poly1305;
 
-    #[cfg(feature = "hkdfsha2")]
-    use crate::kdf::HkdfSha256;
     use crate::{test_util::gen_ctx_simple_pair, Deserializable, HpkeError, Serializable};
 
     use hybrid_array::typenum::Unsigned;
@@ -535,11 +533,11 @@ mod test {
     /// over ciphers.
     #[cfg(feature = "alloc")]
     macro_rules! test_export_idempotence {
-        ($test_name:ident, $kem_ty:ty) => {
+        ($test_name:ident, $kdf_ty:ty, $kem_ty:ty) => {
             #[test]
             fn $test_name() {
                 type Kem = $kem_ty;
-                type Kdf = HkdfSha256;
+                type Kdf = $kdf_ty;
                 // Again, this test is cipher-agnostic
                 type A = ChaCha20Poly1305;
 
@@ -572,12 +570,12 @@ mod test {
     /// panic
     #[cfg(feature = "alloc")]
     macro_rules! test_exportonly_panics {
-        ($test_name1:ident, $test_name2:ident, $kem_ty:ty) => {
+        ($test_name1:ident, $test_name2:ident, $kdf_ty:ty, $kem_ty:ty) => {
             #[should_panic]
             #[test]
             fn $test_name1() {
                 type Kem = $kem_ty;
-                type Kdf = HkdfSha256;
+                type Kdf = $kdf_ty;
                 type A = ExportOnlyAead;
 
                 // Set up a context and try encrypting
@@ -590,7 +588,7 @@ mod test {
             #[test]
             fn $test_name2() {
                 type Kem = $kem_ty;
-                type Kdf = HkdfSha256;
+                type Kdf = $kdf_ty;
                 type A = ExportOnlyAead;
 
                 // Set up a context and try decrypting an invalid ciphertext
@@ -606,11 +604,11 @@ mod test {
     /// make the test generic over ciphers.
     #[cfg(feature = "alloc")]
     macro_rules! test_overflow {
-        ($test_name:ident, $kem_ty:ty) => {
+        ($test_name:ident, $kdf_ty:ty, $kem_ty:ty) => {
             #[test]
             fn $test_name() {
                 type Kem = $kem_ty;
-                type Kdf = HkdfSha256;
+                type Kdf = $kdf_ty;
                 // Again, this test is cipher-agnostic
                 type A = ChaCha20Poly1305;
 
@@ -676,11 +674,11 @@ mod test {
     /// Tests that `open()` can decrypt things properly encrypted with `seal()`
     #[cfg(feature = "alloc")]
     macro_rules! test_ctx_correctness {
-        ($test_name:ident, $aead_ty:ty, $kem_ty:ty) => {
+        ($test_name:ident, $aead_ty:ty, $kdf_ty:ty, $kem_ty:ty) => {
             #[test]
             fn $test_name() {
                 type A = $aead_ty;
-                type Kdf = HkdfSha256;
+                type Kdf = $kdf_ty;
                 type Kem = $kem_ty;
 
                 let (mut sender_ctx, mut receiver_ctx) = gen_ctx_simple_pair::<A, Kdf, Kem>();
@@ -725,30 +723,43 @@ mod test {
     #[cfg(all(feature = "x25519", feature = "alloc", feature = "chacha"))]
     mod x25519_tests {
         use super::*;
+        use crate::kdf::HkdfSha256;
 
-        test_export_idempotence!(test_export_idempotence_x25519, crate::kem::X25519HkdfSha256);
+        test_export_idempotence!(
+            test_export_idempotence_x25519,
+            HkdfSha256,
+            crate::kem::X25519HkdfSha256
+        );
         test_exportonly_panics!(
             test_exportonly_panics_x25519_seal,
             test_exportonly_panics_x25519_open,
+            HkdfSha256,
             crate::kem::X25519HkdfSha256
         );
-        test_overflow!(test_overflow_x25519, crate::kem::X25519HkdfSha256);
+        test_overflow!(
+            test_overflow_x25519,
+            HkdfSha256,
+            crate::kem::X25519HkdfSha256
+        );
 
         #[cfg(feature = "aes")]
         test_ctx_correctness!(
             test_ctx_correctness_aes128_x25519,
             AesGcm128,
+            HkdfSha256,
             crate::kem::X25519HkdfSha256
         );
         #[cfg(feature = "aes")]
         test_ctx_correctness!(
             test_ctx_correctness_aes256_x25519,
             AesGcm256,
+            HkdfSha256,
             crate::kem::X25519HkdfSha256
         );
         test_ctx_correctness!(
             test_ctx_correctness_chacha_x25519,
             ChaCha20Poly1305,
+            HkdfSha256,
             crate::kem::X25519HkdfSha256
         );
     }
@@ -756,61 +767,245 @@ mod test {
     #[cfg(all(feature = "nistp", feature = "alloc", feature = "chacha"))]
     mod nistp_tests {
         use super::*;
+        use crate::kdf::HkdfSha256;
 
         // P-256
 
-        test_export_idempotence!(test_export_idempotence_p256, crate::kem::DhP256HkdfSha256);
+        test_export_idempotence!(
+            test_export_idempotence_p256,
+            HkdfSha256,
+            crate::kem::DhP256HkdfSha256
+        );
         test_exportonly_panics!(
             test_exportonly_panics_p256_seal,
             test_exportonly_panics_p256_open,
+            HkdfSha256,
             crate::kem::DhP256HkdfSha256
         );
-        test_overflow!(test_overflow_p256, crate::kem::DhP256HkdfSha256);
+        test_overflow!(test_overflow_p256, HkdfSha256, crate::kem::DhP256HkdfSha256);
 
         #[cfg(feature = "aes")]
         test_ctx_correctness!(
             test_ctx_correctness_aes128_p256,
             AesGcm128,
+            HkdfSha256,
             crate::kem::DhP256HkdfSha256
         );
         #[cfg(feature = "aes")]
         test_ctx_correctness!(
             test_ctx_correctness_aes256_p256,
             AesGcm256,
+            HkdfSha256,
             crate::kem::DhP256HkdfSha256
         );
         test_ctx_correctness!(
             test_ctx_correctness_chacha_p256,
             ChaCha20Poly1305,
+            HkdfSha256,
             crate::kem::DhP256HkdfSha256
         );
 
         // P-384
 
-        test_export_idempotence!(test_export_idempotence_p384, crate::kem::DhP384HkdfSha384);
+        test_export_idempotence!(
+            test_export_idempotence_p384,
+            HkdfSha256,
+            crate::kem::DhP384HkdfSha384
+        );
         test_exportonly_panics!(
             test_exportonly_panics_p384_seal,
             test_exportonly_panics_p384_open,
+            HkdfSha256,
             crate::kem::DhP384HkdfSha384
         );
-        test_overflow!(test_overflow_p384, crate::kem::DhP384HkdfSha384);
+        test_overflow!(test_overflow_p384, HkdfSha256, crate::kem::DhP384HkdfSha384);
 
         #[cfg(feature = "aes")]
         test_ctx_correctness!(
             test_ctx_correctness_aes128_p384,
             AesGcm128,
+            HkdfSha256,
             crate::kem::DhP384HkdfSha384
         );
         #[cfg(feature = "aes")]
         test_ctx_correctness!(
             test_ctx_correctness_aes256_p384,
             AesGcm256,
+            HkdfSha256,
             crate::kem::DhP384HkdfSha384
         );
         test_ctx_correctness!(
             test_ctx_correctness_chacha_p384,
             ChaCha20Poly1305,
+            HkdfSha256,
             crate::kem::DhP384HkdfSha384
+        );
+
+        // P-521
+
+        test_export_idempotence!(
+            test_export_idempotence_p521,
+            HkdfSha256,
+            crate::kem::DhP521HkdfSha512
+        );
+        test_exportonly_panics!(
+            test_exportonly_panics_p521_seal,
+            test_exportonly_panics_p521_open,
+            HkdfSha256,
+            crate::kem::DhP521HkdfSha512
+        );
+        test_overflow!(test_overflow_p521, HkdfSha256, crate::kem::DhP521HkdfSha512);
+
+        #[cfg(feature = "aes")]
+        test_ctx_correctness!(
+            test_ctx_correctness_aes128_p521,
+            AesGcm128,
+            HkdfSha256,
+            crate::kem::DhP521HkdfSha512
+        );
+        #[cfg(feature = "aes")]
+        test_ctx_correctness!(
+            test_ctx_correctness_aes256_p521,
+            AesGcm256,
+            HkdfSha256,
+            crate::kem::DhP521HkdfSha512
+        );
+        test_ctx_correctness!(
+            test_ctx_correctness_chacha_p521,
+            ChaCha20Poly1305,
+            HkdfSha256,
+            crate::kem::DhP521HkdfSha512
+        );
+    }
+
+    #[cfg(all(feature = "mlkem", feature = "alloc", feature = "chacha"))]
+    mod mlkem_tests {
+        use super::*;
+        use crate::kdf::KdfShake128;
+
+        test_export_idempotence!(
+            test_export_idempotence_mlkem768,
+            KdfShake128,
+            crate::kem::MlKem768
+        );
+        test_exportonly_panics!(
+            test_exportonly_panics_mlkem768_seal,
+            test_exportonly_panics_mlkem768_open,
+            KdfShake128,
+            crate::kem::MlKem768
+        );
+        test_overflow!(test_overflow_mlkem768, KdfShake128, crate::kem::MlKem768);
+        test_ctx_correctness!(
+            test_ctx_correctness_chacha_mlkem768,
+            ChaCha20Poly1305,
+            KdfShake128,
+            crate::kem::MlKem768
+        );
+
+        test_export_idempotence!(
+            test_export_idempotence_mlkem1024,
+            KdfShake128,
+            crate::kem::MlKem1024
+        );
+        test_exportonly_panics!(
+            test_exportonly_panics_mlkem1024_seal,
+            test_exportonly_panics_mlkem1024_open,
+            KdfShake128,
+            crate::kem::MlKem1024
+        );
+        test_overflow!(test_overflow_mlkem1024, KdfShake128, crate::kem::MlKem1024);
+        test_ctx_correctness!(
+            test_ctx_correctness_chacha_mlkem1024,
+            ChaCha20Poly1305,
+            KdfShake128,
+            crate::kem::MlKem1024
+        );
+    }
+
+    #[cfg(all(
+        feature = "mlkem",
+        feature = "nistp",
+        feature = "alloc",
+        feature = "chacha"
+    ))]
+    mod mlkem_nistp_tests {
+        use super::*;
+        use crate::kdf::{KdfShake128, KdfShake256};
+
+        test_export_idempotence!(
+            test_export_idempotence_mlkem768p256,
+            KdfShake128,
+            crate::kem::MlKem768P256
+        );
+        test_exportonly_panics!(
+            test_exportonly_panics_mlkem768p256_seal,
+            test_exportonly_panics_mlkem768p256_open,
+            KdfShake128,
+            crate::kem::MlKem768P256
+        );
+        test_overflow!(
+            test_overflow_mlkem768p256,
+            KdfShake128,
+            crate::kem::MlKem768P256
+        );
+        test_ctx_correctness!(
+            test_ctx_correctness_chacha_mlkem768p256,
+            ChaCha20Poly1305,
+            KdfShake128,
+            crate::kem::MlKem768P256
+        );
+
+        test_export_idempotence!(
+            test_export_idempotence_mlkem1024p384,
+            KdfShake128,
+            crate::kem::MlKem1024P384
+        );
+        test_exportonly_panics!(
+            test_exportonly_panics_mlkem1024p384_seal,
+            test_exportonly_panics_mlkem1024p384_open,
+            KdfShake256,
+            crate::kem::MlKem1024P384
+        );
+        test_overflow!(
+            test_overflow_mlkem1024p384,
+            KdfShake256,
+            crate::kem::MlKem1024P384
+        );
+        test_ctx_correctness!(
+            test_ctx_correctness_chacha_mlkem1024p384,
+            ChaCha20Poly1305,
+            KdfShake256,
+            crate::kem::MlKem1024P384
+        );
+    }
+
+    #[cfg(all(
+        feature = "mlkem",
+        feature = "x25519",
+        feature = "alloc",
+        feature = "chacha"
+    ))]
+    mod xwing_tests {
+        use super::*;
+        use crate::kdf::KdfTurboShake128;
+
+        test_export_idempotence!(
+            test_export_idempotence_xwing,
+            KdfTurboShake128,
+            crate::kem::XWing
+        );
+        test_exportonly_panics!(
+            test_exportonly_panics_xwing_seal,
+            test_exportonly_panics_xwing_open,
+            KdfTurboShake128,
+            crate::kem::XWing
+        );
+        test_overflow!(test_overflow_xwing, KdfTurboShake128, crate::kem::XWing);
+        test_ctx_correctness!(
+            test_ctx_correctness_chacha_xwing,
+            ChaCha20Poly1305,
+            KdfTurboShake128,
+            crate::kem::XWing
         );
     }
 

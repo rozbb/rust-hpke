@@ -199,7 +199,7 @@ mod test {
     /// testing that `gen_ctx_kem_pair` returns identical encryption contexts
     #[cfg(feature = "chacha")]
     macro_rules! test_setup_correctness {
-        ($test_name:ident, $aead_ty:ty, $kdf_ty:ty, $kem_ty:ty) => {
+        ($test_name:ident, $aead_ty:ty, $kdf_ty:ty, $kem_ty:ty, $use_auth:expr) => {
             #[test]
             fn $test_name() {
                 type A = $aead_ty;
@@ -213,13 +213,20 @@ mod test {
                 // Generate the receiver's long-term keypair
                 let (sk_recip, pk_recip) = Kem::gen_keypair_with_rng(&mut csprng);
 
-                // Try a full setup for all the op modes
-                for op_mode_kind in &[
-                    OpModeKind::Base,
-                    OpModeKind::Auth,
-                    OpModeKind::Psk,
-                    OpModeKind::AuthPsk,
-                ] {
+                // Build the list of modes to test. PQ KEMs don't support Auth/AuthPsk.
+                let op_mode_kinds: &[OpModeKind] = if $use_auth {
+                    &[
+                        OpModeKind::Base,
+                        OpModeKind::Psk,
+                        OpModeKind::Auth,
+                        OpModeKind::AuthPsk,
+                    ]
+                } else {
+                    &[OpModeKind::Base, OpModeKind::Psk]
+                };
+
+                // Try a full setup for the chosen op modes
+                for op_mode_kind in op_mode_kinds {
                     // Generate a mutually agreeing op mode pair
                     let (psk, psk_id) = (gen_rand_buf(), gen_rand_buf());
                     let (sender_mode, receiver_mode) =
@@ -253,7 +260,7 @@ mod test {
     /// Tests that using different input data gives you different encryption contexts
     #[cfg(feature = "chacha")]
     macro_rules! test_setup_soundness {
-        ($test_name:ident, $aead:ty, $kdf:ty, $kem:ty) => {
+        ($test_name:ident, $aead:ty, $kdf:ty, $kem:ty, $use_auth:expr) => {
             #[test]
             fn $test_name() {
                 type A = $aead;
@@ -343,13 +350,15 @@ mod test {
             test_setup_correctness_x25519,
             ChaCha20Poly1305,
             HkdfSha256,
-            X25519HkdfSha256
+            X25519HkdfSha256,
+            true
         );
         test_setup_soundness!(
             test_setup_soundness_x25519,
             ChaCha20Poly1305,
             HkdfSha256,
-            X25519HkdfSha256
+            X25519HkdfSha256,
+            true
         );
     }
 
@@ -365,39 +374,144 @@ mod test {
             test_setup_correctness_p256,
             ChaCha20Poly1305,
             HkdfSha256,
-            DhP256HkdfSha256
+            DhP256HkdfSha256,
+            true
         );
         test_setup_soundness!(
             test_setup_soundness_p256,
             ChaCha20Poly1305,
             HkdfSha256,
-            DhP256HkdfSha256
+            DhP256HkdfSha256,
+            true
         );
 
         test_setup_correctness!(
             test_setup_correctness_p384,
             ChaCha20Poly1305,
             HkdfSha384,
-            DhP384HkdfSha384
+            DhP384HkdfSha384,
+            true
         );
         test_setup_soundness!(
             test_setup_soundness_p384,
             ChaCha20Poly1305,
             HkdfSha384,
-            DhP384HkdfSha384
+            DhP384HkdfSha384,
+            true
         );
 
         test_setup_correctness!(
             test_setup_correctness_p521,
             ChaCha20Poly1305,
             HkdfSha512,
-            DhP521HkdfSha512
+            DhP521HkdfSha512,
+            true
         );
         test_setup_soundness!(
             test_setup_soundness_p521,
             ChaCha20Poly1305,
             HkdfSha512,
-            DhP521HkdfSha512
+            DhP521HkdfSha512,
+            true
+        );
+    }
+
+    #[cfg(all(feature = "mlkem", feature = "chacha"))]
+    mod mlkem_tests {
+        use super::*;
+        use crate::{
+            kdf::{KdfShake128, KdfShake256},
+            kem::*,
+        };
+
+        test_setup_correctness!(
+            test_setup_correctness_mlkem768,
+            ChaCha20Poly1305,
+            KdfShake128,
+            MlKem768,
+            false
+        );
+        test_setup_soundness!(
+            test_setup_soundness_mlkem768,
+            ChaCha20Poly1305,
+            KdfShake128,
+            MlKem768,
+            false
+        );
+
+        test_setup_correctness!(
+            test_setup_correctness_mlkem1024,
+            ChaCha20Poly1305,
+            KdfShake256,
+            MlKem1024,
+            false
+        );
+        test_setup_soundness!(
+            test_setup_soundness_mlkem1024,
+            ChaCha20Poly1305,
+            KdfShake256,
+            MlKem1024,
+            false
+        );
+    }
+
+    #[cfg(all(feature = "mlkem", feature = "nistp", feature = "chacha"))]
+    mod mlkem_nistp_tests {
+        use super::*;
+        use crate::{
+            kdf::{KdfShake128, KdfShake256},
+            kem::*,
+        };
+
+        test_setup_correctness!(
+            test_setup_correctness_mlkem768p256,
+            ChaCha20Poly1305,
+            KdfShake128,
+            MlKem768P256,
+            false
+        );
+        test_setup_soundness!(
+            test_setup_soundness_mlkem768p256,
+            ChaCha20Poly1305,
+            KdfShake128,
+            MlKem768P256,
+            false
+        );
+
+        test_setup_correctness!(
+            test_setup_correctness_mlkem1024p384,
+            ChaCha20Poly1305,
+            KdfShake256,
+            MlKem1024P384,
+            false
+        );
+        test_setup_soundness!(
+            test_setup_soundness_mlkem1024p384,
+            ChaCha20Poly1305,
+            KdfShake256,
+            MlKem1024P384,
+            false
+        );
+    }
+
+    #[cfg(all(feature = "mlkem", feature = "x25519", feature = "chacha"))]
+    mod xwing_tests {
+        use super::*;
+        use crate::{kdf::KdfTurboShake128, kem::*};
+
+        test_setup_correctness!(
+            test_setup_correctness_xwing,
+            ChaCha20Poly1305,
+            KdfTurboShake128,
+            XWing,
+            false
+        );
+        test_setup_soundness!(
+            test_setup_soundness_xwing,
+            ChaCha20Poly1305,
+            KdfTurboShake128,
+            XWing,
+            false
         );
     }
 }

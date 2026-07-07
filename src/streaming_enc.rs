@@ -119,17 +119,15 @@ mod test {
     use super::{
         create_receiver_context, create_sender_context, AeadKey, AeadNonce, ExporterSecret,
     };
-    #[cfg(feature = "hkdfsha2")]
-    use crate::kdf::HkdfSha256;
     use rand_core::Rng;
 
     /// Tests that `open()` can decrypt things properly encrypted with `seal()`
     macro_rules! test_create_ctx_correctness {
-        ($test_name:ident, $aead_ty:ty, $kem_ty:ty) => {
+        ($test_name:ident, $aead_ty:ty, $kdf_ty:ty, $kem_ty:ty) => {
             #[test]
             fn $test_name() {
                 type A = $aead_ty;
-                type Kdf = HkdfSha256;
+                type Kdf = $kdf_ty;
                 type Kem = $kem_ty;
 
                 let mut rng = rand::rng();
@@ -196,15 +194,18 @@ mod test {
     mod x25519_aes_tests {
         use super::*;
         use crate::aead::{AesGcm128, AesGcm256};
+        use crate::kdf::HkdfSha256;
 
         test_create_ctx_correctness!(
             test_create_ctx_correctness_aes128_x25519,
             AesGcm128,
+            HkdfSha256,
             crate::kem::X25519HkdfSha256
         );
         test_create_ctx_correctness!(
             test_create_ctx_correctness_aes256_x25519,
             AesGcm256,
+            HkdfSha256,
             crate::kem::X25519HkdfSha256
         );
     }
@@ -213,10 +214,12 @@ mod test {
     mod x25519_chacha_tests {
         use super::*;
         use crate::aead::ChaCha20Poly1305;
+        use crate::kdf::HkdfSha256;
 
         test_create_ctx_correctness!(
             test_create_ctx_correctness_chacha_x25519,
             ChaCha20Poly1305,
+            HkdfSha256,
             crate::kem::X25519HkdfSha256
         );
     }
@@ -225,27 +228,45 @@ mod test {
     mod nistp_aes_tests {
         use super::*;
         use crate::aead::{AesGcm128, AesGcm256};
+        use crate::kdf::HkdfSha256;
 
         test_create_ctx_correctness!(
             test_create_ctx_correctness_aes128_p256,
             AesGcm128,
+            HkdfSha256,
             crate::kem::DhP256HkdfSha256
         );
         test_create_ctx_correctness!(
             test_create_ctx_correctness_aes256_p256,
             AesGcm256,
+            HkdfSha256,
             crate::kem::DhP256HkdfSha256
         );
 
         test_create_ctx_correctness!(
             test_create_ctx_correctness_aes128_p384,
             AesGcm128,
+            HkdfSha256,
             crate::kem::DhP384HkdfSha384
         );
         test_create_ctx_correctness!(
             test_create_ctx_correctness_aes256_p384,
             AesGcm256,
+            HkdfSha256,
             crate::kem::DhP384HkdfSha384
+        );
+
+        test_create_ctx_correctness!(
+            test_create_ctx_correctness_aes128_p521,
+            AesGcm128,
+            HkdfSha256,
+            crate::kem::DhP521HkdfSha512
+        );
+        test_create_ctx_correctness!(
+            test_create_ctx_correctness_aes256_p521,
+            AesGcm256,
+            HkdfSha256,
+            crate::kem::DhP521HkdfSha512
         );
     }
 
@@ -253,17 +274,84 @@ mod test {
     mod nistp_chacha_tests {
         use super::*;
         use crate::aead::ChaCha20Poly1305;
+        use crate::kdf::{HkdfSha256, HkdfSha384, HkdfSha512};
 
         test_create_ctx_correctness!(
             test_create_ctx_correctness_chacha_p256,
             ChaCha20Poly1305,
+            HkdfSha256,
             crate::kem::DhP256HkdfSha256
         );
-
         test_create_ctx_correctness!(
             test_create_ctx_correctness_chacha_p384,
             ChaCha20Poly1305,
+            HkdfSha384,
             crate::kem::DhP384HkdfSha384
+        );
+        test_create_ctx_correctness!(
+            test_create_ctx_correctness_chacha_p521,
+            ChaCha20Poly1305,
+            HkdfSha512,
+            crate::kem::DhP521HkdfSha512
+        );
+    }
+
+    #[cfg(all(feature = "mlkem", feature = "chacha"))]
+    mod mlkem_tests {
+        use super::*;
+        use crate::aead::ChaCha20Poly1305;
+        use crate::kdf::{KdfShake128, KdfShake256};
+
+        test_create_ctx_correctness!(
+            test_create_ctx_correctness_chacha_mlkem768,
+            ChaCha20Poly1305,
+            KdfShake128,
+            crate::kem::MlKem768
+        );
+        test_create_ctx_correctness!(
+            test_create_ctx_correctness_chacha_mlkem1024,
+            ChaCha20Poly1305,
+            KdfShake256,
+            crate::kem::MlKem1024
+        );
+    }
+
+    #[cfg(all(
+        feature = "mlkem",
+        feature = "nistp",
+        feature = "alloc",
+        feature = "chacha"
+    ))]
+    mod mlkem_nistp_tests {
+        use super::*;
+        use crate::aead::ChaCha20Poly1305;
+        use crate::kdf::{KdfShake128, KdfShake256};
+
+        test_create_ctx_correctness!(
+            test_create_ctx_correctness_chacha_mlkem768p256,
+            ChaCha20Poly1305,
+            KdfShake128,
+            crate::kem::MlKem768P256
+        );
+        test_create_ctx_correctness!(
+            test_create_ctx_correctness_chacha_mlkem1024p384,
+            ChaCha20Poly1305,
+            KdfShake256,
+            crate::kem::MlKem1024P384
+        );
+    }
+
+    #[cfg(all(feature = "mlkem", feature = "x25519", feature = "chacha"))]
+    mod xwing_tests {
+        use super::*;
+        use crate::aead::ChaCha20Poly1305;
+        use crate::kdf::KdfTurboShake128;
+
+        test_create_ctx_correctness!(
+            test_create_ctx_correctness_chacha_xwing,
+            ChaCha20Poly1305,
+            KdfTurboShake128,
+            crate::kem::XWing
         );
     }
 }
