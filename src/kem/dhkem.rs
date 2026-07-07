@@ -11,6 +11,7 @@ macro_rules! impl_dhkem {
         $kdf:ty,
         $kem_id:literal,
     ) => {
+        // We do feature flags as a param because then it shows up in our docs
         #[cfg(feature = $feature_flag)]
         pub use $mod_name::$kem_name;
 
