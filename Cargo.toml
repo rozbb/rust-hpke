@@ -76,7 +76,7 @@ required-features = ["getrandom", "x25519", "chacha"]
 
 [[example]]
 name = "agility"
-required-features = ["getrandom", "nistp", "x25519", "aes", "chacha"]
+required-features = ["getrandom", "nistp", "x25519", "aes", "chacha", "mlkem"]
 
 # Tell docs.rs to build docs with `--all-features` and `--cfg docsrs` (for nightly docs features)
 [package.metadata.docs.rs]

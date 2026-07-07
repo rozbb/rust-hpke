@@ -2,8 +2,8 @@
 //! Here's the gist of this file: Instead of doing things at the type level, you can use zero-sized
 //! types and runtime validity checks to do all of HPKE. This file is a rough idea of how one would
 //! go about implementing that. There isn't too much repetition. The main part where you have to
-//! get clever is in `agile_setup_*`, where you have to have a match statement with up to 3·3·5 =
-//! 45 branches for all the different AEAD-KEM-KDF combinations. Practically speaking, though,
+//! get clever is in `agile_setup_*`, where you have to have a match statement with up to 3·7·9 =
+//! 189 branches for all the different AEAD-KEM-KDF combinations. Practically speaking, though,
 //! that's not a big number, so writing that out and using a macro for the actual work (e.g.,
 //! `do_setup_sender!`) seems to be the way to go.
 //!
@@ -15,9 +15,13 @@
 use hpke::{
     aead::{Aead, AeadCtxR, AeadCtxS, AeadTag, AesGcm128, AesGcm256, ChaCha20Poly1305},
     inout::InOutBuf,
-    kdf::{HkdfSha256, HkdfSha384, HkdfSha512, Kdf as KdfTrait},
+    kdf::{
+        HkdfSha256, HkdfSha384, HkdfSha512, Kdf as KdfTrait, KdfShake128, KdfShake256,
+        KdfTurboShake128, KdfTurboShake256,
+    },
     kem::{
-        DhP256HkdfSha256, DhP384HkdfSha384, DhP521HkdfSha512, Kem as KemTrait, X25519HkdfSha256,
+        DhP256HkdfSha256, DhP384HkdfSha384, DhP521HkdfSha512, Kem as KemTrait, MlKem1024,
+        MlKem1024P384, MlKem768, MlKem768P256, X25519HkdfSha256, XWing,
     },
     setup_receiver, setup_sender, Deserializable, HpkeError, OpModeR, OpModeS, PskBundle,
     Serializable,
@@ -134,6 +138,10 @@ enum KdfAlg {
     HkdfSha256,
     HkdfSha384,
     HkdfSha512,
+    KdfShake128,
+    KdfShake256,
+    KdfTurboShake128,
+    KdfTurboShake256,
 }
 
 impl KdfAlg {
@@ -142,6 +150,10 @@ impl KdfAlg {
             KdfAlg::HkdfSha256 => "HkdfSha256",
             KdfAlg::HkdfSha384 => "HkdfSha384",
             KdfAlg::HkdfSha512 => "HkdfSha512",
+            KdfAlg::KdfShake128 => "KdfShake128",
+            KdfAlg::KdfShake256 => "KdfShake256",
+            KdfAlg::KdfTurboShake128 => "KdfTurboShake128",
+            KdfAlg::KdfTurboShake256 => "KdfTurboShake256",
         }
     }
 
@@ -150,6 +162,10 @@ impl KdfAlg {
             0x01 => KdfAlg::HkdfSha256,
             0x02 => KdfAlg::HkdfSha384,
             0x03 => KdfAlg::HkdfSha512,
+            0x10 => KdfAlg::KdfShake128,
+            0x11 => KdfAlg::KdfShake256,
+            0x12 => KdfAlg::KdfTurboShake128,
+            0x13 => KdfAlg::KdfTurboShake256,
             _ => return Err(AgileHpkeError::UnknownAlgIdent("KdfAlg", id)),
         };
 
@@ -161,14 +177,10 @@ impl KdfAlg {
             KdfAlg::HkdfSha256 => 0x01,
             KdfAlg::HkdfSha384 => 0x02,
             KdfAlg::HkdfSha512 => 0x03,
-        }
-    }
-
-    fn get_digest_len(&self) -> usize {
-        match self {
-            KdfAlg::HkdfSha256 => 32,
-            KdfAlg::HkdfSha384 => 48,
-            KdfAlg::HkdfSha512 => 64,
+            KdfAlg::KdfShake128 => 0x10,
+            KdfAlg::KdfShake256 => 0x11,
+            KdfAlg::KdfTurboShake128 => 0x12,
+            KdfAlg::KdfTurboShake256 => 0x13,
         }
     }
 }
@@ -180,6 +192,11 @@ enum KemAlg {
     DhP256HkdfSha256,
     DhP384HkdfSha384,
     DhP521HkdfSha512,
+    MlKem768,
+    MlKem1024,
+    MlKem768P256,
+    MlKem1024P384,
+    XWing,
 }
 
 impl KemAlg {
@@ -190,6 +207,11 @@ impl KemAlg {
             KemAlg::DhP521HkdfSha512 => "DhP521HkdfSha512",
             KemAlg::X25519HkdfSha256 => "X25519HkdfSha256",
             KemAlg::X448HkdfSha512 => "X448HkdfSha512",
+            KemAlg::MlKem768 => "MlKem768",
+            KemAlg::MlKem1024 => "MlKem1024",
+            KemAlg::MlKem768P256 => "MlKem768P256",
+            KemAlg::MlKem1024P384 => "MlKem1024P384",
+            KemAlg::XWing => "XWing",
         }
     }
 
@@ -200,6 +222,11 @@ impl KemAlg {
             0x12 => KemAlg::DhP521HkdfSha512,
             0x20 => KemAlg::X25519HkdfSha256,
             0x21 => KemAlg::X448HkdfSha512,
+            0x41 => KemAlg::MlKem768,
+            0x42 => KemAlg::MlKem1024,
+            0x50 => KemAlg::MlKem768P256,
+            0x51 => KemAlg::MlKem1024P384,
+            0x647a => KemAlg::XWing,
             _ => return Err(AgileHpkeError::UnknownAlgIdent("KemAlg", id)),
         };
 
@@ -213,16 +240,28 @@ impl KemAlg {
             KemAlg::DhP521HkdfSha512 => 0x12,
             KemAlg::X25519HkdfSha256 => 0x20,
             KemAlg::X448HkdfSha512 => 0x21,
+            KemAlg::MlKem768 => 0x41,
+            KemAlg::MlKem1024 => 0x42,
+            KemAlg::MlKem768P256 => 0x50,
+            KemAlg::MlKem1024P384 => 0x51,
+            KemAlg::XWing => 0x647a,
         }
     }
 
-    fn kdf_alg(&self) -> KdfAlg {
+    /// Returns whether this KEM supports authenticated encapsulation (Auth/AuthPsk modes).
+    /// Post-quantum KEMs do not support auth modes.
+    fn supports_auth(&self) -> bool {
         match self {
-            KemAlg::X25519HkdfSha256 => KdfAlg::HkdfSha256,
-            KemAlg::X448HkdfSha512 => KdfAlg::HkdfSha512,
-            KemAlg::DhP256HkdfSha256 => KdfAlg::HkdfSha256,
-            KemAlg::DhP384HkdfSha384 => KdfAlg::HkdfSha384,
-            KemAlg::DhP521HkdfSha512 => KdfAlg::HkdfSha512,
+            KemAlg::X25519HkdfSha256
+            | KemAlg::X448HkdfSha512
+            | KemAlg::DhP256HkdfSha256
+            | KemAlg::DhP384HkdfSha384
+            | KemAlg::DhP521HkdfSha512 => true,
+            KemAlg::MlKem768
+            | KemAlg::MlKem1024
+            | KemAlg::MlKem768P256
+            | KemAlg::MlKem1024P384
+            | KemAlg::XWing => false,
         }
     }
 }
@@ -309,6 +348,11 @@ fn agile_gen_keypair(kem_alg: KemAlg) -> AgileKeypair {
         KemAlg::DhP256HkdfSha256 => do_gen_keypair!(DhP256HkdfSha256, kem_alg),
         KemAlg::DhP384HkdfSha384 => do_gen_keypair!(DhP384HkdfSha384, kem_alg),
         KemAlg::DhP521HkdfSha512 => do_gen_keypair!(DhP521HkdfSha512, kem_alg),
+        KemAlg::MlKem768 => do_gen_keypair!(MlKem768, kem_alg),
+        KemAlg::MlKem1024 => do_gen_keypair!(MlKem1024, kem_alg),
+        KemAlg::MlKem768P256 => do_gen_keypair!(MlKem768P256, kem_alg),
+        KemAlg::MlKem1024P384 => do_gen_keypair!(MlKem1024P384, kem_alg),
+        KemAlg::XWing => do_gen_keypair!(XWing, kem_alg),
         _ => unimplemented!(),
     }
 }
@@ -568,8 +612,10 @@ fn agile_setup_sender(
     hpke_dispatch!(
         res, to_match,
         (ChaCha20Poly1305, AesGcm128, AesGcm256),
-        (HkdfSha256, HkdfSha384, HkdfSha512),
-        (X25519HkdfSha256, DhP256HkdfSha256, DhP384HkdfSha384, DhP521HkdfSha512),
+        (HkdfSha256, HkdfSha384, HkdfSha512,
+         KdfShake128, KdfShake256, KdfTurboShake128, KdfTurboShake256),
+        (X25519HkdfSha256, DhP256HkdfSha256, DhP384HkdfSha384, DhP521HkdfSha512,
+         MlKem768, MlKem1024, MlKem768P256, MlKem1024P384, XWing),
         do_setup_sender,
             mode,
             pk_recip,
@@ -645,8 +691,10 @@ fn agile_setup_receiver(
     hpke_dispatch!(
         res, to_match,
         (ChaCha20Poly1305, AesGcm128, AesGcm256),
-        (HkdfSha256, HkdfSha384, HkdfSha512),
-        (X25519HkdfSha256, DhP256HkdfSha256, DhP384HkdfSha384, DhP521HkdfSha512),
+        (HkdfSha256, HkdfSha384, HkdfSha512,
+         KdfShake128, KdfShake256, KdfTurboShake128, KdfTurboShake256),
+        (X25519HkdfSha256, DhP256HkdfSha256, DhP384HkdfSha384, DhP521HkdfSha512,
+         MlKem768, MlKem1024, MlKem768P256, MlKem1024P384, XWing),
         do_setup_receiver,
             mode,
             recip_keypair,
@@ -672,8 +720,21 @@ fn main() {
         KemAlg::DhP256HkdfSha256,
         KemAlg::DhP384HkdfSha384,
         KemAlg::DhP521HkdfSha512,
+        KemAlg::MlKem768,
+        KemAlg::MlKem1024,
+        KemAlg::MlKem768P256,
+        KemAlg::MlKem1024P384,
+        KemAlg::XWing,
     ];
-    let supported_kdf_algs = &[KdfAlg::HkdfSha256, KdfAlg::HkdfSha384, KdfAlg::HkdfSha512];
+    let supported_kdf_algs = &[
+        KdfAlg::HkdfSha256,
+        KdfAlg::HkdfSha384,
+        KdfAlg::HkdfSha512,
+        KdfAlg::KdfShake128,
+        KdfAlg::KdfShake256,
+        KdfAlg::KdfTurboShake128,
+        KdfAlg::KdfTurboShake256,
+    ];
 
     // For every combination of supported algorithms, test an encryption-decryption round trip
     for &aead_alg in supported_aead_algs {
@@ -683,24 +744,41 @@ fn main() {
 
                 // Make a random sender keypair and PSK bundle
                 let sender_keypair = agile_gen_keypair(kem_alg);
-                let mut psk_bytes = vec![0u8; kdf_alg.get_digest_len()];
+                let mut psk_bytes = [0u8; 32];
                 let psk_id = b"preshared key attempt #5, take 2. action";
                 let psk_bundle = {
                     rand::fill(&mut psk_bytes);
                     AgilePskBundle(PskBundle::new(&psk_bytes, psk_id).unwrap())
                 };
 
-                // Make two agreeing OpModes (AuthPsk is the most complicated, so we're just using
-                // that).
-                let op_mode_s_ty = AgileOpModeSTy::AuthPsk(sender_keypair.clone(), psk_bundle);
-                let op_mode_s = AgileOpModeS {
-                    kem_alg,
-                    op_mode_ty: op_mode_s_ty,
-                };
-                let op_mode_r_ty = AgileOpModeRTy::AuthPsk(sender_keypair.1, psk_bundle);
-                let op_mode_r = AgileOpModeR {
-                    kem_alg,
-                    op_mode_ty: op_mode_r_ty,
+                // Build OpModes. PQ KEMs don't support Auth/AuthPsk, so use Psk for them
+                // and AuthPsk for classical KEMs.
+                let (op_mode_s, op_mode_r) = if kem_alg.supports_auth() {
+                    let op_mode_s_ty = AgileOpModeSTy::AuthPsk(sender_keypair.clone(), psk_bundle);
+                    let op_mode_r_ty = AgileOpModeRTy::AuthPsk(sender_keypair.1, psk_bundle);
+                    (
+                        AgileOpModeS {
+                            kem_alg,
+                            op_mode_ty: op_mode_s_ty,
+                        },
+                        AgileOpModeR {
+                            kem_alg,
+                            op_mode_ty: op_mode_r_ty,
+                        },
+                    )
+                } else {
+                    let op_mode_s_ty = AgileOpModeSTy::Psk(psk_bundle);
+                    let op_mode_r_ty = AgileOpModeRTy::Psk(psk_bundle);
+                    (
+                        AgileOpModeS {
+                            kem_alg,
+                            op_mode_ty: op_mode_s_ty,
+                        },
+                        AgileOpModeR {
+                            kem_alg,
+                            op_mode_ty: op_mode_r_ty,
+                        },
+                    )
                 };
 
                 // Set up the sender's encryption context
@@ -715,7 +793,7 @@ fn main() {
                 )
                 .unwrap();
 
-                // Set up the receivers's encryption context
+                // Set up the receiver's encryption context
                 let mut aead_ctx2 = agile_setup_receiver(
                     aead_alg,
                     kdf_alg,
