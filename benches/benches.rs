@@ -183,7 +183,7 @@ pub fn benches() {
     let mut c = Criterion::default().configure_from_args();
 
     // NIST ciphersuite at the 128-bit security level is AES-GCM-128, HKDF-SHA256, and ECDH-P256
-    #[cfg(all(feature = "p256", feature = "aes"))]
+    #[cfg(all(feature = "nistp", feature = "aes"))]
     bench_ciphersuite::<hpke::aead::AesGcm128, hpke::kdf::HkdfSha256, hpke::kem::DhP256HkdfSha256>(
         "Classical-NIST[seclevel=128]",
         &mut c,
@@ -199,7 +199,7 @@ pub fn benches() {
     >("Classical-NonNIST[seclevel=128]", &mut c, true);
 
     // Pure ML-KEM-768 at the 128-bit security level
-    #[cfg(all(feature = "mlkem768", feature = "aes"))]
+    #[cfg(all(feature = "mlkem", feature = "aes"))]
     bench_ciphersuite::<hpke::aead::AesGcm128, hpke::kdf::KdfShake128, hpke::kem::MlKem768>(
         "MLKEM768-NIST[seclevel=128]",
         &mut c,
@@ -207,7 +207,7 @@ pub fn benches() {
     );
 
     // Pure ML-KEM-1024 at the 256-bit security level
-    #[cfg(all(feature = "mlkem1024", feature = "aes"))]
+    #[cfg(all(feature = "mlkem", feature = "aes"))]
     bench_ciphersuite::<hpke::aead::AesGcm256, hpke::kdf::KdfShake256, hpke::kem::MlKem1024>(
         "MLKEM1024-NIST[seclevel=256]",
         &mut c,
@@ -215,7 +215,7 @@ pub fn benches() {
     );
 
     // Hybrid ML-KEM-768 + NIST-P256 at the 128-bit security level
-    #[cfg(all(feature = "mlkem768p256", feature = "aes"))]
+    #[cfg(all(feature = "mlkem", feature = "nistp", feature = "aes"))]
     bench_ciphersuite::<hpke::aead::AesGcm128, hpke::kdf::KdfShake128, hpke::kem::MlKem768P256>(
         "MLKEM768P256-NIST[seclevel=128]",
         &mut c,
@@ -223,7 +223,7 @@ pub fn benches() {
     );
 
     // Hybrid ML-KEM-1024 + NIST-P384 at the 256-bit security level
-    #[cfg(all(feature = "mlkem1024p384", feature = "aes"))]
+    #[cfg(all(feature = "mlkem", feature = "nistp", feature = "aes"))]
     bench_ciphersuite::<hpke::aead::AesGcm256, hpke::kdf::KdfShake256, hpke::kem::MlKem1024P384>(
         "MLKEM1024P384-NIST[seclevel=256]",
         &mut c,
@@ -231,7 +231,7 @@ pub fn benches() {
     );
 
     // X-Wing hybrid PQ KEM with ChaCha20Poly1305 and SHAKE256
-    #[cfg(all(feature = "xwing", feature = "chacha"))]
+    #[cfg(all(feature = "mlkem", feature = "chacha"))]
     bench_ciphersuite::<hpke::aead::ChaCha20Poly1305, hpke::kdf::KdfTurboShake128, hpke::kem::XWing>(
         "XWing-NonNIST[seclevel=128]",
         &mut c,

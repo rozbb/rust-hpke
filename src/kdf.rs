@@ -8,18 +8,25 @@ use crate::{
     HpkeError,
 };
 
+#[cfg(feature = "hkdf")]
+use hybrid_array::typenum::U48;
 use hybrid_array::{
-    typenum::{U32, U48, U64},
+    typenum::{U32, U64},
     Array, ArraySize,
 };
+#[cfg(feature = "hkdf")]
 use sha2::{Sha256, Sha384, Sha512};
 
+#[cfg(feature = "shake")]
 pub(crate) mod one_stage_kdf;
+#[cfg(feature = "hkdf")]
 mod two_stage_kdf;
 
+#[cfg(any(feature = "hkdf", feature = "shake"))]
 pub(crate) const VERSION_LABEL: &[u8] = b"HPKE-v1";
 
 // This is the maximum value of Nh. It is achieved by HKDF-SHA512 in RFC 9180 §7.2.
+#[cfg(feature = "hkdf")]
 pub(crate) const MAX_DIGEST_SIZE: usize = 64;
 
 // Pretty much all the KDF functionality is covered by the hkdf crate
@@ -52,14 +59,14 @@ pub trait Kdf: Sized {
 
     /// Extracts randomness from `ikm`, binds it to the given suite ID and info string, and expands
     /// the result to fill the output buffer.  If `out.len()` is more than 255x the digest size (in
-    /// bytes) of the underlying hash function, returns an `Err(hkdf::InvalidLength)`.
+    /// bytes) of the underlying hash function, returns an `Err(HpkeError::KdfOutputTooLong)`.
     #[doc(hidden)]
     fn extract_and_expand(
         ikm: &[u8],
         suite_id: &[u8],
         info: &[u8],
         out: &mut [u8],
-    ) -> Result<(), hkdf::InvalidLength>;
+    ) -> Result<(), HpkeError>;
 
     /// Derives bytes for a use as a P256/P384/P521 ephemeral secret. Counter is because it may
     /// require multiple attempts to find a valid scalar. The keying material SHOULD have as many
@@ -88,7 +95,9 @@ pub trait Kdf: Sized {
     ) -> Result<(), HpkeError>;
 }
 
+#[cfg(feature = "shake")]
 use sha3::{Shake128, Shake256};
+#[cfg(feature = "shake")]
 use turboshake::{TurboShake128, TurboShake256};
 // We use Kdf as a type parameter, so this is to avoid ambiguity.
 use Kdf as KdfTrait;
@@ -102,9 +111,11 @@ pub(crate) type DigestArray<Kdf> = Array<u8, <Kdf as KdfTrait>::Nh>;
 // Implement KdfTrait for all our KDFs. Call the one- or two-stage implementation for each of them
 //
 
+#[cfg(feature = "hkdf")]
 /// The implementation of HKDF-SHA256
 pub struct HkdfSha256 {}
 
+#[cfg(feature = "hkdf")]
 impl KdfTrait for HkdfSha256 {
     // RFC 9180 §7.2: HKDF-SHA256
     const KDF_ID: u16 = 0x0001;
@@ -128,8 +139,9 @@ impl KdfTrait for HkdfSha256 {
         suite_id: &[u8],
         info: &[u8],
         out: &mut [u8],
-    ) -> Result<(), hkdf::InvalidLength> {
+    ) -> Result<(), HpkeError> {
         two_stage_kdf::extract_and_expand::<Sha256>(ikm, suite_id, info, out)
+            .map_err(|_| HpkeError::KdfOutputTooLong)
     }
 
     fn derive_x25519_sk_eph_bytes(suite_id: &KemSuiteId, ikm: &[u8]) -> [u8; 32] {
@@ -154,9 +166,11 @@ impl KdfTrait for HkdfSha256 {
     }
 }
 
+#[cfg(feature = "hkdf")]
 /// The implementation of HKDF-SHA384
 pub struct HkdfSha384 {}
 
+#[cfg(feature = "hkdf")]
 impl KdfTrait for HkdfSha384 {
     // RFC 9180 §7.2: HKDF-SHA384
     const KDF_ID: u16 = 0x0002;
@@ -180,8 +194,9 @@ impl KdfTrait for HkdfSha384 {
         suite_id: &[u8],
         info: &[u8],
         out: &mut [u8],
-    ) -> Result<(), hkdf::InvalidLength> {
+    ) -> Result<(), HpkeError> {
         two_stage_kdf::extract_and_expand::<Sha384>(ikm, suite_id, info, out)
+            .map_err(|_| HpkeError::KdfOutputTooLong)
     }
 
     fn derive_x25519_sk_eph_bytes(suite_id: &KemSuiteId, ikm: &[u8]) -> [u8; 32] {
@@ -206,9 +221,11 @@ impl KdfTrait for HkdfSha384 {
     }
 }
 
+#[cfg(feature = "hkdf")]
 /// The implementation of HKDF-SHA512
 pub struct HkdfSha512 {}
 
+#[cfg(feature = "hkdf")]
 impl KdfTrait for HkdfSha512 {
     // RFC 9180 §7.2: HKDF-SHA512
     const KDF_ID: u16 = 0x0003;
@@ -232,8 +249,9 @@ impl KdfTrait for HkdfSha512 {
         suite_id: &[u8],
         info: &[u8],
         out: &mut [u8],
-    ) -> Result<(), hkdf::InvalidLength> {
+    ) -> Result<(), HpkeError> {
         two_stage_kdf::extract_and_expand::<Sha512>(ikm, suite_id, info, out)
+            .map_err(|_| HpkeError::KdfOutputTooLong)
     }
 
     fn derive_x25519_sk_eph_bytes(suite_id: &KemSuiteId, ikm: &[u8]) -> [u8; 32] {
@@ -258,9 +276,11 @@ impl KdfTrait for HkdfSha512 {
     }
 }
 
+#[cfg(feature = "shake")]
 /// The implementation of SHAKE128 KDF
 pub struct KdfShake128 {}
 
+#[cfg(feature = "shake")]
 impl KdfTrait for KdfShake128 {
     // From <https://www.ietf.org/archive/id/draft-ietf-hpke-pq-04.html#table-1>
     const KDF_ID: u16 = 0x0010;
@@ -284,7 +304,7 @@ impl KdfTrait for KdfShake128 {
         suite_id: &[u8],
         info: &[u8],
         out: &mut [u8],
-    ) -> Result<(), hkdf::InvalidLength> {
+    ) -> Result<(), HpkeError> {
         one_stage_kdf::extract_and_expand::<Shake128>(ikm, suite_id, info, out);
         Ok(())
     }
@@ -311,9 +331,11 @@ impl KdfTrait for KdfShake128 {
     }
 }
 
+#[cfg(feature = "shake")]
 /// The implementation of SHAKE256 KDF
 pub struct KdfShake256 {}
 
+#[cfg(feature = "shake")]
 impl KdfTrait for KdfShake256 {
     // From <https://www.ietf.org/archive/id/draft-ietf-hpke-pq-04.html#table-1>
     const KDF_ID: u16 = 0x0011;
@@ -337,7 +359,7 @@ impl KdfTrait for KdfShake256 {
         suite_id: &[u8],
         info: &[u8],
         out: &mut [u8],
-    ) -> Result<(), hkdf::InvalidLength> {
+    ) -> Result<(), HpkeError> {
         one_stage_kdf::extract_and_expand::<Shake256>(ikm, suite_id, info, out);
         Ok(())
     }
@@ -364,9 +386,11 @@ impl KdfTrait for KdfShake256 {
     }
 }
 
+#[cfg(feature = "shake")]
 /// The implementation of TurboSHAKE128 KDF
 pub struct KdfTurboShake128 {}
 
+#[cfg(feature = "shake")]
 impl KdfTrait for KdfTurboShake128 {
     // From <https://www.ietf.org/archive/id/draft-ietf-hpke-pq-04.html#table-1>
     const KDF_ID: u16 = 0x0012;
@@ -390,7 +414,7 @@ impl KdfTrait for KdfTurboShake128 {
         suite_id: &[u8],
         info: &[u8],
         out: &mut [u8],
-    ) -> Result<(), hkdf::InvalidLength> {
+    ) -> Result<(), HpkeError> {
         one_stage_kdf::extract_and_expand::<TurboShake128>(ikm, suite_id, info, out);
         Ok(())
     }
@@ -419,9 +443,11 @@ impl KdfTrait for KdfTurboShake128 {
     }
 }
 
+#[cfg(feature = "shake")]
 /// The implementation of TurboSHAKE256 KDF
 pub struct KdfTurboShake256 {}
 
+#[cfg(feature = "shake")]
 impl KdfTrait for KdfTurboShake256 {
     // From <https://www.ietf.org/archive/id/draft-ietf-hpke-pq-04.html#table-1>
     const KDF_ID: u16 = 0x0013;
@@ -445,7 +471,7 @@ impl KdfTrait for KdfTurboShake256 {
         suite_id: &[u8],
         info: &[u8],
         out: &mut [u8],
-    ) -> Result<(), hkdf::InvalidLength> {
+    ) -> Result<(), HpkeError> {
         one_stage_kdf::extract_and_expand::<TurboShake256>(ikm, suite_id, info, out);
         Ok(())
     }

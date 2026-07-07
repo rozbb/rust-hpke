@@ -119,6 +119,7 @@ mod test {
     use super::{
         create_receiver_context, create_sender_context, AeadKey, AeadNonce, ExporterSecret,
     };
+    #[cfg(feature = "hkdf")]
     use crate::kdf::HkdfSha256;
     use rand_core::Rng;
 
@@ -220,8 +221,8 @@ mod test {
         );
     }
 
-    #[cfg(all(feature = "p256", feature = "alloc", feature = "aes"))]
-    mod p256_aes_tests {
+    #[cfg(all(feature = "nistp", feature = "alloc", feature = "aes"))]
+    mod nistp_aes_tests {
         use super::*;
         use crate::aead::{AesGcm128, AesGcm256};
 
@@ -235,24 +236,7 @@ mod test {
             AesGcm256,
             crate::kem::DhP256HkdfSha256
         );
-    }
 
-    #[cfg(all(feature = "p256", feature = "alloc", feature = "chacha"))]
-    mod p256_chacha_tests {
-        use super::*;
-        use crate::aead::ChaCha20Poly1305;
-
-        test_create_ctx_correctness!(
-            test_create_ctx_correctness_chacha_p256,
-            ChaCha20Poly1305,
-            crate::kem::DhP256HkdfSha256
-        );
-    }
-
-    #[cfg(all(feature = "p384", feature = "alloc", feature = "aes"))]
-    mod p384_aes_tests {
-        use super::*;
-        use crate::aead::{AesGcm128, AesGcm256};
         test_create_ctx_correctness!(
             test_create_ctx_correctness_aes128_p384,
             AesGcm128,
@@ -265,10 +249,16 @@ mod test {
         );
     }
 
-    #[cfg(all(feature = "p384", feature = "alloc", feature = "chacha"))]
-    mod p384_chacha_tests {
+    #[cfg(all(feature = "nistp", feature = "alloc", feature = "chacha"))]
+    mod nistp_chacha_tests {
         use super::*;
         use crate::aead::ChaCha20Poly1305;
+
+        test_create_ctx_correctness!(
+            test_create_ctx_correctness_chacha_p256,
+            ChaCha20Poly1305,
+            crate::kem::DhP256HkdfSha256
+        );
 
         test_create_ctx_correctness!(
             test_create_ctx_correctness_chacha_p384,

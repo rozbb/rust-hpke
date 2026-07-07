@@ -13,35 +13,25 @@ use rand_core::UnwrapErr;
 use subtle::ConstantTimeEq;
 use zeroize::Zeroize;
 
-#[cfg(any(
-    feature = "x25519",
-    feature = "p256",
-    feature = "p384",
-    feature = "p521"
-))]
+#[cfg(any(feature = "x25519", feature = "nistp"))]
 mod dhkem;
-#[cfg(any(
-    feature = "x25519",
-    feature = "p256",
-    feature = "p384",
-    feature = "p521"
-))]
+#[cfg(any(feature = "x25519", feature = "nistp"))]
 pub use dhkem::*;
-#[cfg(any(feature = "mlkem768p256", feature = "mlkem1024p384"))]
+#[cfg(all(feature = "mlkem", feature = "nistp"))]
 mod mlkem_nistp;
-#[cfg(feature = "mlkem1024p384")]
+#[cfg(all(feature = "mlkem", feature = "nistp"))]
 pub use mlkem_nistp::mlkem1024p384::MlKem1024P384;
-#[cfg(feature = "mlkem768p256")]
+#[cfg(all(feature = "mlkem", feature = "nistp"))]
 pub use mlkem_nistp::mlkem768p256::MlKem768P256;
-#[cfg(any(feature = "mlkem768", feature = "mlkem1024"))]
+#[cfg(feature = "mlkem")]
 pub(crate) mod mlkem;
-#[cfg(feature = "mlkem1024")]
+#[cfg(feature = "mlkem")]
 pub use mlkem::mlkem1024::MlKem1024;
-#[cfg(feature = "mlkem768")]
+#[cfg(feature = "mlkem")]
 pub use mlkem::mlkem768::MlKem768;
-#[cfg(feature = "xwing")]
+#[cfg(feature = "mlkem")]
 pub(crate) mod xwing;
-#[cfg(feature = "xwing")]
+#[cfg(all(feature = "mlkem", feature = "x25519"))]
 pub use xwing::XWing;
 
 /// Represents authenticated encryption functionality
@@ -193,7 +183,7 @@ mod tests {
     use crate::{kem::Kem as KemTrait, Deserializable, Serializable};
 
     macro_rules! test_encap_correctness {
-        ($test_name:ident, $kem_ty:ty) => {
+        ($test_name:ident, $kem_ty:ty, $use_auth:literal) => {
             /// Tests that encap and decap produce the same shared secret when composed
             #[test]
             fn $test_name() {
@@ -216,24 +206,25 @@ mod tests {
                 //
                 // Now do it with the auth, i.e., using the sender's identity keys
                 //
+                if $use_auth {
+                    // Make a sender identity keypair
+                    let (sk_sender_id, pk_sender_id) = Kem::gen_keypair_with_rng(&mut csprng);
 
-                // Make a sender identity keypair
-                let (sk_sender_id, pk_sender_id) = Kem::gen_keypair_with_rng(&mut csprng);
+                    // Encapsulate a random shared secret
+                    let (auth_shared_secret, encapped_key) = Kem::encap_with_rng(
+                        &pk_recip,
+                        Some((&sk_sender_id, &pk_sender_id.clone())),
+                        &mut csprng,
+                    )
+                    .unwrap();
 
-                // Encapsulate a random shared secret
-                let (auth_shared_secret, encapped_key) = Kem::encap_with_rng(
-                    &pk_recip,
-                    Some((&sk_sender_id, &pk_sender_id.clone())),
-                    &mut csprng,
-                )
-                .unwrap();
+                    // Decap it
+                    let decapped_auth_shared_secret =
+                        Kem::decap(&sk_recip, Some(&pk_sender_id), &encapped_key).unwrap();
 
-                // Decap it
-                let decapped_auth_shared_secret =
-                    Kem::decap(&sk_recip, Some(&pk_sender_id), &encapped_key).unwrap();
-
-                // Ensure that the encapsulated secret is what decap() derives
-                assert_eq!(auth_shared_secret.0, decapped_auth_shared_secret.0);
+                    // Ensure that the encapsulated secret is what decap() derives
+                    assert_eq!(auth_shared_secret.0, decapped_auth_shared_secret.0);
+                }
             }
         };
     }
@@ -260,8 +251,10 @@ mod tests {
                     )
                     .unwrap();
 
+                // Now serialize again
                 assert_eq!(
-                    new_encapped_key.0, encapped_key.0,
+                    new_encapped_key.to_bytes(),
+                    encapped_key_bytes,
                     "encapped key doesn't serialize correctly"
                 );
             }
@@ -271,32 +264,57 @@ mod tests {
     #[cfg(feature = "x25519")]
     mod x25519_tests {
         use super::*;
+        use crate::kem::*;
 
-        test_encap_correctness!(test_encap_correctness_x25519, crate::kem::X25519HkdfSha256);
-        test_encapped_serialize!(test_encapped_serialize_x25519, crate::kem::X25519HkdfSha256);
+        test_encap_correctness!(test_encap_correctness_x25519, X25519HkdfSha256, true);
+        test_encapped_serialize!(test_encapped_serialize_x25519, X25519HkdfSha256);
     }
 
-    #[cfg(feature = "p256")]
-    mod p256_tests {
+    #[cfg(feature = "nistp")]
+    mod nistp_test {
         use super::*;
+        use crate::kem::*;
 
-        test_encap_correctness!(test_encap_correctness_p256, crate::kem::DhP256HkdfSha256);
-        test_encapped_serialize!(test_encapped_serialize_p256, crate::kem::DhP256HkdfSha256);
+        test_encap_correctness!(test_encap_correctness_p256, DhP256HkdfSha256, true);
+        test_encapped_serialize!(test_encapped_serialize_p256, DhP256HkdfSha256);
+
+        test_encap_correctness!(test_encap_correctness_p384, DhP384HkdfSha384, true);
+        test_encapped_serialize!(test_encapped_serialize_p384, DhP384HkdfSha384);
+
+        test_encap_correctness!(test_encap_correctness_p521, DhP521HkdfSha512, true);
+        test_encapped_serialize!(test_encapped_serialize_p521, DhP521HkdfSha512);
     }
 
-    #[cfg(feature = "p384")]
-    mod p384_tests {
+    #[cfg(feature = "mlkem")]
+    mod mlkem_test {
         use super::*;
+        use crate::kem::*;
 
-        test_encap_correctness!(test_encap_correctness_p384, crate::kem::DhP384HkdfSha384);
-        test_encapped_serialize!(test_encapped_serialize_p384, crate::kem::DhP384HkdfSha384);
+        test_encap_correctness!(test_encap_correctness_mlkem768, MlKem768, false);
+        test_encapped_serialize!(test_encapped_serialize_mlkem768, MlKem768);
+
+        test_encap_correctness!(test_encap_correctness_mlkem1024, MlKem1024, false);
+        test_encapped_serialize!(test_encapped_serialize_mlkem1024, MlKem1024);
     }
 
-    #[cfg(feature = "p521")]
-    mod p521_tests {
+    #[cfg(all(feature = "mlkem", feature = "nistp"))]
+    mod mlkem_nistp_test {
         use super::*;
+        use crate::kem::*;
 
-        test_encap_correctness!(test_encap_correctness_p521, crate::kem::DhP521HkdfSha512);
-        test_encapped_serialize!(test_encapped_serialize_p521, crate::kem::DhP521HkdfSha512);
+        test_encap_correctness!(test_encap_correctness_mlkem768p256, MlKem768P256, false);
+        test_encapped_serialize!(test_encapped_serialize_mlkem768p256, MlKem768P256);
+
+        test_encap_correctness!(test_encap_correctness_mlkem1024p384, MlKem1024P384, false);
+        test_encapped_serialize!(test_encapped_serialize_mlkem1024p384, MlKem1024P384);
+    }
+
+    #[cfg(all(feature = "mlkem", feature = "x25519"))]
+    mod xwing_test {
+        use super::*;
+        use crate::kem::*;
+
+        test_encap_correctness!(test_encap_correctness_xwing, XWing, false);
+        test_encapped_serialize!(test_encapped_serialize_xwing, XWing);
     }
 }

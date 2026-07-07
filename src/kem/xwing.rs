@@ -236,7 +236,7 @@ mod tests {
     #[test]
     fn test_roundtrip() {
         let mut csprng = rand::rng();
-        let (sk, pk) = XWing::gen_keypair();
+        let (sk, pk) = XWing::gen_keypair_with_rng(&mut csprng);
         let (shared_secret, encapped_key) =
             XWing::encap_with_rng(&pk, None, &mut csprng).expect("encapsulation failed");
         let shared_secret_recipient =

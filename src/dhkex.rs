@@ -44,7 +44,7 @@ pub trait DhKeyExchange {
     ) -> (Self::PrivateKey, Self::PublicKey);
 }
 
-#[cfg(any(feature = "p256", feature = "p384", feature = "p521"))]
+#[cfg(feature = "nistp")]
 pub(crate) mod ecdh_nistp;
 
 #[cfg(feature = "x25519")]

@@ -13,34 +13,20 @@ categories = ["cryptography", "no-std"]
 rust-version = "1.85"
 
 [features]
-# "p256" enables the use of ECDH-NIST-P256 as a KEM
-# "p384" enables the use of ECDH-NIST-P384 as a KEM
-# "x25519" enables the use of the X25519 as a KEM
-# "aes" enables AES-GCM AEAD algorithms (AES-128-GCM and AES-256-GCM)
-# "chacha" enables ChaCha20-Poly1305 AEAD algorithm
-# "xwing" enables the use of X-Wing hybrid post-quantum KEM
-# "mlkem768p256" enables the use of MLKEM768-P256 hybrid post-quantum KEM
-# "mlkem1024p384" enables the use of MLKEM1024-P384 hybrid post-quantum KEM
-# "mlkem768" enables the use of the pure ML-KEM-768 post-quantum KEM
-# "mlkem1024" enables the use of the pure ML-KEM-1024 post-quantum KEM
-default = ["getrandom", "alloc", "p256", "x25519", "aes", "chacha"]
-x25519 = ["dep:x25519-dalek"]
-p256 = ["dep:p256"]
-p384 = ["dep:p384"]
-p521 = ["dep:p521"]
+default = ["getrandom", "alloc", "x25519", "mlkem", "chacha"]
+x25519 = ["dep:x25519-dalek", "hkdf"]
+nistp = ["dep:p256", "dep:p384", "dep:p521", "hkdf"]
+mlkem = ["dep:ml-kem", "dep:x-wing", "shake"]
 aes = ["dep:aes-gcm"]
 chacha = ["dep:chacha20poly1305"]
-xwing = ["dep:x-wing"]
-mlkem768p256 = ["dep:ml-kem", "dep:p256"]
-mlkem1024p384 = ["dep:ml-kem", "dep:p384"]
-mlkem768 = ["dep:ml-kem"]
-mlkem1024 = ["dep:ml-kem"]
+hkdf = ["dep:hkdf", "dep:sha2"]
+shake = ["dep:sha3", "dep:turboshake"]
 # Include allocating methods like open() and seal()
 alloc = []
 # Enable RNG-less top-level functions
 getrandom = ["dep:getrandom"]
 # Used to enable known-answer tests. Implies alloc and all other features
-kat = ["alloc", "getrandom", "aes", "chacha", "x25519", "p256", "p384", "p521", "xwing", "mlkem768p256", "mlkem1024p384", "mlkem768", "mlkem1024"]
+kat = ["alloc", "getrandom", "aes", "chacha", "x25519", "nistp", "mlkem", "hkdf", "shake"]
 hazmat-streaming-enc = []
 
 [dependencies]
@@ -49,7 +35,7 @@ aes-gcm = { version = "=0.11.0-rc.3", default-features = false, features = ["aes
 chacha20poly1305 = { version = "=0.11.0-rc.3", default-features = false, optional = true }
 getrandom = { version = "0.4", default-features = false, features = ["sys_rng"], optional = true }
 hybrid-array = "0.4.11"
-hkdf = { version = "0.13", default-features = false }
+hkdf = { version = "0.13", default-features = false, optional = true }
 rand_core = { version = "0.10.0", default-features = false }
 ml-kem = { version = "0.3", default-features = false, features = ["zeroize"], optional = true }
 p256 = { version = "=0.14.0-rc.10", default-features = false, features = [
@@ -64,9 +50,9 @@ p521 = { version = "=0.14.0-rc.10", default-features = false, features = [
     "arithmetic",
     "ecdh",
 ], optional = true }
-sha2 = { version = "0.11", default-features = false }
-sha3 = { version = "0.11", default-features = false, features = ["zeroize"] }
-turboshake = { version = "0.7", default-features = false, features = ["zeroize"] }
+sha2 = { version = "0.11", default-features = false, optional = true }
+sha3 = { version = "0.11", default-features = false, features = ["zeroize"], optional = true }
+turboshake = { version = "0.7", default-features = false, features = ["zeroize"], optional = true }
 subtle = { version = "2.6", default-features = false }
 x25519-dalek = { version = "=3.0.0-pre.6", default-features = false, features = [
     "static_secrets",
@@ -90,7 +76,7 @@ required-features = ["getrandom", "x25519", "chacha"]
 
 [[example]]
 name = "agility"
-required-features = ["getrandom", "p256", "p384", "p521", "x25519", "aes", "chacha"]
+required-features = ["getrandom", "nistp", "x25519", "aes", "chacha"]
 
 # Tell docs.rs to build docs with `--all-features` and `--cfg docsrs` (for nightly docs features)
 [package.metadata.docs.rs]

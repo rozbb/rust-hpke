@@ -1,6 +1,7 @@
+#[cfg(any(feature = "x25519", feature = "nistp"))]
+use crate::dhkex::DhKeyExchange;
 use crate::{
     aead::{Aead, AeadCtx, AeadCtxR, AeadCtxS, AeadKey, AeadNonce},
-    dhkex::DhKeyExchange,
     kdf::Kdf as KdfTrait,
     kem::Kem as KemTrait,
     op_mode::{OpModeR, OpModeS, PskBundle},
@@ -22,6 +23,7 @@ pub(crate) fn gen_rand_buf() -> [u8; 32] {
 }
 
 /// Generates a keypair without the need of a KEM
+#[cfg(any(feature = "x25519", feature = "nistp"))]
 pub(crate) fn dhkex_gen_keypair_with_rng<Kex: DhKeyExchange>(
     csprng: &mut impl CryptoRng,
 ) -> (Kex::PrivateKey, Kex::PublicKey) {

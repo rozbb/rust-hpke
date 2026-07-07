@@ -502,9 +502,9 @@ mod test {
     #[cfg(feature = "chacha")]
     use super::ChaCha20Poly1305;
 
-    use crate::{
-        kdf::HkdfSha256, test_util::gen_ctx_simple_pair, Deserializable, HpkeError, Serializable,
-    };
+    #[cfg(feature = "hkdf")]
+    use crate::kdf::HkdfSha256;
+    use crate::{test_util::gen_ctx_simple_pair, Deserializable, HpkeError, Serializable};
 
     use hybrid_array::typenum::Unsigned;
 
@@ -753,9 +753,11 @@ mod test {
         );
     }
 
-    #[cfg(all(feature = "p256", feature = "alloc", feature = "chacha"))]
-    mod p256_tests {
+    #[cfg(all(feature = "nistp", feature = "alloc", feature = "chacha"))]
+    mod nistp_tests {
         use super::*;
+
+        // P-256
 
         test_export_idempotence!(test_export_idempotence_p256, crate::kem::DhP256HkdfSha256);
         test_exportonly_panics!(
@@ -782,11 +784,8 @@ mod test {
             ChaCha20Poly1305,
             crate::kem::DhP256HkdfSha256
         );
-    }
 
-    #[cfg(all(feature = "p384", feature = "alloc", feature = "chacha"))]
-    mod p384_tests {
-        use super::*;
+        // P-384
 
         test_export_idempotence!(test_export_idempotence_p384, crate::kem::DhP384HkdfSha384);
         test_exportonly_panics!(

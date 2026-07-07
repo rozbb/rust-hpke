@@ -273,7 +273,6 @@ macro_rules! define_mlkem {
 
 // kem_id is from <https://www.ietf.org/archive/id/draft-ietf-hpke-pq-04.html#table-2>
 
-#[cfg(feature = "mlkem768")]
 define_mlkem!(
     #[doc = "ML-KEM 768 post-quantum KEM"],
     mlkem768,         // mod_name
@@ -282,7 +281,6 @@ define_mlkem!(
     0x0041,           // kem_id
 );
 
-#[cfg(feature = "mlkem1024")]
 define_mlkem!(
     #[doc = "ML-KEM 1024 post-quantum KEM"],
     mlkem1024,         // mod_name
@@ -293,9 +291,7 @@ define_mlkem!(
 
 #[cfg(test)]
 mod tests {
-    #[cfg(feature = "mlkem1024")]
     use super::mlkem1024::MlKem1024;
-    #[cfg(feature = "mlkem768")]
     use super::mlkem768::MlKem768;
     use crate::{Deserializable, Kem as KemTrait, Serializable};
 
@@ -347,17 +343,12 @@ mod tests {
         };
     }
 
-    #[cfg(feature = "mlkem768")]
     test_encap_correctness!(test_encap_correctness_mlkem768, MlKem768);
-    #[cfg(feature = "mlkem1024")]
     test_encap_correctness!(test_encap_correctness_mlkem1024, MlKem1024);
-    #[cfg(feature = "mlkem768")]
     test_encapped_serialize!(test_encapped_serialize_mlkem768, MlKem768);
-    #[cfg(feature = "mlkem1024")]
     test_encapped_serialize!(test_encapped_serialize_mlkem1024, MlKem1024);
 
     /// Tests that the wire sizes match the constants in <https://www.ietf.org/archive/id/draft-ietf-hpke-pq-04.html#table-2>
-    #[cfg(feature = "mlkem768")]
     #[test]
     fn sizes_match_spec_mlkem768() {
         // ML-KEM-768: KEM_ID=0x0041, Nsecret=32, Nenc=1088, Npk=1184, Nsk=64
@@ -368,7 +359,6 @@ mod tests {
     }
 
     /// Tests that the wire sizes match the constants in draft-ietf-hpke-pq-04 §3
-    #[cfg(feature = "mlkem1024")]
     #[test]
     fn sizes_match_spec_mlkem1024() {
         // ML-KEM-1024: KEM_ID=0x0042, Nsecret=32, Nenc=1568, Npk=1568, Nsk=64
@@ -379,7 +369,6 @@ mod tests {
     }
 
     /// Tests that DeriveKeyPair is deterministic and that derived keypairs round-trip
-    #[cfg(feature = "mlkem768")]
     #[test]
     fn derive_keypair_roundtrip() {
         let ikm = [7u8; 64];

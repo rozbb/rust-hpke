@@ -95,6 +95,14 @@ mod kat_tests;
 #[cfg(test)]
 mod test_util;
 
+//-------- Feature flag validation --------//
+
+#[cfg(not(any(feature = "x25519", feature = "nistp", feature = "mlkem")))]
+compile_error!("At least one KEM feature must be enabled: `x25519`, `nistp`, or `mlkem`");
+
+#[cfg(not(any(feature = "aes", feature = "chacha")))]
+compile_error!("At least one AEAD feature must be enabled: `aes` or `chacha`");
+
 //-------- Modules and exports--------//
 
 // Re-export our versions of hybrid_array, rand_core, and inout, since their traits and types are
@@ -107,12 +115,7 @@ pub use rand_core;
 mod util;
 
 pub mod aead;
-#[cfg(any(
-    feature = "x25519",
-    feature = "p256",
-    feature = "p384",
-    feature = "p521"
-))]
+#[cfg(any(feature = "x25519", feature = "nistp"))]
 mod dhkex;
 pub mod kdf;
 pub mod kem;

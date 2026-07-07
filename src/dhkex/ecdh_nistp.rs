@@ -239,7 +239,6 @@ macro_rules! nistp_dhkex {
 
 use hybrid_array::typenum;
 
-#[cfg(feature = "p256")]
 nistp_dhkex!(
     "P-256",
     DhP256,
@@ -250,7 +249,6 @@ nistp_dhkex!(
     0xFF          // RFC 9180 §7.1.3: The `bitmask` in DeriveKeyPair to be 0xFF for P-256
 );
 
-#[cfg(feature = "p384")]
 nistp_dhkex!(
     "P-384",
     DhP384,
@@ -261,7 +259,6 @@ nistp_dhkex!(
     0xFF          // RFC 9180 §7.1.3: The `bitmask` in DeriveKeyPair to be 0xFF for P-384
 );
 
-#[cfg(feature = "p521")]
 nistp_dhkex!(
     "P-521",
     DhP521,
@@ -278,11 +275,8 @@ mod tests {
         dhkex::DhKeyExchange, test_util::dhkex_gen_keypair_with_rng, Deserializable, Serializable,
     };
 
-    #[cfg(feature = "p256")]
     use super::p256::DhP256;
-    #[cfg(feature = "p384")]
     use super::p384::DhP384;
-    #[cfg(feature = "p521")]
     use super::p521::DhP521;
 
     use hex_literal::hex;
@@ -292,14 +286,12 @@ mod tests {
     // https://tools.ietf.org/html/rfc5903
     //
 
-    #[cfg(feature = "p256")]
     const P256_PRIVKEYS: &[&[u8]] = &[
         &hex!("C88F01F5 10D9AC3F 70A292DA A2316DE5 44E9AAB8 AFE84049 C62A9C57 862D1433"),
         &hex!("C6EF9C5D 78AE012A 011164AC B397CE20 88685D8F 06BF9BE0 B283AB46 476BEE53"),
     ];
 
     // The public keys corresponding to the above private keys, in order
-    #[cfg(feature = "p256")]
     const P256_PUBKEYS: &[&[u8]] = &[
         &hex!(
             "04"                                                                      // Uncompressed
@@ -314,11 +306,9 @@ mod tests {
     ];
 
     // The result of DH(privkey0, pubkey1) or equivalently, DH(privkey1, pubkey0)
-    #[cfg(feature = "p256")]
     const P256_DH_RES_XCOORD: &[u8] =
         &hex!("D6840F6B 42F6EDAF D13116E0 E1256520 2FEF8E9E CE7DCE03 812464D0 4B9442DE");
 
-    #[cfg(feature = "p384")]
     const P384_PRIVKEYS: &[&[u8]] = &[
         &hex!(
             "099F3C70 34D4A2C6 99884D73 A375A67F 7624EF7C 6B3C0F16 0647B674 14DCE655 E35B5380"
@@ -331,7 +321,6 @@ mod tests {
     ];
 
     // The public keys corresponding to the above private keys, in order
-    #[cfg(feature = "p384")]
     const P384_PUBKEYS: &[&[u8]] = &[
         &hex!(
             "04"                                                             // Uncompressed
@@ -350,13 +339,11 @@ mod tests {
     ];
 
     // The result of DH(privkey0, pubkey1) or equivalently, DH(privkey1, pubkey0)
-    #[cfg(feature = "p384")]
     const P384_DH_RES_XCOORD: &[u8] = &hex!(
         "11187331 C279962D 93D60424 3FD592CB 9D0A926F 422E4718 7521287E 7156C5C4 D6031355"
         "69B9E9D0 9CF5D4A2 70F59746"
     );
 
-    #[cfg(feature = "p521")]
     const P521_PRIVKEYS: &[&[u8]] = &[
         &hex!(
             "0037ADE9 319A89F4 DABDB3EF 411AACCC A5123C61 ACAB57B5 393DCE47 608172A0"
@@ -371,7 +358,6 @@ mod tests {
     ];
 
     // The public keys corresponding to the above private keys, in order
-    #[cfg(feature = "p521")]
     const P521_PUBKEYS: &[&[u8]] = &[
         &hex!(
             "04"                                                                      // Uncompressed
@@ -394,7 +380,6 @@ mod tests {
     ];
 
     // The result of DH(privkey0, pubkey1) or equivalently, DH(privkey1, pubkey0)
-    #[cfg(feature = "p521")]
     const P521_DH_RES_XCOORD: &[u8] = &hex!(
         "01144C7D 79AE6956 BC8EDB8E 7C787C45 21CB086F A64407F9 7894E5E6 B2D79B04"
         "D1427E73 CA4BAA24 0A347868 59810C06 B3C715A3 A8CC3151 F2BEE417 996D19F3"
@@ -477,73 +462,61 @@ mod tests {
         assert!(new_pk == pk, "public key doesn't serialize correctly");
     }
 
-    #[cfg(feature = "p256")]
     #[test]
     fn test_vector_ecdh_p256() {
         test_vector_ecdh::<DhP256>(P256_PRIVKEYS[0], P256_PUBKEYS[1], P256_DH_RES_XCOORD);
     }
 
-    #[cfg(feature = "p384")]
     #[test]
     fn test_vector_ecdh_p384() {
         test_vector_ecdh::<DhP384>(P384_PRIVKEYS[0], P384_PUBKEYS[1], P384_DH_RES_XCOORD);
     }
 
-    #[cfg(feature = "p521")]
     #[test]
     fn test_vector_ecdh_p521() {
         test_vector_ecdh::<DhP521>(P521_PRIVKEYS[0], P521_PUBKEYS[1], P521_DH_RES_XCOORD);
     }
 
-    #[cfg(feature = "p256")]
     #[test]
     fn test_vector_corresponding_pubkey_p256() {
         test_vector_corresponding_pubkey::<DhP256>(P256_PRIVKEYS, P256_PUBKEYS);
     }
 
-    #[cfg(feature = "p384")]
     #[test]
     fn test_vector_corresponding_pubkey_p384() {
         test_vector_corresponding_pubkey::<DhP384>(P384_PRIVKEYS, P384_PUBKEYS);
     }
 
-    #[cfg(feature = "p521")]
     #[test]
     fn test_vector_corresponding_pubkey_p521() {
         test_vector_corresponding_pubkey::<DhP521>(P521_PRIVKEYS, P521_PUBKEYS);
     }
 
-    #[cfg(feature = "p256")]
     #[test]
     fn test_pubkey_serialize_correctness_p256() {
         test_pubkey_serialize_correctness::<DhP256>();
     }
 
-    #[cfg(feature = "p384")]
     #[test]
     fn test_pubkey_serialize_correctness_p384() {
         test_pubkey_serialize_correctness::<DhP384>();
     }
 
-    #[cfg(feature = "p521")]
     #[test]
     fn test_pubkey_serialize_correctness_p521() {
         test_pubkey_serialize_correctness::<DhP521>();
     }
 
-    #[cfg(feature = "p256")]
     #[test]
     fn test_dh_serialize_correctness_p256() {
         test_dh_serialize_correctness::<DhP256>();
     }
 
-    #[cfg(feature = "p384")]
     #[test]
     fn test_dh_serialize_correctness_p384() {
         test_dh_serialize_correctness::<DhP384>();
     }
 
-    #[cfg(feature = "p521")]
     #[test]
     fn test_dh_serialize_correctness_p521() {
         test_dh_serialize_correctness::<DhP521>();

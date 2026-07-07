@@ -187,8 +187,10 @@ where
 #[cfg(test)]
 mod test {
     use super::{setup_receiver, setup_sender_with_rng};
+    #[cfg(feature = "hkdf")]
+    use crate::kdf::HkdfSha256;
+    use crate::kem::Kem as KemTrait;
     use crate::test_util::{aead_ctx_eq, gen_rand_buf, new_op_mode_pair, OpModeKind};
-    use crate::{kdf::HkdfSha256, kem::Kem as KemTrait};
 
     #[cfg(feature = "chacha")]
     use crate::aead::ChaCha20Poly1305;
@@ -335,74 +337,67 @@ mod test {
     #[cfg(all(feature = "x25519", feature = "chacha"))]
     mod x25519_tests {
         use super::*;
+        use crate::kem::*;
 
         test_setup_correctness!(
             test_setup_correctness_x25519,
             ChaCha20Poly1305,
             HkdfSha256,
-            crate::kem::x25519_hkdfsha256::X25519HkdfSha256
+            X25519HkdfSha256
         );
         test_setup_soundness!(
             test_setup_soundness_x25519,
             ChaCha20Poly1305,
             HkdfSha256,
-            crate::kem::x25519_hkdfsha256::X25519HkdfSha256
+            X25519HkdfSha256
         );
     }
 
-    #[cfg(all(feature = "p256", feature = "chacha"))]
-    mod p256_tests {
+    #[cfg(all(feature = "nistp", feature = "chacha"))]
+    mod nistp_tests {
         use super::*;
+        use crate::{
+            kdf::{HkdfSha384, HkdfSha512},
+            kem::*,
+        };
 
         test_setup_correctness!(
             test_setup_correctness_p256,
             ChaCha20Poly1305,
             HkdfSha256,
-            crate::kem::dhp256_hkdfsha256::DhP256HkdfSha256
+            DhP256HkdfSha256
         );
         test_setup_soundness!(
             test_setup_soundness_p256,
             ChaCha20Poly1305,
             HkdfSha256,
-            crate::kem::dhp256_hkdfsha256::DhP256HkdfSha256
+            DhP256HkdfSha256
         );
-    }
-
-    #[cfg(all(feature = "p384", feature = "chacha"))]
-    mod p384_tests {
-        use super::*;
-        use crate::kdf::HkdfSha384;
 
         test_setup_correctness!(
             test_setup_correctness_p384,
             ChaCha20Poly1305,
             HkdfSha384,
-            crate::kem::dhp384_hkdfsha384::DhP384HkdfSha384
+            DhP384HkdfSha384
         );
         test_setup_soundness!(
             test_setup_soundness_p384,
             ChaCha20Poly1305,
             HkdfSha384,
-            crate::kem::dhp384_hkdfsha384::DhP384HkdfSha384
+            DhP384HkdfSha384
         );
-    }
-
-    #[cfg(all(feature = "p521", feature = "chacha"))]
-    mod p521_tests {
-        use super::*;
-        use crate::kdf::HkdfSha512;
 
         test_setup_correctness!(
             test_setup_correctness_p521,
             ChaCha20Poly1305,
             HkdfSha512,
-            crate::kem::dhp521_hkdfsha512::DhP521HkdfSha512
+            DhP521HkdfSha512
         );
         test_setup_soundness!(
             test_setup_soundness_p521,
             ChaCha20Poly1305,
             HkdfSha512,
-            crate::kem::dhp521_hkdfsha512::DhP521HkdfSha512
+            DhP521HkdfSha512
         );
     }
 }
