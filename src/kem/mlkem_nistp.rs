@@ -529,6 +529,8 @@ macro_rules! impl_mlkem_nistp {
 // kem_id from <https://www.ietf.org/archive/id/draft-ietf-hpke-pq-04.html#table-3>
 // seed_t_len from <https://www.ietf.org/archive/id/draft-irtf-cfrg-concrete-hybrid-kems-03.html#section-3.1.1>
 
+// The cfgs here are redundant. We keep them bc it makes the docs show the feature gates properly
+
 #[cfg(all(feature = "mlkem", feature = "nistp"))]
 impl_mlkem_nistp!(
     #[doc = "ML-KEM 768 + P256 hybrid post-quantum KEM"],
