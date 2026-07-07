@@ -73,7 +73,7 @@ pub(crate) const fn kem_suite_id<Kem: KemTrait>() -> KemSuiteId {
 }
 
 /// Returns a const expression that evaluates to the number of arguments it received
-#[cfg(feature = "hkdf")]
+#[cfg(feature = "hkdfsha2")]
 macro_rules! count {
     () => (0usize);
     ( $x:tt $($xs:tt)* ) => (1usize + count!($($xs)*));
@@ -83,7 +83,7 @@ macro_rules! count {
 /// non-allocating concatenation of the bytestrings. It constructs a big buffer of n*L many bytes
 /// writes everything into there, and keeps track of how many bytes it wrote. The macro returns
 /// `(buf, num_bytes_written)`.
-#[cfg(feature = "hkdf")]
+#[cfg(feature = "hkdfsha2")]
 macro_rules! concat_with_known_maxlen {
     ( $maxlen:expr, $( $slice:expr ),* ) => {{
         // The length of the big buffer is the number of items we're concatting times the max
@@ -105,7 +105,7 @@ macro_rules! concat_with_known_maxlen {
 
 /// A helper function that writes to a buffer and returns a slice containing the unwritten portion.
 /// If this crate were allowed to use std, we'd just use std::io::Write instead.
-#[cfg(feature = "hkdf")]
+#[cfg(feature = "hkdfsha2")]
 pub(crate) fn write_to_buf<'a>(buf: &'a mut [u8], to_write: &[u8]) -> &'a mut [u8] {
     buf[..to_write.len()].copy_from_slice(to_write);
     &mut buf[to_write.len()..]

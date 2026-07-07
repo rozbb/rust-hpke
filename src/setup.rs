@@ -187,7 +187,7 @@ where
 #[cfg(test)]
 mod test {
     use super::{setup_receiver, setup_sender_with_rng};
-    #[cfg(feature = "hkdf")]
+    #[cfg(feature = "hkdfsha2")]
     use crate::kdf::HkdfSha256;
     use crate::kem::Kem as KemTrait;
     use crate::test_util::{aead_ctx_eq, gen_rand_buf, new_op_mode_pair, OpModeKind};

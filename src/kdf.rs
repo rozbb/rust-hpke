@@ -8,25 +8,22 @@ use crate::{
     HpkeError,
 };
 
-#[cfg(feature = "hkdf")]
-use hybrid_array::typenum::U48;
 use hybrid_array::{
     typenum::{U32, U64},
     Array, ArraySize,
 };
-#[cfg(feature = "hkdf")]
+#[cfg(feature = "hkdfsha2")]
 use sha2::{Sha256, Sha384, Sha512};
 
 #[cfg(feature = "shake")]
 pub(crate) mod one_stage_kdf;
-#[cfg(feature = "hkdf")]
+#[cfg(feature = "hkdfsha2")]
 mod two_stage_kdf;
 
-#[cfg(any(feature = "hkdf", feature = "shake"))]
 pub(crate) const VERSION_LABEL: &[u8] = b"HPKE-v1";
 
 // This is the maximum value of Nh. It is achieved by HKDF-SHA512 in RFC 9180 §7.2.
-#[cfg(feature = "hkdf")]
+#[cfg(feature = "hkdfsha2")]
 pub(crate) const MAX_DIGEST_SIZE: usize = 64;
 
 // Pretty much all the KDF functionality is covered by the hkdf crate
@@ -111,11 +108,11 @@ pub(crate) type DigestArray<Kdf> = Array<u8, <Kdf as KdfTrait>::Nh>;
 // Implement KdfTrait for all our KDFs. Call the one- or two-stage implementation for each of them
 //
 
-#[cfg(feature = "hkdf")]
+#[cfg(feature = "hkdfsha2")]
 /// The implementation of HKDF-SHA256
 pub struct HkdfSha256 {}
 
-#[cfg(feature = "hkdf")]
+#[cfg(feature = "hkdfsha2")]
 impl KdfTrait for HkdfSha256 {
     // RFC 9180 §7.2: HKDF-SHA256
     const KDF_ID: u16 = 0x0001;
@@ -166,15 +163,15 @@ impl KdfTrait for HkdfSha256 {
     }
 }
 
-#[cfg(feature = "hkdf")]
+#[cfg(feature = "hkdfsha2")]
 /// The implementation of HKDF-SHA384
 pub struct HkdfSha384 {}
 
-#[cfg(feature = "hkdf")]
+#[cfg(feature = "hkdfsha2")]
 impl KdfTrait for HkdfSha384 {
     // RFC 9180 §7.2: HKDF-SHA384
     const KDF_ID: u16 = 0x0002;
-    type Nh = U48;
+    type Nh = hybrid_array::typenum::U48;
 
     fn combine_secrets<A, Kem, O>(
         mode: &O,
@@ -221,11 +218,11 @@ impl KdfTrait for HkdfSha384 {
     }
 }
 
-#[cfg(feature = "hkdf")]
+#[cfg(feature = "hkdfsha2")]
 /// The implementation of HKDF-SHA512
 pub struct HkdfSha512 {}
 
-#[cfg(feature = "hkdf")]
+#[cfg(feature = "hkdfsha2")]
 impl KdfTrait for HkdfSha512 {
     // RFC 9180 §7.2: HKDF-SHA512
     const KDF_ID: u16 = 0x0003;

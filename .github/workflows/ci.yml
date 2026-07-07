@@ -132,7 +132,7 @@ jobs:
         with:
           targets: thumbv6m-none-eabi
       - name: Build with all features but kat and getrandom
-        run: cargo build --target thumbv6m-none-eabi --no-default-features --features "alloc,x25519,nistp,mlkem,aes,chacha,hkdf,shake"
+        run: cargo build --target thumbv6m-none-eabi --no-default-features --features "alloc,x25519,nistp,mlkem,aes,chacha,hkdfsha2,shake"
       - name: Build with no default features
         run: cargo build --target thumbv6m-none-eabi --no-default-features
 

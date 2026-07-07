@@ -502,7 +502,7 @@ mod test {
     #[cfg(feature = "chacha")]
     use super::ChaCha20Poly1305;
 
-    #[cfg(feature = "hkdf")]
+    #[cfg(feature = "hkdfsha2")]
     use crate::kdf::HkdfSha256;
     use crate::{test_util::gen_ctx_simple_pair, Deserializable, HpkeError, Serializable};
 

@@ -45,17 +45,17 @@ The feature flags in this crate allow end-users to avoid pulling in dependencies
 
 Default features flags: `getrandom`, `alloc`
 
-* `alloc` - Exposes allocating methods like `AeadCtxR::open()` and `AeadCtxS::seal()`
-* `getrandom` - Enables top-level functions that use `getrandom` for random number generation, rather than taking in an explicit RNG
+* `alloc` (default) - Exposes allocating methods like `AeadCtxR::open()` and `AeadCtxS::seal()`
+* `getrandom` (default) - Enables top-level functions that use `getrandom` for random number generation, rather than taking in an explicit RNG
 * AEADs:
+  * `chacha` (default) — Enables ChaCha20-Poly1305
   * `aes` — Enables AES-GCM-128/256
-  * `chacha` — Enables ChaCha20-Poly1305
 * KEMs:
-  * `x25519` — Enables the X25519 DHKEM (also enables `hkdf`)
+  * `x25519` (default) — Enables the X25519 DHKEM (also enables `hkdf`)
   * `nistp` — Enables the ECDH-NIST P-256, P-384, and P-521 DHKEMs (also enables `hkdf`)
-  * `mlkem` — Enables the ML-KEM-768 and ML-KEM-1024 post-quantum KEMs (also enables `shake`)
+  * `mlkem` (default) — Enables the ML-KEM-768 and ML-KEM-1024 post-quantum KEMs (also enables `shake`)
 * KDFs:
-  * `hkdf` — Enables HKDF-SHA256/384/512
+  * `hkdfsha2` — Enables HKDF-SHA256/384/512
   * `shake` — Enables SHAKE128/256 and TurboSHAKE128/256
 * `hazmat-streaming-enc` — Exposes the underlying streaming AEAD context used in HPKE. **DO NOT USE** unless you really know what you're doing.
 * `kat` - Used only to enabled known-answer tests, which require `std`. Only use with `cargo test`
@@ -63,7 +63,7 @@ Default features flags: `getrandom`, `alloc`
 ### Feature Combinations
 
 We list the additional functionality that certain feature combinations enable:
-* `x25519,mlkem` — Enables the ML-KEM-768+X25519 (aka XWing) hybrid post-quantum KEM
+* `x25519,mlkem` (default) — Enables the ML-KEM-768+X25519 (aka XWing) hybrid post-quantum KEM
 * `nistp,mlkem` — Enables the ML-KEM + NIST-P hybrid post-quantum KEMs
 
 For info on how to omit or include feature flags, see the [cargo docs on features](https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html#choosing-features).

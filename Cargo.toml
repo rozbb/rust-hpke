@@ -14,19 +14,19 @@ rust-version = "1.85"
 
 [features]
 default = ["getrandom", "alloc", "x25519", "mlkem", "chacha"]
-x25519 = ["dep:x25519-dalek", "hkdf"]
-nistp = ["dep:p256", "dep:p384", "dep:p521", "hkdf"]
+x25519 = ["dep:x25519-dalek", "hkdfsha2"]
+nistp = ["dep:p256", "dep:p384", "dep:p521", "hkdfsha2"]
 mlkem = ["dep:ml-kem", "dep:x-wing", "shake"]
 aes = ["dep:aes-gcm"]
 chacha = ["dep:chacha20poly1305"]
-hkdf = ["dep:hkdf", "dep:sha2"]
+hkdfsha2 = ["dep:hkdf", "dep:sha2"]
 shake = ["dep:sha3", "dep:turboshake"]
 # Include allocating methods like open() and seal()
 alloc = []
 # Enable RNG-less top-level functions
 getrandom = ["dep:getrandom"]
-# Used to enable known-answer tests. Implies alloc and all other features
-kat = ["alloc", "getrandom", "aes", "chacha", "x25519", "nistp", "mlkem", "hkdf", "shake"]
+# Used to enable known-answer tests. Implies all other features
+kat = ["alloc", "getrandom", "aes", "chacha", "x25519", "nistp", "mlkem", "hkdfsha2", "shake"]
 hazmat-streaming-enc = []
 
 [dependencies]

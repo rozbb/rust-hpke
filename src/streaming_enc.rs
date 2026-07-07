@@ -119,7 +119,7 @@ mod test {
     use super::{
         create_receiver_context, create_sender_context, AeadKey, AeadNonce, ExporterSecret,
     };
-    #[cfg(feature = "hkdf")]
+    #[cfg(feature = "hkdfsha2")]
     use crate::kdf::HkdfSha256;
     use rand_core::Rng;
 
