@@ -25,13 +25,13 @@ use sha2::digest::{Digest, OutputSizeUser};
 /// info string, to expand to the output buffer. Uses HKDF rather than XOF.
 ///
 /// If `out.len()` is more than 255x the digest size (in bytes) of the underlying hash function,
-/// returns an `Err(hkdf::InvalidLength)`.
+/// returns an `Err(HpkeError::KdfOutputTooLong)`.
 pub(crate) fn extract_and_expand<H>(
     ikm: &[u8],
     suite_id: &[u8],
     info: &[u8],
     out: &mut [u8],
-) -> Result<(), hkdf::InvalidLength>
+) -> Result<(), HpkeError>
 where
     H: Clone + Digest + EagerHash,
 {
@@ -39,6 +39,7 @@ where
     let (_, hkdf_ctx) = labeled_extract::<H>(&[], suite_id, b"eae_prk", ikm);
     // Expand using given info string
     labeled_expand(&hkdf_ctx, suite_id, b"shared_secret", info, out)
+        .map_err(|hkdf::InvalidLength| HpkeError::KdfOutputTooLong)
 }
 
 // RFC 9180 §4

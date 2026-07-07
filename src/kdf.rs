@@ -138,7 +138,6 @@ impl KdfTrait for HkdfSha256 {
         out: &mut [u8],
     ) -> Result<(), HpkeError> {
         two_stage_kdf::extract_and_expand::<Sha256>(ikm, suite_id, info, out)
-            .map_err(|_| HpkeError::KdfOutputTooLong)
     }
 
     fn derive_x25519_sk_eph_bytes(suite_id: &KemSuiteId, ikm: &[u8]) -> [u8; 32] {
@@ -193,7 +192,6 @@ impl KdfTrait for HkdfSha384 {
         out: &mut [u8],
     ) -> Result<(), HpkeError> {
         two_stage_kdf::extract_and_expand::<Sha384>(ikm, suite_id, info, out)
-            .map_err(|_| HpkeError::KdfOutputTooLong)
     }
 
     fn derive_x25519_sk_eph_bytes(suite_id: &KemSuiteId, ikm: &[u8]) -> [u8; 32] {
@@ -248,7 +246,6 @@ impl KdfTrait for HkdfSha512 {
         out: &mut [u8],
     ) -> Result<(), HpkeError> {
         two_stage_kdf::extract_and_expand::<Sha512>(ikm, suite_id, info, out)
-            .map_err(|_| HpkeError::KdfOutputTooLong)
     }
 
     fn derive_x25519_sk_eph_bytes(suite_id: &KemSuiteId, ikm: &[u8]) -> [u8; 32] {
