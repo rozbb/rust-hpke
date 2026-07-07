@@ -18,17 +18,17 @@
 use hpke::{
     aead::{AeadTag, ChaCha20Poly1305},
     inout::InOutBuf,
-    kdf::HkdfSha384,
-    kem::X25519HkdfSha256,
+    kdf::KdfTurboShake128,
+    kem::XWing,
     Deserializable, Kem as KemTrait, OpModeR, OpModeS, Serializable,
 };
 
 const INFO_STR: &[u8] = b"example session";
 
 // These are the only algorithms we're gonna use for this example
-type Kem = X25519HkdfSha256;
+type Kem = XWing;
 type Aead = ChaCha20Poly1305;
-type Kdf = HkdfSha384;
+type Kdf = KdfTurboShake128;
 
 // Initializes the server with a fresh keypair
 fn server_init() -> (<Kem as KemTrait>::PrivateKey, <Kem as KemTrait>::PublicKey) {

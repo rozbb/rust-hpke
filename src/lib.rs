@@ -9,28 +9,34 @@
 //! ```
 //! # #[cfg(all(feature = "alloc", feature = "x25519", feature = "chacha", feature = "getrandom"))]
 //! # {
-//! # use hpke::{
-//! #     aead::ChaCha20Poly1305,
-//! #     kdf::HkdfSha384,
-//! #     kem::X25519HkdfSha256,
-//! #     Kem as KemTrait, OpModeR, OpModeS, setup_receiver, setup_sender,
-//! # };
+//! use hpke::{
+//!     aead::ChaCha20Poly1305,
+//!     kdf::KdfTurboShake128,
+//!     kem::XWing,
+//!     Deserializable, Kem as KemTrait, OpModeR, OpModeS, Serializable, setup_receiver,
+//!     setup_sender,
+//! };
 //! // These types define the ciphersuite Alice and Bob will be using
-//! type Kem = X25519HkdfSha256;
+//! type Kem = XWing;
 //! type Aead = ChaCha20Poly1305;
-//! type Kdf = HkdfSha384;
+//! type Kdf = KdfTurboShake128;
 //!
 //! // Bob generates his keypair
 //! let (bob_sk, bob_pk) = Kem::gen_keypair();
+//! let bob_pk_bytes = bob_pk.to_bytes();
 //!
 //! // This is a description string for the session. Both Alice and Bob need to know this value.
 //! // It's not secret.
 //! let info_str = b"Alice and Bob's weekly chat";
 //!
+//! // Alice downloads Bob's public key from a trusted source and deserializes it
+//! let bob_pk = <Kem as KemTrait>::PublicKey::from_bytes(&bob_pk_bytes)
+//!     .expect("Bob's pk is invalid");
+//!
 //! // Alice initiates a session with Bob. OpModeS::Base means that Alice is not authenticating
-//! // herself at all. If she had a public key herself, or a pre-shared secret that Bob also
-//! // knew, she'd be able to authenticate herself. See the OpModeS and OpModeR types for more
-//! // detail.
+//! // herself at all. If she had a public key herself (and was using an elliptic curve KEM), or
+//! // had a pre-shared secret that Bob also knew, she'd be able to authenticate herself. See the
+//! // OpModeS and OpModeR types for more detail.
 //! let (encapsulated_key, mut encryption_context) =
 //!     hpke::setup_sender::<Aead, Kdf, Kem>(&OpModeS::Base, &bob_pk, info_str)
 //!         .expect("invalid server pubkey!");
@@ -43,7 +49,7 @@
 //! //   use hpke::inout::InOutBuf;
 //! //   let auth_tag = encryption_context.seal_inout_detached(InOutBuf::from(&mut msg), aad)?;
 //! // To seal with allocating:
-//! let ciphertext = encryption_context.seal(msg, aad).expect("encryption failed!");
+//! let ciphertext: Vec<u8> = encryption_context.seal(msg, aad).expect("encryption failed!");
 //!
 //! // ~~~
 //! // Alice sends the encapsulated key, message ciphertext, AAD, and auth tag to Bob over the

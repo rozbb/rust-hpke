@@ -43,17 +43,17 @@ The feature flags in this crate allow end-users to avoid pulling in dependencies
 
 ### Feature Flags
 
-Default features flags: `getrandom`, `alloc`
+Default features flags: `getrandom`, `alloc`, `chacha`, `x25519`, `mlkem`. Note this combination means that XWing is enabled by default, as well as all (Turbo)SHAKE KDFs.
 
-* `alloc` (default) - Exposes allocating methods like `AeadCtxR::open()` and `AeadCtxS::seal()`
+* `alloc` - Exposes allocating methods like `AeadCtxR::open()` and `AeadCtxS::seal()`
 * `getrandom` (default) - Enables top-level functions that use `getrandom` for random number generation, rather than taking in an explicit RNG
 * AEADs:
-  * `chacha` (default) — Enables ChaCha20-Poly1305
+  * `chacha` — Enables ChaCha20-Poly1305
   * `aes` — Enables AES-GCM-128/256
 * KEMs:
-  * `x25519` (default) — Enables the X25519 DHKEM (also enables `hkdf`)
-  * `nistp` — Enables the ECDH-NIST P-256, P-384, and P-521 DHKEMs (also enables `hkdf`)
-  * `mlkem` (default) — Enables the ML-KEM-768 and ML-KEM-1024 post-quantum KEMs (also enables `shake`)
+  * `x25519` — Enables the X25519 DHKEM (also enables `hkdfsha2`)
+  * `nistp` — Enables the ECDH-NIST P-256, P-384, and P-521 DHKEMs (also enables `hkdfsha2`)
+  * `mlkem` — Enables the ML-KEM-768 and ML-KEM-1024 post-quantum KEMs (also enables `shake`)
 * KDFs:
   * `hkdfsha2` — Enables HKDF-SHA256/384/512
   * `shake` — Enables SHAKE128/256 and TurboSHAKE128/256
@@ -125,14 +125,19 @@ To run all benchmarks, execute `cargo bench --all-features`. If you set your own
 
 Ciphersuites benchmarked:
 
-* NIST Ciphersuite with 128-bit security: AES-GCM-128, HKDF-SHA256, ECDH-P256
-* Non-NIST Ciphersuite with 128-bit security: ChaCha20-Poly1305, HKDF-SHA256, X25519
+* Classical NIST Ciphersuite with 128-bit security: AES-GCM-128, HKDF-SHA256, ECDH-P256
+* Classical Non-NIST Ciphersuite with 128-bit security: ChaCha20-Poly1305, HKDF-SHA256, X25519
+* Pure-PQ NIST Ciphersuite with 128-bit security: AES-GCM-128, SHAKE128, MLKEM768
+* Pure-PQ NIST Ciphersuite with 256-bit security: AES-GCM-256, SHAKE256, MLKEM1024
+* Hybrid-PQ NIST Ciphersuite with 128-bit security: AES-GCM-128, SHAKE128, MLKEM768-P256
+* Hybrid-PQ NIST Ciphersuite with 256-bit security: AES-GCM-256, SHAKE256, MLKEM1024-P384
+* Hybrid-PQ Non-NIST Ciphersuite with 128-bit security: ChaCha20-Poly1305, TurboSHAKE128, XWing
 
 Functions benchmarked in each ciphersuite:
 
 * `Kem::gen_keypair`
-* `setup_sender` with OpModes of Base, Auth, Psk, and AuthPsk
-* `setup_receiver` with OpModes of Base, Auth, Psk, and AuthPsk
+* `setup_sender` with OpModes of Base, Auth, Psk, and AuthPsk (Auth* modes omitted if unsupported)
+* `setup_receiver` with OpModes of Base, Auth, Psk, and AuthPsk (Auth* modes omitted if unsupported)
 * `AeadCtxS::seal` with plaintext length 64 and AAD length 64
 * `AeadCtxR::open` with ciphertext length 64 and AAD length 64
 
