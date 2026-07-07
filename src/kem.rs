@@ -29,7 +29,7 @@ pub(crate) mod mlkem;
 pub use mlkem::mlkem1024::MlKem1024;
 #[cfg(feature = "mlkem")]
 pub use mlkem::mlkem768::MlKem768;
-#[cfg(feature = "mlkem")]
+#[cfg(all(feature = "mlkem", feature = "x25519"))]
 pub(crate) mod xwing;
 #[cfg(all(feature = "mlkem", feature = "x25519"))]
 pub use xwing::XWing;
