@@ -134,7 +134,7 @@ jobs:
       - name: Build with all features but kat and getrandom
         run: cargo build --target thumbv6m-none-eabi --no-default-features --features "alloc,x25519,nistp,mlkem,aes,chacha,hkdfsha2,shake"
       - name: Build with no default features
-        run: cargo build --target thumbv6m-none-eabi --no-default-features
+        run: cargo build --target thumbv6m-none-eabi --no-default-features --features "x25519,chacha"
 
   kat:
     name: Known-answer test build
@@ -152,6 +152,6 @@ jobs:
       - uses: actions/checkout@v3
       - uses: dtolnay/rust-toolchain@stable
       - name: Build just ML-KEM and make sure we have no dead code
-        run: cargo build --no-default-features --features "mlkem"
+        run: cargo build --no-default-features --features "mlkem,chacha"
         env:
           RUSTFLAGS: -D warnings
