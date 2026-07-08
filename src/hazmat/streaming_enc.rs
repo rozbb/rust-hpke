@@ -6,12 +6,11 @@
 //!
 //! Example use:
 //! ```rust
-//! # #[cfg(feature = "alloc")] {
-//! # #[cfg(feature = "x25519")] {
+//! # #[cfg(all(feature = "alloc", feature = "x25519", feature = "mlkem"))] {
 //! # use hpke::{
 //! #     aead::ChaCha20Poly1305,
-//! #     kdf::HkdfSha384,
-//! #     kem::X25519HkdfSha256,
+//! #     kdf::KdfTurboShake128,
+//! #     kem::XWing,
 //! #     hazmat::streaming_enc::{
 //! #         create_receiver_context, create_sender_context, ExporterSecret, AeadKey,
 //! #         AeadNonce
@@ -20,9 +19,9 @@
 //! # };
 //! # use rand_core::Rng;
 //! // These types define the ciphersuite Alice and Bob will be using
-//! type Kem = X25519HkdfSha256;
+//! type Kem = XWing;
 //! type Aead = ChaCha20Poly1305;
-//! type Kdf = HkdfSha384;
+//! type Kdf = KdfTurboShake128;
 //!
 //! let mut csprng = rand::rng();
 //!
@@ -62,7 +61,7 @@
 //!
 //! // Check the decrypted message was what was sent
 //! assert_eq!(&decrypted, msg);
-//! # }}
+//! # }
 //! ```
 
 use crate::{
