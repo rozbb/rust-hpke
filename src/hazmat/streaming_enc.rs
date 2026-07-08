@@ -1,10 +1,8 @@
-//! ⚠️ Hazmat:
-//! This file exposes the underlying streaming/online encryption primitive defined in the HPKE spec.
-//! Do NOT use this unless you really know what you're doing.
+//! The underlying streaming/online encryption primitive defined in the HPKE spec.
 //!
-//! Also, DO NOT use the same key for two sender contexts or two receiver contexts. Doing this can
-//! lead to reflection attacks, i.e., replaying Alice's message to Alice herself, pretending it came
-//! from Bob.
+//! DO NOT use the same key for two sender contexts or two receiver contexts. Doing this
+//! can lead to reflection attacks, i.e., replaying Alice's message to Alice herself,
+//! pretending it came from Bob.
 //!
 //! Example use:
 //! ```rust
@@ -14,7 +12,7 @@
 //! #     aead::ChaCha20Poly1305,
 //! #     kdf::HkdfSha384,
 //! #     kem::X25519HkdfSha256,
-//! #     streaming_enc::{
+//! #     hazmat::streaming_enc::{
 //! #         create_receiver_context, create_sender_context, ExporterSecret, AeadKey,
 //! #         AeadNonce
 //! #     },

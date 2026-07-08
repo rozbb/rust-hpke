@@ -57,7 +57,6 @@ Default features flags: `getrandom`, `alloc`, `chacha`, `x25519`, `mlkem`. Note 
 * KDFs:
   * `hkdfsha2` — Enables HKDF-SHA256/384/512
   * `shake` — Enables SHAKE128/256 and TurboSHAKE128/256
-* `hazmat-streaming-enc` — Exposes the underlying streaming AEAD context used in HPKE. **DO NOT USE** unless you really know what you're doing.
 * `kat` - Used only to enabled known-answer tests, which require `std`. Only use with `cargo test`
 
 ### Feature Combinations

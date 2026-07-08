@@ -27,7 +27,6 @@ alloc = []
 getrandom = ["dep:getrandom"]
 # Used to enable known-answer tests. Implies all other features
 kat = ["alloc", "getrandom", "aes", "chacha", "x25519", "nistp", "mlkem", "hkdfsha2", "shake"]
-hazmat-streaming-enc = []
 
 [dependencies]
 aead = { version = "=0.6.0-rc.10", default-features = false }

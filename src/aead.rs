@@ -28,14 +28,9 @@ pub trait Aead {
 
 /// A nonce is a bytestring you only use for encryption once.
 /// Implements `Default` and `Zeroize`, and zeroizes on drop.
-// Only public if we're exposing streaming encryption
-#[cfg(feature = "hazmat-streaming-enc")]
+// Needs to be public because it's re-exported in hazmat
 #[doc(hidden)]
 pub struct AeadNonce<A: Aead>(pub Array<u8, <A::AeadImpl as BaseAeadCore>::NonceSize>);
-#[cfg(not(feature = "hazmat-streaming-enc"))]
-pub(crate) struct AeadNonce<A: Aead>(
-    pub(crate) Array<u8, <A::AeadImpl as BaseAeadCore>::NonceSize>,
-);
 
 // We need this for ease of testing
 #[cfg(test)]
@@ -67,14 +62,9 @@ impl<A: Aead> Drop for AeadNonce<A> {
 
 /// A struct representing a generic key for an AEAD cipher.
 /// Implements `Default` and `Zeroize`, and zeroizes on drop.
-// Only public if we're exposing streaming encryption
-#[cfg(feature = "hazmat-streaming-enc")]
+// Needs to be public because it's re-exported in hazmat
 #[doc(hidden)]
 pub struct AeadKey<A: Aead>(pub Array<u8, <A::AeadImpl as aead::KeySizeUser>::KeySize>);
-#[cfg(not(feature = "hazmat-streaming-enc"))]
-pub(crate) struct AeadKey<A: Aead>(
-    pub(crate) Array<u8, <A::AeadImpl as aead::KeySizeUser>::KeySize>,
-);
 
 // We use this to get an empty buffer we can read key material into
 impl<A: Aead> Default for AeadKey<A> {
