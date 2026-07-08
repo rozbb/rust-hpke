@@ -15,7 +15,7 @@ use zeroize::Zeroize;
 
 /// Secret generated in `derive_enc_ctx` and stored in `AeadCtx`.
 /// Implements `Default` and `Zeroize`, and zeroizes on drop.
-// Needs to be public because it's re-exported in hazmat
+// Needs to be public because it's re-exported in the danger module
 #[doc(hidden)]
 pub struct ExporterSecret<K: KdfTrait>(pub DigestArray<K>);
 

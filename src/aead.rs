@@ -28,7 +28,7 @@ pub trait Aead {
 
 /// A nonce is a bytestring you only use for encryption once.
 /// Implements `Default` and `Zeroize`, and zeroizes on drop.
-// Needs to be public because it's re-exported in hazmat
+// Needs to be public because it's re-exported in the danger module
 #[doc(hidden)]
 pub struct AeadNonce<A: Aead>(pub Array<u8, <A::AeadImpl as BaseAeadCore>::NonceSize>);
 
@@ -62,7 +62,7 @@ impl<A: Aead> Drop for AeadNonce<A> {
 
 /// A struct representing a generic key for an AEAD cipher.
 /// Implements `Default` and `Zeroize`, and zeroizes on drop.
-// Needs to be public because it's re-exported in hazmat
+// Needs to be public because it's re-exported in the danger module
 #[doc(hidden)]
 pub struct AeadKey<A: Aead>(pub Array<u8, <A::AeadImpl as aead::KeySizeUser>::KeySize>);
 

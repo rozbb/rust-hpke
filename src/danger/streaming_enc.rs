@@ -11,7 +11,7 @@
 //! #     aead::ChaCha20Poly1305,
 //! #     kdf::KdfTurboShake128,
 //! #     kem::XWing,
-//! #     hazmat::streaming_enc::{
+//! #     danger::streaming_enc::{
 //! #         create_receiver_context, create_sender_context, ExporterSecret, AeadKey,
 //! #         AeadNonce
 //! #     },
@@ -78,7 +78,7 @@ pub use crate::setup::ExporterSecret;
 
 /// Creates a streaming encryption sender context from a key, nonce, and exporter secret.
 ///
-/// ⚠️ Warning: Hazmat!
+/// ⚠️ DANGER
 ///
 /// This is a low-level API. Only use this if you know what you are doing.
 ///
@@ -98,7 +98,7 @@ pub fn create_sender_context<A: Aead, Kdf: KdfTrait, Kem: KemTrait>(
 
 /// Creates a streaming encryption receiver context from a key, nonce, and exporter secret.
 ///
-/// ⚠️ Warning: Hazmat!
+/// ⚠️ DANGER
 ///
 /// This is a low-level API. Only use this if you know what you are doing.
 ///

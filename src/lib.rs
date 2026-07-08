@@ -121,9 +121,9 @@ pub use rand_core;
 mod util;
 
 pub mod aead;
+pub mod danger;
 #[cfg(any(feature = "x25519", feature = "nistp"))]
 mod dhkex;
-pub mod hazmat;
 pub mod kdf;
 pub mod kem;
 mod op_mode;
