@@ -111,7 +111,7 @@ pub fn create_receiver_context<A: Aead, Kdf: KdfTrait, Kem: KemTrait>(
     AeadCtx::new(key, base_nonce, exporter_secret).into()
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "alloc"))]
 mod test {
     use super::{
         create_receiver_context, create_sender_context, AeadKey, AeadNonce, ExporterSecret,
