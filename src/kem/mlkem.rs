@@ -34,7 +34,7 @@ macro_rules! define_mlkem {
                 Ciphertext, DecapsulationKey, EncapsulationKey, FromSeed, KeyExport, KeySizeUser,
             };
             use rand_core::CryptoRng;
-            use sha3::Shake256;
+            use shake::Shake256;
             use subtle::{Choice, ConstantTimeEq};
             use zeroize::{Zeroize, ZeroizeOnDrop};
 

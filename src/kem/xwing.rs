@@ -12,7 +12,7 @@ use crate::{
 
 use hybrid_array::typenum::{Prod, Sum, Unsigned, U1024, U3, U32, U64};
 use rand_core::CryptoRng;
-use sha3::Shake256;
+use shake::Shake256;
 use subtle::{Choice, ConstantTimeEq};
 use x_wing::{kem::Decapsulate, Decapsulator, KeyExport, TryKeyInit};
 use zeroize::Zeroize;
@@ -223,7 +223,7 @@ impl crate::kat_tests::TestableKem for XWing {
     ) -> Result<(SharedSecret<Self>, Self::EncappedKey), HpkeError> {
         assert!(
             sender_id_keypair.is_none(),
-            "X-Wing does not support authentciated encapsulation"
+            "X-Wing does not support authenticated encapsulation"
         );
         XWing::encap_deterministic(pk_recip, randomness.try_into().unwrap())
     }

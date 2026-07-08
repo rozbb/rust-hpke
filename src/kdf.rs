@@ -93,7 +93,7 @@ pub trait Kdf: Sized {
 }
 
 #[cfg(feature = "shake")]
-use sha3::{Shake128, Shake256};
+use shake::{Shake128, Shake256};
 #[cfg(feature = "shake")]
 use turboshake::{TurboShake128, TurboShake256};
 // We use Kdf as a type parameter, so this is to avoid ambiguity.

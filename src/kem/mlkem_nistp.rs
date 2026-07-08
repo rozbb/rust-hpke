@@ -29,8 +29,9 @@ macro_rules! impl_mlkem_nistp {
             use sha2::digest::XofReader;
             use sha3::{
                 digest::{self, ExtendableOutput, FixedOutput, Update},
-                Digest, Sha3_256, Shake256,
+                Digest, Sha3_256,
             };
+            use shake::Shake256;
             use subtle::{Choice, ConstantTimeEq};
             use $curve::elliptic_curve::sec1::{FromSec1Point, ToSec1Point};
             use zeroize::{Zeroize, ZeroizeOnDrop};
