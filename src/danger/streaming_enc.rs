@@ -65,9 +65,9 @@
 //! ```
 
 use crate::{
+    Kem as KemTrait,
     aead::{Aead, AeadCtx, AeadCtxR, AeadCtxS},
     kdf::Kdf as KdfTrait,
-    Kem as KemTrait,
 };
 
 #[doc(inline)]
@@ -114,7 +114,7 @@ pub fn create_receiver_context<A: Aead, Kdf: KdfTrait, Kem: KemTrait>(
 #[cfg(all(test, feature = "alloc"))]
 mod test {
     use super::{
-        create_receiver_context, create_sender_context, AeadKey, AeadNonce, ExporterSecret,
+        AeadKey, AeadNonce, ExporterSecret, create_receiver_context, create_sender_context,
     };
     use rand_core::Rng;
 

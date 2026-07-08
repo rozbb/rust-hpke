@@ -291,8 +291,8 @@ define_mlkem!(
 
 #[cfg(test)]
 mod tests {
-    use super::mlkem1024::MlKem1024;
     use super::mlkem768::MlKem768;
+    use super::mlkem1024::MlKem1024;
     use crate::{Deserializable, Kem as KemTrait, Serializable};
 
     macro_rules! test_encap_correctness {

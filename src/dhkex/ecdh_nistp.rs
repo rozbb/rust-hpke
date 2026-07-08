@@ -272,7 +272,7 @@ nistp_dhkex!(
 #[cfg(test)]
 mod tests {
     use crate::{
-        dhkex::DhKeyExchange, test_util::dhkex_gen_keypair_with_rng, Deserializable, Serializable,
+        Deserializable, Serializable, dhkex::DhKeyExchange, test_util::dhkex_gen_keypair_with_rng,
     };
 
     use super::p256::DhP256;

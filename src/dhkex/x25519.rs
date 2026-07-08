@@ -1,8 +1,8 @@
 use crate::{
+    Deserializable, HpkeError, Serializable,
     dhkex::{DhError, DhKeyExchange},
     kdf::Kdf as KdfTrait,
-    util::{enforce_equal_len, enforce_outbuf_len, KemSuiteId},
-    Deserializable, HpkeError, Serializable,
+    util::{KemSuiteId, enforce_equal_len, enforce_outbuf_len},
 };
 
 use hybrid_array::typenum::{self, Unsigned};
@@ -168,7 +168,7 @@ impl DhKeyExchange for X25519 {
 #[cfg(test)]
 mod tests {
     use crate::{
-        dhkex::{x25519::X25519, Deserializable, DhKeyExchange, Serializable},
+        dhkex::{Deserializable, DhKeyExchange, Serializable, x25519::X25519},
         test_util::dhkex_gen_keypair_with_rng,
     };
     use hybrid_array::typenum::Unsigned;

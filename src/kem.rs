@@ -20,15 +20,15 @@ pub use dhkem::*;
 #[cfg(all(feature = "mlkem", feature = "nistp"))]
 mod mlkem_nistp;
 #[cfg(all(feature = "mlkem", feature = "nistp"))]
-pub use mlkem_nistp::mlkem1024p384::MlKem1024P384;
-#[cfg(all(feature = "mlkem", feature = "nistp"))]
 pub use mlkem_nistp::mlkem768p256::MlKem768P256;
+#[cfg(all(feature = "mlkem", feature = "nistp"))]
+pub use mlkem_nistp::mlkem1024p384::MlKem1024P384;
 #[cfg(feature = "mlkem")]
 pub(crate) mod mlkem;
 #[cfg(feature = "mlkem")]
-pub use mlkem::mlkem1024::MlKem1024;
-#[cfg(feature = "mlkem")]
 pub use mlkem::mlkem768::MlKem768;
+#[cfg(feature = "mlkem")]
+pub use mlkem::mlkem1024::MlKem1024;
 #[cfg(all(feature = "mlkem", feature = "x25519"))]
 pub(crate) mod xwing;
 #[cfg(all(feature = "mlkem", feature = "x25519"))]
@@ -180,7 +180,7 @@ impl<Kem: KemTrait> Drop for SharedSecret<Kem> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{kem::Kem as KemTrait, Deserializable, Serializable};
+    use crate::{Deserializable, Serializable, kem::Kem as KemTrait};
 
     macro_rules! test_encap_correctness {
         ($test_name:ident, $kem_ty:ty, $use_auth:literal) => {

@@ -1,16 +1,16 @@
 //! Helper functions for two-stage KDFs
 
 use crate::{
+    HpkeError,
     aead::{Aead, AeadCtx},
     kdf::{KdfTrait, MAX_DIGEST_SIZE, VERSION_LABEL},
     kem::{Kem as KemTrait, SharedSecret},
     op_mode::OpMode,
     setup::ExporterSecret,
-    util::{full_suite_id, write_u16_be, KemSuiteId},
-    HpkeError,
+    util::{KemSuiteId, full_suite_id, write_u16_be},
 };
 
-use hkdf::{hmac::EagerHash, Hkdf, HkdfExtract};
+use hkdf::{Hkdf, HkdfExtract, hmac::EagerHash};
 use hybrid_array::{Array, ArraySize};
 use sha2::digest::{Digest, OutputSizeUser};
 

@@ -4,17 +4,17 @@
 //! <https://datatracker.ietf.org/doc/html/draft-ietf-hpke-pq-03>
 
 use crate::{
+    Deserializable, HpkeError, Serializable,
     kdf::one_stage_kdf::labeled_derive,
     kem::{KemTrait, SharedSecret},
     util::{enforce_equal_len, enforce_outbuf_len, kem_suite_id},
-    Deserializable, HpkeError, Serializable,
 };
 
-use hybrid_array::typenum::{Prod, Sum, Unsigned, U1024, U3, U32, U64};
+use hybrid_array::typenum::{Prod, Sum, U3, U32, U64, U1024, Unsigned};
 use rand_core::CryptoRng;
 use shake::Shake256;
 use subtle::{Choice, ConstantTimeEq};
-use x_wing::{kem::Decapsulate, Decapsulator, KeyExport, TryKeyInit};
+use x_wing::{Decapsulator, KeyExport, TryKeyInit, kem::Decapsulate};
 use zeroize::Zeroize;
 
 // Type-level size constants for X-Wing

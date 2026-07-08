@@ -16,11 +16,11 @@
 //    the user of this library to do the appropriate thing when a function returns an error.
 
 use hpke::{
+    Deserializable, Kem as KemTrait, OpModeR, OpModeS, Serializable,
     aead::{AeadTag, ChaCha20Poly1305},
     inout::InOutBuf,
     kdf::KdfTurboShake128,
     kem::XWing,
-    Deserializable, Kem as KemTrait, OpModeR, OpModeS, Serializable,
 };
 
 const INFO_STR: &[u8] = b"example session";

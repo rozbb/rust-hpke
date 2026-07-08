@@ -1,16 +1,16 @@
 //! Traits and structs for key derivation functions
 
 use crate::{
+    HpkeError,
     aead::{Aead, AeadCtx},
     kem::{Kem as KemTrait, SharedSecret},
     op_mode::OpMode,
     util::KemSuiteId,
-    HpkeError,
 };
 
 use hybrid_array::{
-    typenum::{U32, U64},
     Array, ArraySize,
+    typenum::{U32, U64},
 };
 #[cfg(feature = "hkdfsha2")]
 use sha2::{Sha256, Sha384, Sha512};

@@ -1,9 +1,9 @@
 use crate::{
+    HpkeError,
     aead::{Aead, AeadCtxR, AeadCtxS},
     kdf::{DigestArray, Kdf as KdfTrait},
     kem::Kem as KemTrait,
     op_mode::{OpModeR, OpModeS},
-    HpkeError,
 };
 
 #[cfg(feature = "getrandom")]
@@ -187,7 +187,7 @@ mod test {
     #[cfg(feature = "hkdfsha2")]
     use crate::kdf::HkdfSha256;
     use crate::kem::Kem as KemTrait;
-    use crate::test_util::{aead_ctx_eq, gen_rand_buf, new_op_mode_pair, OpModeKind};
+    use crate::test_util::{OpModeKind, aead_ctx_eq, gen_rand_buf, new_op_mode_pair};
 
     #[cfg(feature = "chacha")]
     use crate::aead::ChaCha20Poly1305;

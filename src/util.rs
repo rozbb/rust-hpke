@@ -1,4 +1,4 @@
-use crate::{aead::Aead, kdf::Kdf as KdfTrait, kem::Kem as KemTrait, HpkeError, Serializable};
+use crate::{HpkeError, Serializable, aead::Aead, kdf::Kdf as KdfTrait, kem::Kem as KemTrait};
 
 /// Represents a ciphersuite context. That's "KEMXX", where `XX` is the KEM ID
 pub(crate) type KemSuiteId = [u8; 5];

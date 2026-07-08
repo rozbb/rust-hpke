@@ -1,17 +1,17 @@
 //! Traits and structs for authenticated encryption schemes
 
 use crate::{
+    Deserializable, HpkeError, Serializable,
     kdf::Kdf as KdfTrait,
     kem::Kem as KemTrait,
     setup::ExporterSecret,
-    util::{enforce_equal_len, enforce_outbuf_len, full_suite_id, write_u64_be, FullSuiteId},
-    Deserializable, HpkeError, Serializable,
+    util::{FullSuiteId, enforce_equal_len, enforce_outbuf_len, full_suite_id, write_u64_be},
 };
 
 use core::{default::Default, marker::PhantomData};
 
 use aead::{
-    inout::InOutBuf, AeadCore as BaseAeadCore, AeadInOut as BaseAeadInOut, KeyInit as BaseKeyInit,
+    AeadCore as BaseAeadCore, AeadInOut as BaseAeadInOut, KeyInit as BaseKeyInit, inout::InOutBuf,
 };
 use hybrid_array::Array;
 use zeroize::{Zeroize, ZeroizeOnDrop};
@@ -492,7 +492,7 @@ mod test {
     #[cfg(feature = "chacha")]
     use super::ChaCha20Poly1305;
 
-    use crate::{test_util::gen_ctx_simple_pair, Deserializable, HpkeError, Serializable};
+    use crate::{Deserializable, HpkeError, Serializable, test_util::gen_ctx_simple_pair};
 
     use hybrid_array::typenum::Unsigned;
 

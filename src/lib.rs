@@ -154,7 +154,7 @@ pub use single_shot::{single_shot_open, single_shot_seal_with_rng};
 
 //-------- Top-level types --------//
 
-use hybrid_array::{typenum::marker_traits::Unsigned, Array, ArraySize};
+use hybrid_array::{Array, ArraySize, typenum::marker_traits::Unsigned};
 
 /// Describes things that can go wrong in the HPKE protocol
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

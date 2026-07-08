@@ -1,10 +1,10 @@
 use crate::{
+    HpkeError,
     aead::{Aead, AeadTag},
     kdf::Kdf as KdfTrait,
     kem::Kem as KemTrait,
     op_mode::{OpModeR, OpModeS},
     setup::{setup_receiver, setup_sender_with_rng},
-    HpkeError,
 };
 
 use aead::inout::InOutBuf;

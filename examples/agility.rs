@@ -13,6 +13,7 @@
 //! of runtime checks.
 
 use hpke::{
+    Deserializable, HpkeError, OpModeR, OpModeS, PskBundle, Serializable,
     aead::{Aead, AeadCtxR, AeadCtxS, AeadTag, AesGcm128, AesGcm256, ChaCha20Poly1305},
     inout::InOutBuf,
     kdf::{
@@ -20,11 +21,10 @@ use hpke::{
         KdfTurboShake128, KdfTurboShake256,
     },
     kem::{
-        DhP256HkdfSha256, DhP384HkdfSha384, DhP521HkdfSha512, Kem as KemTrait, MlKem1024,
-        MlKem1024P384, MlKem768, MlKem768P256, X25519HkdfSha256, XWing,
+        DhP256HkdfSha256, DhP384HkdfSha384, DhP521HkdfSha512, Kem as KemTrait, MlKem768,
+        MlKem768P256, MlKem1024, MlKem1024P384, X25519HkdfSha256, XWing,
     },
-    setup_receiver, setup_sender, Deserializable, HpkeError, OpModeR, OpModeS, PskBundle,
-    Serializable,
+    setup_receiver, setup_sender,
 };
 
 trait AgileAeadCtxS {

@@ -1,4 +1,4 @@
-use crate::{kem::Kem as KemTrait, HpkeError};
+use crate::{HpkeError, kem::Kem as KemTrait};
 
 /// Contains preshared key bytes and an identifier. This is intended to go inside an `OpModeR` or
 /// `OpModeS` struct.

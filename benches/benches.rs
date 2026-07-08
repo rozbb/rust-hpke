@@ -1,12 +1,13 @@
 use hpke::{
+    OpModeR, OpModeS, PskBundle,
     aead::{Aead as AeadTrait, AeadCtxR, AeadTag},
     inout::InOutBuf,
     kdf::Kdf as KdfTrait,
     kem::Kem as KemTrait,
-    setup_receiver, setup_sender, OpModeR, OpModeS, PskBundle,
+    setup_receiver, setup_sender,
 };
 
-use criterion::{criterion_main, Criterion};
+use criterion::{Criterion, criterion_main};
 use rand::random;
 use rand_core::Rng;
 use std::time::Instant;

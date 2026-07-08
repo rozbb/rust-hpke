@@ -1,13 +1,13 @@
 //! Helper functions for one-stage KDFs
 
 use crate::{
+    HpkeError,
     aead::{Aead, AeadCtx},
     kdf::{KdfTrait, VERSION_LABEL},
     kem::{Kem as KemTrait, SharedSecret},
     op_mode::OpMode,
     setup::ExporterSecret,
-    util::{full_suite_id, write_u16_be, KemSuiteId},
-    HpkeError,
+    util::{KemSuiteId, full_suite_id, write_u16_be},
 };
 
 use hybrid_array::{Array, ArraySize};

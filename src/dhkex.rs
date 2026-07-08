@@ -1,4 +1,4 @@
-use crate::{kdf::Kdf as KdfTrait, util::KemSuiteId, Deserializable, Serializable};
+use crate::{Deserializable, Serializable, kdf::Kdf as KdfTrait, util::KemSuiteId};
 
 use core::fmt::Debug;
 
