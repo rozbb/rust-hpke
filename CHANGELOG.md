@@ -5,28 +5,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
-## [0.14.0-pre.2] — 2026-02-25
+## [0.14.0] — 2026-07-XX
 
-### Changes
+### Breaking Changes
 
-* Renamed every function that took an RNG to `*_with_rng`, and removed the `rng` parameter from the function with the original name (gated by `getrandom`)
-* Feature-gated AES-GCM and ChaCha20Poly1305 behind `aes` and `chacha` features, respectively
-* Added zeroizing for more intermediate secrets, and improved no-std support
-
-### Additions
-
-* Implemented the X-Wing (aka MLKEM768-X25519) hybrid post-quantum KEM, gated by the `xwing` feature
-* Added `streaming_enc` module for creating streaming encryption contexts, gated by the `hazmat-streaming-enc` feature
-
-## [0.14.0-pre.1] — 2025-11-24
-
-### Changes
-
-* Updated RustCrypto crates `aead`, `aes-gcm`, `chacha20poly1305`, `digest`, `hkdf`, `hmac`
-* Updated `rand` and `rand_core`
-* Replaced `generic-array` with `hybrid-array`
-* Switched all `_in_place` algorithms to `_inout`, and replace `&mut [u8]` with `inout::InOut<'_, '_, u8>`
 * Bumped MSRV to 1.85.0 (2025-02-20)
+* Updated `rand` and `rand_core`
+* Renamed every function that took an RNG to `*_with_rng`, and removed the `rng` parameter from the function with the original name (gated by `getrandom`) ([#97](https://github.com/rozbb/rust-hpke/pull/97))
+* Feature-gated AES-GCM and ChaCha20Poly1305 behind `aes` and `chacha` features, respectively ([#91](https://github.com/rozbb/rust-hpke/pull/91))
+* Consolidated feature flags ([#106](https://github.com/rozbb/rust-hpke/pull/106))
+* Replaced `generic-array` with `hybrid-array` ([#82](https://github.com/rozbb/rust-hpke/pull/82))
+* Switched all `_in_place` algorithms to `_inout`, and replaced `&mut [u8]` with `inout::InOut<'_, '_, u8>` ([#82](https://github.com/rozbb/rust-hpke/pull/82))
+* Updated RustCrypto crates `aead`, `aes-gcm`, `chacha20poly1305`, `digest`, `hkdf`, `hmac`
+
+### Other Changes
+
+* Added XWing KEM and SHAKE KDFs ([#81](https://github.com/rozbb/rust-hpke/pull/81))
+* Added MLKEM-NISP KEMs ([#105](https://github.com/rozbb/rust-hpke/pull/105))
+* Added pure-MLKEM KEMs and TurboSHAKE KDF ([#105](https://github.com/rozbb/rust-hpke/pull/105))
+* Added `danger::streaming_enc` module for creating streaming encryption contexts
+[#107](https://github.com/rozbb/rust-hpke/pull/107)
+* Added zeroizing for more intermediate secrets ([#92](https://github.com/rozbb/rust-hpke/pull/92))
+* Fixed `no_std` support([#96](https://github.com/rozbb/rust-hpke/pull/96))
 
 ## [0.13.0] - 2025-02-19
 
