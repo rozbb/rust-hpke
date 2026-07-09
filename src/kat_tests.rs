@@ -1,22 +1,22 @@
 use crate::{
+    Deserializable, HpkeError, Serializable,
     aead::{Aead, AesGcm128, AesGcm256, ChaCha20Poly1305, ExportOnlyAead},
     kdf::{
         HkdfSha256, HkdfSha384, HkdfSha512, Kdf as KdfTrait, KdfShake128, KdfShake256,
         KdfTurboShake128, KdfTurboShake256,
     },
     kem::{
-        DhP256HkdfSha256, DhP384HkdfSha384, DhP521HkdfSha512, Kem as KemTrait, MlKem1024,
-        MlKem1024P384, MlKem768, MlKem768P256, SharedSecret, X25519HkdfSha256, XWing,
+        DhP256HkdfSha256, DhP384HkdfSha384, DhP521HkdfSha512, Kem as KemTrait, MlKem768,
+        MlKem768P256, MlKem1024, MlKem1024P384, SharedSecret, X25519HkdfSha256, XWing,
     },
     op_mode::{OpModeR, PskBundle},
     setup::setup_receiver,
-    Deserializable, HpkeError, Serializable,
 };
 
 use std::{fs::File, string::String, vec::Vec};
 
 use ml_kem::KeyExport;
-use serde::{de::Error as SError, Deserialize, Deserializer};
+use serde::{Deserialize, Deserializer, de::Error as SError};
 
 // For known-answer tests we need to be able to encap with fixed randomness. This allows that.
 pub(crate) trait TestableKem: KemTrait {
