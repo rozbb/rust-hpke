@@ -57,7 +57,7 @@ subtle = { version = "2.6", default-features = false }
 x25519-dalek = { version = "3.0.0", default-features = false, features = [
     "static_secrets",
 ], optional = true }
-x-wing = { version = "=0.1.0-rc.0", optional = true, default-features = false, features = ["hazmat"] }
+x-wing = { version = "0.1.0", optional = true, default-features = false, features = ["hazmat"] }
 zeroize = { version = "1", default-features = false, features = [
     "zeroize_derive",
 ] }

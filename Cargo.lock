@@ -1239,14 +1239,14 @@ dependencies = [
 
 [[package]]
 name = "x-wing"
-version = "0.1.0-rc.0"
+version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e17d0d5f4d1f26b9b9e7477af1d3bef960e1d1fb64edab7912fde472a8a8432e"
+checksum = "b51507b887016c3925c84591108dadb8c099f776eb04fec6a60ae3519fee856f"
 dependencies = [
  "kem",
  "ml-kem",
- "rand_core",
- "sha3 0.11.0",
+ "sha3 0.12.0",
+ "shake",
  "x25519-dalek",
 ]
 
