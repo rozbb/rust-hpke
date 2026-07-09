@@ -30,6 +30,8 @@ Here are all the primitives listed in the spec. The primitives with checked boxe
     - [X] HKDF-SHA512
     - [X] SHAKE128
     - [X] SHAKE256
+    - [X] TurboSHAKE128
+    - [X] TurboSHAKE256
 * AEADs
     - [X] AES-GCM-128
     - [X] AES-GCM-256
@@ -57,13 +59,13 @@ Default features flags: `getrandom`, `alloc`, `chacha`, `x25519`, `mlkem`. Note 
   * `shake` — Enables SHAKE128/256 and TurboSHAKE128/256
 * `kat` - Used only to enabled known-answer tests, which require `std`. Only use with `cargo test`
 
+For info on how to omit or include feature flags, see the [cargo docs on features](https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html#choosing-features).
+
 ## Feature Combinations
 
 We list the additional functionality that certain feature combinations enable:
 * `x25519,mlkem` (default) — Enables the ML-KEM-768+X25519 (aka XWing) hybrid post-quantum KEM
 * `nistp,mlkem` — Enables the ML-KEM + NIST-P hybrid post-quantum KEMs
-
-For info on how to omit or include feature flags, see the [cargo docs on features](https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html#choosing-features).
 
 # Usage Examples
 
@@ -71,7 +73,7 @@ See the [client-server](examples/client_server.rs) example for an idea of how to
 
 # Breaking Changes
 
-All changes in the last few versions can be found in [CHANGELOG.md](CHANGELOG.md). We highlight recent ones below. This crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html) for all modules except for `danger`. We reserve the right to break the `danger` API with patch version updates. So if you are using the `danger` API, pin `hpke` to the patch version, e.g., by specifying `=0.14.0`.
+All changes in the last few versions can be found in [CHANGELOG.md](CHANGELOG.md). We highlight recent ones below. This crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html) for all modules except for `danger`. We reserve the right to break the `danger` API with patch version updates. So **if you are using the `danger` API, pin `hpke` to the patch version, e.g., by specifying `=0.14.0`.**
 
 ## Important Breaking Changes in v0.14.0
 
