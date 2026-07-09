@@ -25,7 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * Added MLKEM-NISP KEMs ([#105](https://github.com/rozbb/rust-hpke/pull/105))
 * Added pure-MLKEM KEMs and TurboSHAKE KDF ([#105](https://github.com/rozbb/rust-hpke/pull/105))
 * Added `danger::streaming_enc` module for creating streaming encryption contexts
-[#107](https://github.com/rozbb/rust-hpke/pull/107)
+([#87](https://github.com/rozbb/rust-hpke/pull/87), [#107](https://github.com/rozbb/rust-hpke/pull/107))
 * Added zeroizing for more intermediate secrets ([#92](https://github.com/rozbb/rust-hpke/pull/92))
 * Fixed `no_std` support([#96](https://github.com/rozbb/rust-hpke/pull/96))
 

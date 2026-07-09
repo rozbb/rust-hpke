@@ -1,13 +1,12 @@
-rust-hpke
-=========
+# rust-hpke
+
 [![Version](https://img.shields.io/crates/v/hpke.svg)](https://crates.io/crates/hpke)
 [![Docs](https://docs.rs/hpke/badge.svg)](https://docs.rs/hpke)
 [![CI](https://github.com/rozbb/rust-hpke/workflows/CI/badge.svg)](https://github.com/rozbb/rust-hpke/actions)
 
 This is an implementation of the [HPKE](https://www.rfc-editor.org/rfc/rfc9180.html) hybrid encryption standard (RFC 9180).
 
-What it implements
-------------------
+# What It Implements
 
 This implementation complies with the [HPKE standard](https://www.rfc-editor.org/rfc/rfc9180.html) (RFC 9180). It also implements the pure post-quantum KEMs defined in [draft-ietf-hpke-pq-04](https://datatracker.ietf.org/doc/html/draft-ietf-hpke-pq-04), and the hybrid post-quantum KEMs defined in  [draft-connolly-cfrg-xwing-kem-10](https://datatracker.ietf.org/doc/html/draft-connolly-cfrg-xwing-kem-10), [draft-irtf-cfrg-concrete-hybrid-kems-03](https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-concrete-hybrid-kems-03), and [draft-irtf-cfrg-hybrid-kems-11](https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hybrid-kems-11) (this is all quite confusing, see Filippo's [summary](https://filippo.io/hpke-pq) of it).
 
@@ -36,12 +35,11 @@ Here are all the primitives listed in the spec. The primitives with checked boxe
     - [X] AES-GCM-256
     - [X] ChaCha20Poly1305
 
-Crate Features
---------------
+# Crate Features
 
 The feature flags in this crate allow end-users to avoid pulling in dependencies they don't want. We thus take an **additive approach** to features: if you want hybrid post-quantum KEMs, you need to pull in the individual features it relies on. All is explained below.
 
-### Feature Flags
+## Feature Flags
 
 Default features flags: `getrandom`, `alloc`, `chacha`, `x25519`, `mlkem`. Note this combination means that XWing is enabled by default, as well as all (Turbo)SHAKE KDFs.
 
@@ -59,7 +57,7 @@ Default features flags: `getrandom`, `alloc`, `chacha`, `x25519`, `mlkem`. Note 
   * `shake` — Enables SHAKE128/256 and TurboSHAKE128/256
 * `kat` - Used only to enabled known-answer tests, which require `std`. Only use with `cargo test`
 
-### Feature Combinations
+## Feature Combinations
 
 We list the additional functionality that certain feature combinations enable:
 * `x25519,mlkem` (default) — Enables the ML-KEM-768+X25519 (aka XWing) hybrid post-quantum KEM
@@ -67,39 +65,30 @@ We list the additional functionality that certain feature combinations enable:
 
 For info on how to omit or include feature flags, see the [cargo docs on features](https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html#choosing-features).
 
-Usage Examples
---------------
+# Usage Examples
 
 See the [client-server](examples/client_server.rs) example for an idea of how to use HPKE.
 
-Breaking changes
-----------------
+# Breaking Changes
 
-This crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html) for all modules except for `danger`. We reserve the right to break the `danger` API with patch version updates. All changes in the last few versions can be found in [CHANGELOG.md](CHANGELOG.md). We highlight recent ones below.
+All changes in the last few versions can be found in [CHANGELOG.md](CHANGELOG.md). We highlight recent ones below. This crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html) for all modules except for `danger`. We reserve the right to break the `danger` API with patch version updates. So if you are using the `danger` API, pin `hpke` to the patch version, e.g., by specifying `=0.14.0`.
 
-## Important Breaking in v0.14.0
+## Important Breaking Changes in v0.14.0
 
 * Completely overhauled feature flags (see feature flags section above)
 * Switched all `*_in_place` algorithms to `_inout`, and replaced `&mut [u8]` with `inout::InOut<'_, '_, u8>`
 * Renamed every function that took an RNG to `*_with_rng`, and removed the `rng` parameter from the function with the original name (gated by `getrandom`)
 * Replaced `generic-array` with `hybrid-array`
 
-### Breaking changes in v0.12
+## Important Breaking Changes in v0.12
 
 The `serde_impls` feature was removed. If you were using this and require backwards compatible serialization/deserialization, see the wiki page [here](https://github.com/rozbb/rust-hpke/wiki/Migrating-away-from-the-serde_impls-feature).
 
-MSRV
-----
+# MSRV
 
 The current minimum supported Rust version (MSRV) is 1.85.0 (2025-02-20).
 
-Changelog
----------
-
-See [CHANGELOG.md](CHANGELOG.md) for a list of changes made throughout past versions.
-
-Tests
------
+# Tests
 
 To run all tests, execute `cargo test --all-features`. This includes known-answer tests.
 
@@ -109,8 +98,7 @@ Post-quantum ciphersuites (including hybrid), test against `test-vectors/pq-COMM
 
 Hybrid ciphersuites are additionally tested against `test-vectors/hybrid-COMMIT_ID.json`. The commit ID refers to the concrete hybrid HPKE spec [repo](https://github.com/cfrg/draft-irtf-cfrg-concrete-hybrid-kems).
 
-Benchmarks
-----------
+# Benchmarks
 
 To run all benchmarks, execute `cargo bench --all-features`. If you set your own feature flags, the benchmarks will still work, and run the subset of benches that it is able to. The results of a benchmark can be read as a neat webpage at `target/criterion/report/index.html`.
 
@@ -132,8 +120,7 @@ Functions benchmarked in each ciphersuite:
 * `AeadCtxS::seal` with plaintext length 64 and AAD length 64
 * `AeadCtxR::open` with ciphertext length 64 and AAD length 64
 
-Audit History
--------------
+# Audit History
 
 To the authors' knowledge, nobody has performed a paid audit of this crate. However, Cloudflare [did a security](https://blog.cloudflare.com/using-hpke-to-encrypt-request-payloads/) review of version 0.8, saying:
 
@@ -144,8 +131,7 @@ To the authors' knowledge, nobody has performed a paid audit of this crate. Howe
 > practices like correctly zeroing memory and safe usage of random number
 > generators, we found no security issues.
 
-Agility
--------
+# Agility
 
 A definition: *crypto agility* refers to the ability of a cryptosystem or protocol to vary its underlying primitives. For example, TLS has "crypto agility" in that you can run the protocol with many different ciphersuites.
 
@@ -153,8 +139,7 @@ This crate does not support crypto agility out of the box. This is because the c
 
 If you want agility, you can use the [`hpke-dispatch`](https://crates.io/crates/hpke-dispatch) crate.
 
-License
--------
+# License
 
 Licensed under either of
 
