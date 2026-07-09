@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Breaking Changes
 
+* Bumped Rust edition to 2024
 * Bumped MSRV to 1.85.0 (2025-02-20)
 * Updated `rand` and `rand_core`
 * Renamed every function that took an RNG to `*_with_rng`, and removed the `rng` parameter from the function with the original name (gated by `getrandom`) ([#97](https://github.com/rozbb/rust-hpke/pull/97))
