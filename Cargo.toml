@@ -45,7 +45,7 @@ p384 = { version = "0.14.0", default-features = false, features = [
     "arithmetic",
     "ecdh",
 ], optional = true }
-p521 = { version = "0.14.0-rc.15", default-features = false, features = [
+p521 = { version = "0.14.0", default-features = false, features = [
     "arithmetic",
     "ecdh",
 ], optional = true }
