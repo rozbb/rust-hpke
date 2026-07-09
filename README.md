@@ -131,13 +131,11 @@ To the authors' knowledge, nobody has performed a paid audit of this crate. Howe
 > practices like correctly zeroing memory and safe usage of random number
 > generators, we found no security issues.
 
-# Agility
+# Runtime Ciphersuite Selection
 
-A definition: *crypto agility* refers to the ability of a cryptosystem or protocol to vary its underlying primitives. For example, TLS has "crypto agility" in that you can run the protocol with many different ciphersuites.
+This crate forces the user to decide _at compile time_ which ciphersuite they wish to use. We do it this way for the sake of simplicity, and for the added static guarantees that you get when you use the type system.
 
-This crate does not support crypto agility out of the box. This is because the cryptographic primitives are encoded as types satisfying certain constraints, and types need to be determined at compile time (broadly speaking). Purely for the sake of demonstration, there is a [sample implementation](examples/agility.rs) in the examples folder. The sample implementation is messy because agility is messy.
-
-If you want agility, you can use the [`hpke-dispatch`](https://crates.io/crates/hpke-dispatch) crate.
+If you do not know in advance which ciphersuites you will be using, e.g., for a protocol that does ciphersuite negotiation, then you should use the [`hpke-dispatch`](https://crates.io/crates/hpke-dispatch) crate. This crates allows ciphersuite selection at runtime (this feature is sometimes known as "agility"). Purely for the sake of demonstration, we also have a [sample implementation](examples/agility.rs) in the examples folder.
 
 # License
 
