@@ -56,8 +56,12 @@ turboshake = { version = "0.7", default-features = false, features = ["zeroize"]
 subtle = { version = "2.6", default-features = false }
 x25519-dalek = { version = "3.0.0", default-features = false, features = [
     "static_secrets",
+    "zeroize",
 ], optional = true }
-x-wing = { version = "0.1.0", optional = true, default-features = false, features = ["hazmat"] }
+x-wing = { version = "0.1.0", optional = true, default-features = false, features = [
+    "hazmat",
+    "zeroize",
+] }
 zeroize = { version = "1", default-features = false, features = [
     "zeroize_derive",
 ] }
