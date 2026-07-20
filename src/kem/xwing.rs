@@ -48,7 +48,10 @@ impl Deserializable for PrivateKey {
         let mut arr = [0u8; Self::OutputSize::USIZE];
         arr.copy_from_slice(encoded);
 
-        Ok(PrivateKey(arr.into()))
+        let sk = PrivateKey(arr.into());
+        arr.zeroize();
+
+        Ok(sk)
     }
 }
 

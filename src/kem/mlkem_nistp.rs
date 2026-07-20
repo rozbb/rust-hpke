@@ -278,7 +278,7 @@ macro_rules! impl_mlkem_nistp {
                     //       ss_PQ = KEM_PQ.Decaps(dk_PQ, ct_PQ)
                     //       ss_T = Group_T.ElementToSharedSecret(Group_T.Exp(ct_T, dk_T))
                     //       return (ss_PQ, ss_T)
-                    let ss_pq = sk_recip.dk_pq.decapsulate(&encapped_key.ct_pq);
+                    let mut ss_pq = sk_recip.dk_pq.decapsulate(&encapped_key.ct_pq);
                     let ss_t = $curve::ecdh::diffie_hellman(
                         sk_recip.dk_t.to_nonzero_scalar(),
                         ct_t.as_affine(),
@@ -290,6 +290,8 @@ macro_rules! impl_mlkem_nistp {
                         encapped_key.ct_t.as_bytes(),
                         sk_recip.dk_t.public_key().to_sec1_point(false).as_bytes(),
                     );
+
+                    ss_pq.zeroize();
 
                     Ok(SharedSecret(shared_secret))
                 }
@@ -329,7 +331,7 @@ macro_rules! impl_mlkem_nistp {
                     //       ct_T = Group_T.Exp(Group_T.g, sk_E)
                     //       ss_T = Group_T.ElementToSharedSecret(Group_T.Exp(ek_T, sk_E))
                     //       return (ss_PQ, ss_T, ct_PQ, ct_T)
-                    let (ct_pq, ss_pq) = pk_recip.ek_pq.encapsulate_with_rng(csprng);
+                    let (ct_pq, mut ss_pq) = pk_recip.ek_pq.encapsulate_with_rng(csprng);
                     let sk_e = $curve::ecdh::EphemeralSecret::generate_from_rng(csprng);
                     let ct_t = sk_e.public_key().to_sec1_point(false);
                     let ss_t = sk_e.diffie_hellman(&pk_recip.ek_t);
@@ -340,6 +342,8 @@ macro_rules! impl_mlkem_nistp {
                         ct_t.as_bytes(),
                         pk_recip.ek_t.to_sec1_point(false).as_bytes(),
                     );
+
+                    ss_pq.zeroize();
 
                     Ok((SharedSecret(shared_secret), EncappedKey { ct_pq, ct_t }))
                 }

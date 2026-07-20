@@ -7,6 +7,7 @@ use crate::{
 
 use hybrid_array::typenum::{self, Unsigned};
 use subtle::{Choice, ConstantTimeEq};
+use zeroize::Zeroize;
 
 // We wrap the types in order to abstract away the dalek dep
 
@@ -96,7 +97,10 @@ impl Deserializable for PrivateKey {
         // then k = nq for some n > 0. And since k is a multiple of 8 and q is prime, n must be a
         // multiple of 8. However, 8q > 2^257 which is already out of representable range! So k
         // cannot be 0 (mod q).
-        Ok(PrivateKey(x25519_dalek::StaticSecret::from(arr)))
+        let sk = PrivateKey(x25519_dalek::StaticSecret::from(arr));
+        arr.zeroize();
+
+        Ok(sk)
     }
 }
 
