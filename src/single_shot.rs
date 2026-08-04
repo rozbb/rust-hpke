@@ -396,5 +396,13 @@ mod test {
             XWing,
             false
         );
+
+        test_single_shot_correctness!(
+            test_single_shot_correctness_xwing_reject_non_contrib,
+            ChaCha20Poly1305,
+            KdfTurboShake128,
+            XWingRejectNonContrib,
+            false
+        );
     }
 }

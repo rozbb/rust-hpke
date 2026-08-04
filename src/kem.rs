@@ -32,7 +32,7 @@ pub use mlkem::mlkem1024::MlKem1024;
 #[cfg(all(feature = "mlkem", feature = "x25519"))]
 pub(crate) mod xwing;
 #[cfg(all(feature = "mlkem", feature = "x25519"))]
-pub use xwing::XWing;
+pub use xwing::{XWing, XWingRejectNonContrib};
 
 /// Represents authenticated encryption functionality
 pub trait Kem: Sized {
@@ -316,5 +316,15 @@ mod tests {
 
         test_encap_correctness!(test_encap_correctness_xwing, XWing, false);
         test_encapped_serialize!(test_encapped_serialize_xwing, XWing);
+
+        test_encap_correctness!(
+            test_encap_correctness_xwing_reject_non_contrib,
+            XWingRejectNonContrib,
+            false
+        );
+        test_encapped_serialize!(
+            test_encapped_serialize_xwing_reject_non_contrib,
+            XWingRejectNonContrib
+        );
     }
 }
