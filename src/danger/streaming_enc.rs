@@ -350,5 +350,12 @@ mod test {
             KdfTurboShake128,
             crate::kem::XWing
         );
+
+        test_create_ctx_correctness!(
+            test_create_ctx_correctness_chacha_xwing_reject_non_contrib,
+            ChaCha20Poly1305,
+            KdfTurboShake128,
+            crate::kem::XWingRejectNonContrib
+        );
     }
 }

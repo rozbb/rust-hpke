@@ -8,6 +8,7 @@ use crate::{
     kem::{
         DhP256HkdfSha256, DhP384HkdfSha384, DhP521HkdfSha512, Kem as KemTrait, MlKem768,
         MlKem768P256, MlKem1024, MlKem1024P384, SharedSecret, X25519HkdfSha256, XWing,
+        XWingRejectNonContrib,
     },
     op_mode::{OpModeR, PskBundle},
     setup::setup_receiver,
@@ -493,5 +494,6 @@ fn hybrid() {
         // Note we skip "unpack_dk" because the XWing crate doesn't expose the secret key
         // internals to us
         test_hybrid_vector!(XWing, tv);
+        test_hybrid_vector!(XWingRejectNonContrib, tv);
     }
 }

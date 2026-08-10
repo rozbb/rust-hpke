@@ -14,7 +14,10 @@ use hybrid_array::typenum::{Prod, Sum, U3, U32, U64, U1024, Unsigned};
 use rand_core::CryptoRng;
 use shake::Shake256;
 use subtle::{Choice, ConstantTimeEq};
-use x_wing::{Decapsulator, KeyExport, TryKeyInit, kem::Decapsulate};
+use x_wing::{
+    Decapsulator, KeyExport, TryKeyInit,
+    kem::{Decapsulate, TryDecapsulate},
+};
 use zeroize::Zeroize;
 
 // Type-level size constants for X-Wing
@@ -68,6 +71,50 @@ impl PartialEq for PrivateKey {
 }
 impl Eq for PrivateKey {}
 
+#[derive(Clone)]
+pub struct PrivateKeyRejectNonContrib(x_wing::DecapsulationKeyRejectNonContrib);
+
+impl Serializable for PrivateKeyRejectNonContrib {
+    // x_wing::DECAPSULATION_KEY_SIZE == 32
+    type OutputSize = U32;
+
+    fn write_exact(&self, buf: &mut [u8]) {
+        // Check the length is correct and panic if not
+        enforce_outbuf_len::<Self>(buf);
+
+        buf.copy_from_slice(&self.0.to_bytes());
+    }
+}
+
+impl Deserializable for PrivateKeyRejectNonContrib {
+    fn from_bytes(encoded: &[u8]) -> Result<Self, HpkeError> {
+        // Check the input buf length is correct and error if not
+        enforce_equal_len(Self::OutputSize::USIZE, encoded.len())?;
+
+        // Copy to a fixed-size array
+        let mut arr = [0u8; Self::OutputSize::USIZE];
+        arr.copy_from_slice(encoded);
+
+        let sk = PrivateKeyRejectNonContrib(arr.into());
+        arr.zeroize();
+
+        Ok(sk)
+    }
+}
+
+impl ConstantTimeEq for PrivateKeyRejectNonContrib {
+    fn ct_eq(&self, other: &Self) -> Choice {
+        self.0.to_bytes().ct_eq(&other.0.to_bytes())
+    }
+}
+
+impl PartialEq for PrivateKeyRejectNonContrib {
+    fn eq(&self, other: &Self) -> bool {
+        self.ct_eq(other).into()
+    }
+}
+impl Eq for PrivateKeyRejectNonContrib {}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PublicKey(x_wing::EncapsulationKey);
 
@@ -114,7 +161,10 @@ impl Deserializable for EncappedKey {
     }
 }
 
-/// X-Wing (a.k.a ML-KEM 768 + X25519) hybrid post-quantum KEM
+/// X-Wing (a.k.a ML-KEM 768 + X25519) hybrid post-quantum KEM.
+///
+/// This KEM implementation accepts "non-contributory behaviour" in the X25519 component.
+/// To reject instead, use [`XWingRejectNonContrib`].
 pub struct XWing;
 
 impl XWing {
@@ -232,6 +282,121 @@ impl crate::kat_tests::TestableKem for XWing {
     }
 }
 
+/// X-Wing (a.k.a ML-KEM 768 + X25519) hybrid post-quantum KEM.
+///
+/// This KEM implementation rejects "non-contributory behaviour" in the X25519 component.
+/// To accept instead, use [`XWing`].
+///
+/// # Backstory
+///
+/// [RFC 7748] defines the `X25519` function, and [specifies] that when used for ECDH
+/// (as it is inside X-Wing), the implementation **MAY** abort if the all-zero value
+/// is produced as a shared secret. X-Wing, as initially specified, used the X25519
+/// function without making any mention of this **MAY**, meaning that implementations
+/// inherited whatever behaviour their underlying X25519 ECDH implementation provided.
+///
+/// This crate initially did not check for non-contributory behaviour, which meant it
+/// was incompatible with other implementations that did (in that it would accept
+/// ciphertexts that other implementations reject).
+///
+/// [CFRG have decided] that they will pick a single behaviour for the IETF X-Wing
+/// standard. Until the corresponding RFC is published, this crate supports both
+/// behaviours: [`XWing`] accepts non-contributory behaviour for backwards-compatibility
+/// with existing usages, and this struct can be used to instead reject non-contributory
+/// behaviour. Once the RFC is published, `XWing` will be altered to match it.
+///
+/// [RFC 7748]: https://www.rfc-editor.org/info/rfc7748/#section-5
+/// [specifies]: https://www.rfc-editor.org/info/rfc7748/#section-6.1
+/// [CFRG have decided]: https://mailarchive.ietf.org/arch/msg/cfrg/v9fEHQj3QTUpdu72AzjyyrY4j2g/
+pub struct XWingRejectNonContrib;
+
+impl KemTrait for XWingRejectNonContrib {
+    const KEM_ID: u16 = XWing::KEM_ID;
+    type NSecret = <XWing as KemTrait>::NSecret;
+    type PublicKey = <XWing as KemTrait>::PublicKey;
+    type PrivateKey = PrivateKeyRejectNonContrib;
+    type EncappedKey = <XWing as KemTrait>::EncappedKey;
+
+    fn sk_to_pk(sk: &PrivateKeyRejectNonContrib) -> PublicKey {
+        PublicKey(sk.0.encapsulation_key().clone())
+    }
+
+    fn derive_keypair(ikm: &[u8]) -> (PrivateKeyRejectNonContrib, PublicKey) {
+        let (sk, pk) = XWing::derive_keypair(ikm);
+
+        let sk = PrivateKeyRejectNonContrib::from_bytes(&sk.to_bytes()).expect("valid");
+
+        (sk, pk)
+    }
+
+    /// Decapsulate the encapsulated key using the recipient's private key. This DOES NOT support
+    /// authenticated encapsulation, i.e., `pk_sender_id` MUST be `None`.
+    ///
+    /// # Panics
+    /// Panics if `pk_sender_id` is `Some`.
+    fn decap(
+        sk_recip: &PrivateKeyRejectNonContrib,
+        pk_sender_id: Option<&PublicKey>,
+        encapped_key: &EncappedKey,
+    ) -> Result<SharedSecret<Self>, HpkeError> {
+        assert!(
+            pk_sender_id.is_none(),
+            "X-Wing doesn't support authenticated encapsulation. Use Base or Psk operation mode."
+        );
+
+        let ss = sk_recip
+            .0
+            .try_decapsulate(&encapped_key.0)
+            .map_err(|_| HpkeError::DecapError)?;
+        Ok(SharedSecret(ss))
+    }
+
+    /// Decapsulate the encapsulated key using the recipient's private key. This DOES NOT support
+    /// authenticated encapsulation, i.e., `sender_id_keypair` MUST be `None`.
+    ///
+    /// # Panics
+    /// Panics if `sender_id_keypair` is `Some`.
+    fn encap_with_rng(
+        pk_recip: &PublicKey,
+        sender_id_keypair: Option<(&PrivateKeyRejectNonContrib, &PublicKey)>,
+        csprng: &mut impl CryptoRng,
+    ) -> Result<(SharedSecret<Self>, EncappedKey), HpkeError> {
+        assert!(
+            sender_id_keypair.is_none(),
+            "X-Wing doesn't support authenticated encapsulation. Use Base or Psk operation mode."
+        );
+
+        XWing::encap_with_rng(pk_recip, None, csprng).map(|(ss, ek)| (SharedSecret(ss.0), ek))
+    }
+}
+
+// Impl the trait necessary for known-answer tests
+#[cfg(all(test, feature = "kat"))]
+impl crate::kat_tests::TestableKem for XWingRejectNonContrib {
+    // There is no encap-with-eph, since that only makes sense for DHKEMs
+    type EphemeralKey = core::convert::Infallible;
+    fn encap_with_eph(
+        _pk_recip: &Self::PublicKey,
+        _sender_id_keypair: Option<(&Self::PrivateKey, &Self::PublicKey)>,
+        _sk_eph: Self::EphemeralKey,
+    ) -> Result<(SharedSecret<Self>, Self::EncappedKey), HpkeError> {
+        unimplemented!()
+    }
+
+    fn encap_det(
+        pk_recip: &Self::PublicKey,
+        sender_id_keypair: Option<(&Self::PrivateKey, &Self::PublicKey)>,
+        randomness: &[u8],
+    ) -> Result<(SharedSecret<Self>, Self::EncappedKey), HpkeError> {
+        assert!(
+            sender_id_keypair.is_none(),
+            "X-Wing does not support authenticated encapsulation"
+        );
+        XWing::encap_deterministic(pk_recip, randomness.try_into().unwrap())
+            .map(|(ss, ek)| (SharedSecret(ss.0), ek))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -244,6 +409,19 @@ mod tests {
             XWing::encap_with_rng(&pk, None, &mut csprng).expect("encapsulation failed");
         let shared_secret_recipient =
             XWing::decap(&sk, None, &EncappedKey(encapped_key.0)).expect("decapsulation failed");
+        assert_eq!(shared_secret.0, shared_secret_recipient.0);
+    }
+
+    #[test]
+    fn test_roundtrip_reject_non_contributory() {
+        let mut csprng = rand::rng();
+        let (sk, pk) = XWingRejectNonContrib::gen_keypair_with_rng(&mut csprng);
+        let (shared_secret, encapped_key) =
+            XWingRejectNonContrib::encap_with_rng(&pk, None, &mut csprng)
+                .expect("encapsulation failed");
+        let shared_secret_recipient =
+            XWingRejectNonContrib::decap(&sk, None, &EncappedKey(encapped_key.0))
+                .expect("decapsulation failed");
         assert_eq!(shared_secret.0, shared_secret_recipient.0);
     }
 }

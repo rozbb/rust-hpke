@@ -510,5 +510,20 @@ mod test {
             XWing,
             false
         );
+
+        test_setup_correctness!(
+            test_setup_correctness_xwing_reject_non_contrib,
+            ChaCha20Poly1305,
+            KdfTurboShake128,
+            XWingRejectNonContrib,
+            false
+        );
+        test_setup_soundness!(
+            test_setup_soundness_xwing_reject_non_contrib,
+            ChaCha20Poly1305,
+            KdfTurboShake128,
+            XWingRejectNonContrib,
+            false
+        );
     }
 }
