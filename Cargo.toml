@@ -31,7 +31,7 @@ kat = ["alloc", "getrandom", "aes", "chacha", "x25519", "nistp", "mlkem", "hkdfs
 [dependencies]
 aead = { version = "0.6.1", default-features = false }
 aes-gcm = { version = "0.11.0", default-features = false, features = ["aes"], optional = true }
-chacha20poly1305 = { version = "0.11.0", default-features = false, optional = true }
+chacha20poly1305 = { version = "0.11.0", default-features = false, features = ["zeroize"], optional = true }
 getrandom = { version = "0.4", default-features = false, features = ["sys_rng"], optional = true }
 hybrid-array = "0.4.13"
 hkdf = { version = "0.13", default-features = false, optional = true }
