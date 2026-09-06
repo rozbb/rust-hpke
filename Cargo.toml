@@ -4,7 +4,7 @@ repository = "https://github.com/rozbb/rust-hpke"
 documentation = "https://docs.rs/hpke"
 description = "An implementation of the HPKE hybrid encryption standard (RFC 9180) in pure Rust"
 readme = "README.md"
-version = "0.14.0"
+version = "0.14.1"
 authors = ["Michael Rosenberg <michael@mrosenberg.pub>"]
 edition = "2024"
 license = "MIT/Apache-2.0"
@@ -70,9 +70,9 @@ zeroize = { version = "1", default-features = false, features = [
 criterion = { version = "0.8", features = ["html_reports"] }
 hex = "0.4"
 hex-literal = "1"
+rand = { version = "0.10.2", features = ["thread_rng"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-rand = { git = "https://github.com/rust-random/rand.git", rev = "9c98f59e8b042e5c7c714e933e49b384a4ce75a6", features = [ "thread_rng" ] }
 
 [[example]]
 name = "client_server"
