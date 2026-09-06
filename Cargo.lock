@@ -536,7 +536,7 @@ dependencies = [
 
 [[package]]
 name = "hpke"
-version = "0.14.0"
+version = "0.14.1"
 dependencies = [
  "aead",
  "aes-gcm",
@@ -842,8 +842,9 @@ checksum = "f8dcc9c7d52a811697d2151c701e0d08956f92b0e24136cf4cf27b57a6a0d9bf"
 
 [[package]]
 name = "rand"
-version = "0.10.0-rc.8"
-source = "git+https://github.com/rust-random/rand.git?rev=9c98f59e8b042e5c7c714e933e49b384a4ce75a6#9c98f59e8b042e5c7c714e933e49b384a4ce75a6"
+version = "0.10.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c7f5fa3a058cd35567ef9bfa5e75732bee0f9e4c55fa90477bef2dfcdbc4be80"
 dependencies = [
  "chacha20",
  "getrandom",
