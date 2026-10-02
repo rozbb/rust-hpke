@@ -1240,8 +1240,9 @@ dependencies = [
 
 [[package]]
 name = "x-wing"
-version = "0.1.0"
-source = "git+https://github.com/str4d/RustCrypto-KEMs.git?rev=f5dd74e238bfebc0b36754923ccc6157d75641e6#f5dd74e238bfebc0b36754923ccc6157d75641e6"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "01576e56599d01d75c5efcd5b30fa5de29e776f5a225e43fbf8c92c7302d4c8b"
 dependencies = [
  "kem",
  "ml-kem",
