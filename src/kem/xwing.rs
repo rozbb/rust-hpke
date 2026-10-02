@@ -14,7 +14,7 @@ use hybrid_array::typenum::{Prod, Sum, U3, U32, U64, U1024, Unsigned};
 use rand_core::CryptoRng;
 use shake::Shake256;
 use subtle::{Choice, ConstantTimeEq};
-use x_wing::{Decapsulator, KeyExport, TryKeyInit, kem::Decapsulate};
+use x_wing::{Decapsulator, KeyExport, TryKeyInit, kem::TryDecapsulate};
 use zeroize::Zeroize;
 
 // Type-level size constants for X-Wing
@@ -25,7 +25,7 @@ type U1120 = Sum<Sum<U1024, U64>, U32>;
 const XWING_ENCAP_RANDOMNESS_SIZE: usize = 64;
 
 #[derive(Clone)]
-pub struct PrivateKey(x_wing::DecapsulationKey);
+pub struct PrivateKey(x_wing::DecapsulationKeyRejectNonContrib);
 
 impl Serializable for PrivateKey {
     // x_wing::DECAPSULATION_KEY_SIZE == 32
@@ -35,7 +35,7 @@ impl Serializable for PrivateKey {
         // Check the length is correct and panic if not
         enforce_outbuf_len::<Self>(buf);
 
-        buf.copy_from_slice(self.0.as_bytes());
+        buf.copy_from_slice(&self.0.to_bytes());
     }
 }
 
@@ -57,7 +57,7 @@ impl Deserializable for PrivateKey {
 
 impl ConstantTimeEq for PrivateKey {
     fn ct_eq(&self, other: &Self) -> Choice {
-        self.0.as_bytes().ct_eq(other.0.as_bytes())
+        self.0.to_bytes().ct_eq(&other.0.to_bytes())
     }
 }
 
@@ -166,6 +166,9 @@ impl KemTrait for XWing {
     /// Decapsulate the encapsulated key using the recipient's private key. This DOES NOT support
     /// authenticated encapsulation, i.e., `pk_sender_id` MUST be `None`.
     ///
+    /// # Errors
+    /// Errors if the X25519 portion of the shared secret is the all-zero string.
+    ///
     /// # Panics
     /// Panics if `pk_sender_id` is `Some`.
     fn decap(
@@ -178,7 +181,11 @@ impl KemTrait for XWing {
             "X-Wing doesn't support authenticated encapsulation. Use Base or Psk operation mode."
         );
 
-        let ss = sk_recip.0.decapsulate(&encapped_key.0);
+        // Decapsulate, erroring if the X25519 shared secret is the all-zero string
+        let ss = sk_recip
+            .0
+            .try_decapsulate(&encapped_key.0)
+            .map_err(|_| HpkeError::DecapError)?;
         Ok(SharedSecret(ss))
     }
 
