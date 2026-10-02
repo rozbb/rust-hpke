@@ -166,6 +166,9 @@ impl KemTrait for XWing {
     /// Decapsulate the encapsulated key using the recipient's private key. This DOES NOT support
     /// authenticated encapsulation, i.e., `pk_sender_id` MUST be `None`.
     ///
+    /// # Errors
+    /// Errors if the X25519 portion of the shared secret is the all-zero string.
+    ///
     /// # Panics
     /// Panics if `pk_sender_id` is `Some`.
     fn decap(
@@ -178,6 +181,7 @@ impl KemTrait for XWing {
             "X-Wing doesn't support authenticated encapsulation. Use Base or Psk operation mode."
         );
 
+        // Decapsulate, erroring if the X25519 shared secret is the all-zero string
         let ss = sk_recip
             .0
             .try_decapsulate(&encapped_key.0)
