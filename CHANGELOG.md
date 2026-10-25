@@ -6,7 +6,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
-* Clamp X25519 private keys on serialization ([#122](https://github.com/rozbb/rust-hpke/pull/122))
+* Clamp X25519 private keys on serialization ([#122](https://github.com/rozbb/rust-hpke/pull/122)). Consequences:
+  * Re-serializing private keys generated in `hpke` prior to `0.15` will yield a different bytestring. This new private key is equivalent to the old one, i.e., it behaves identically for all HPKE operations.
+  * X25519's constant-time equality check `PrivateKey::ct_eq` now returns `true` for any two private keys which are equal _after clamping_. This means that now two private keys can be `ct_eq` without being equal as bytestrings.
 
 ## [0.14.1] — 2026-09-05
 

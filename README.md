@@ -81,6 +81,9 @@ All changes in the last few versions can be found in [CHANGELOG.md](CHANGELOG.md
 * Switched all `*_in_place` algorithms to `_inout`, and replaced `&mut [u8]` with `inout::InOut<'_, '_, u8>`
 * Renamed every function that took an RNG to `*_with_rng`, and removed the `rng` parameter from the function with the original name (gated by `getrandom`)
 * Replaced `generic-array` with `hybrid-array`
+* X25519 private keys are now clamped on serialization. Consequences:
+  * Re-serializing private keys generated in `hpke` prior to `0.15` will yield a different bytestring. This new private key is equivalent to the old one, i.e., it behaves identically for all HPKE operations.
+  * X25519's constant-time equality check `PrivateKey::ct_eq` now returns `true` for any two private keys which are equal _after clamping_. This means that now two private keys can be `ct_eq` without being equal as bytestrings.
 
 ## Important Breaking Changes in v0.12
 
