@@ -170,6 +170,8 @@ impl DhKeyExchange for X25519 {
     #[doc(hidden)]
     fn derive_keypair<Kdf: KdfTrait>(suite_id: &KemSuiteId, ikm: &[u8]) -> (PrivateKey, PublicKey) {
         let sk_bytes = Kdf::derive_x25519_sk_eph_bytes(suite_id, ikm);
+        // Safe to unwrap because the only error is if sk_bytes.len() isn't 32. But it is 32 because
+        // derive_x25519_sk_eph_bytes is hardcoded that way
         let sk = PrivateKey::from_bytes(&sk_bytes).unwrap();
         let pk = Self::sk_to_pk(&sk);
 
