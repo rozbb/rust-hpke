@@ -175,6 +175,7 @@ mod tests {
         dhkex::{Deserializable, DhKeyExchange, Serializable, x25519::X25519},
         test_util::dhkex_gen_keypair_with_rng,
     };
+    use curve25519_dalek::scalar::clamp_integer;
     use hybrid_array::typenum::Unsigned;
     use rand_core::Rng;
 
@@ -220,5 +221,24 @@ mod tests {
         // See if the deserialized values are the same as the initial ones
         assert!(new_sk == sk, "private key doesn't serialize correctly");
         assert!(new_pk == pk, "public key doesn't serialize correctly");
+    }
+
+    // Regression test: DHKEM(X25519) serialized private keys MUST be clamped
+    // Issue: https://github.com/rozbb/rust-hpke/issues/121
+    #[test]
+    fn regression_unclamped_privkey() {
+        type Kex = X25519;
+
+        let mut csprng = rand::rng();
+
+        // Clamping affects 5 bits. The likelihood that they're all set correctly by chance is 2^-5.
+        // The likelihood that this happens 30 times in a row is 2^(-150).
+        for _ in 0..30 {
+            let (sk, _) = dhkex_gen_keypair_with_rng::<Kex>(&mut csprng);
+            let sk_bytes = sk.to_bytes().into();
+            // You can test it's clamped by just clamping again and seeing if anything changed. This is
+            // because clamping is idempotent.
+            assert_eq!(sk_bytes, clamp_integer(sk_bytes));
+        }
     }
 }
