@@ -75,8 +75,9 @@ See the [client-server](examples/client_server.rs) example for an idea of how to
 
 All changes in the last few versions can be found in [CHANGELOG.md](CHANGELOG.md). We highlight recent ones below. This crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html) for all modules except for `danger`. We reserve the right to break the `danger` API with patch version updates. So **if you are using the `danger` API, pin `hpke` to the patch version, e.g., by specifying `=0.14.0`.**
 
-## Important Breaking Changes in v0.14.0
+## Important Breaking Changes v0.12.0
 
+* Bumped MSRV to 1.87.0
 * Completely overhauled feature flags (see feature flags section above)
 * Switched all `*_in_place` algorithms to `_inout`, and replaced `&mut [u8]` with `inout::InOut<'_, '_, u8>`
 * Renamed every function that took an RNG to `*_with_rng`, and removed the `rng` parameter from the function with the original name (gated by `getrandom`)
@@ -91,7 +92,7 @@ The `serde_impls` feature was removed. If you were using this and require backwa
 
 # MSRV
 
-The current minimum supported Rust version (MSRV) is 1.85.0 (2025-02-20).
+The current minimum supported Rust version (MSRV) is 1.87.0 (2025-05-15).
 
 # Tests
 
