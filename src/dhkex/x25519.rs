@@ -17,6 +17,7 @@ use zeroize::Zeroize;
 pub struct PublicKey(x25519_dalek::PublicKey);
 
 // The underlying type is zeroize-on-drop
+// INVARIANT: the internal StaticSecret is clamped
 /// An X25519 private key
 #[derive(Clone)]
 pub struct PrivateKey(x25519_dalek::StaticSecret);
@@ -77,7 +78,7 @@ impl Serializable for PrivateKey {
         enforce_outbuf_len::<Self>(buf);
 
         // "The SerializePrivateKey() function MUST clamp its output"
-        // We do not have to clamp here because the only constructor, `from_bytes`, clamps its input
+        // We do not have to clamp here because the all constructors clamp its input
         buf.copy_from_slice(self.0.as_bytes());
     }
 }
@@ -103,6 +104,7 @@ impl Deserializable for PrivateKey {
         // then k = nq for some n > 0. And since k is a multiple of 8 and q is prime, n must be a
         // multiple of 8. However, 8q > 2^257 which is already out of representable range! So k
         // cannot be 0 (mod q).
+        // INVARIANT on PrivateKey: the StaticSecret is clamped because arr is clamped
         let sk = PrivateKey(x25519_dalek::StaticSecret::from(arr));
         arr.zeroize();
 
