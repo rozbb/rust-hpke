@@ -10,12 +10,12 @@ edition = "2024"
 license = "MIT/Apache-2.0"
 keywords = ["cryptography", "crypto", "key-exchange", "encryption", "aead"]
 categories = ["cryptography", "no-std"]
-rust-version = "1.85"
+rust-version = "1.87"
 exclude = [".github/", "test-vectors/"]
 
 [features]
 default = ["getrandom", "alloc", "x25519", "mlkem", "chacha"]
-x25519 = ["dep:x25519-dalek", "hkdfsha2"]
+x25519 = ["dep:x25519-dalek", "dep:curve25519-dalek", "hkdfsha2"]
 nistp = ["dep:p256", "dep:p384", "dep:p521", "hkdfsha2"]
 mlkem = ["dep:ml-kem", "dep:x-wing", "shake"]
 aes = ["dep:aes-gcm"]
@@ -59,6 +59,7 @@ x25519-dalek = { version = "3.0.0", default-features = false, features = [
     "static_secrets",
     "zeroize",
 ], optional = true }
+curve25519-dalek = { version = "5", default-features = false, optional = true }
 x-wing = { version = "0.1.0", optional = true, default-features = false, features = [
     "hazmat",
     "zeroize",
