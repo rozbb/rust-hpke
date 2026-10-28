@@ -73,9 +73,9 @@ See the [client-server](examples/client_server.rs) example for an idea of how to
 
 # Breaking Changes
 
-All changes in the last few versions can be found in [CHANGELOG.md](CHANGELOG.md). We highlight recent ones below. This crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html) for all modules except for `danger`. We reserve the right to break the `danger` API with patch version updates. So **if you are using the `danger` API, pin `hpke` to the patch version, e.g., by specifying `=0.15.0`.**
+All changes in the last few versions can be found in [CHANGELOG.md](CHANGELOG.md). We highlight recent ones below. This crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html) for all modules except for `danger`. We reserve the right to break the `danger` API with patch version updates. So **if you are using the `danger` API, pin `hpke` to the patch version, e.g., by specifying `=0.15.1`.**
 
-## Important Breaking Changes v0.12.0
+## Important Breaking Changes Since v0.12.0
 
 * Bumped MSRV to 1.87.0
 * Completely overhauled feature flags (see feature flags section above)
