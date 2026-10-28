@@ -538,7 +538,7 @@ dependencies = [
 
 [[package]]
 name = "hpke"
-version = "0.15.0"
+version = "0.15.1"
 dependencies = [
  "aead",
  "aes-gcm",
