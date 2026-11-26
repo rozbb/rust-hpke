@@ -163,7 +163,7 @@ impl Deserializable for EncappedKey {
 
 /// X-Wing (a.k.a ML-KEM 768 + X25519) hybrid post-quantum KEM.
 ///
-/// This KEM implementation accepts "non-contributory behaviour" in the X25519 component. That is, a
+/// This KEM implementation accepts "non-contributory behavior" in the X25519 component. That is, a
 /// decapsulator will allow the X25519 shared secret to be all zeros. To reject instead, use
 /// [`XWingRejectNonContrib`].
 pub struct XWing;
@@ -283,9 +283,9 @@ impl crate::kat_tests::TestableKem for XWing {
     }
 }
 
-/// X-Wing (a.k.a ML-KEM 768 + X25519) hybrid post-quantum KEM.
+/// X-Wing (a.k.a ML-KEM 768 + X25519) hybrid post-quantum KEM, rejecting non-contributory behavior.
 ///
-/// This KEM implementation rejects "non-contributory behaviour" in the X25519 component. That is, a
+/// This KEM implementation rejects "non-contributory behavior" in the X25519 component. That is, a
 /// decapsulator will reject a X25519 shared secret that is all zeros. To accept instead, use
 /// [`XWing`].
 ///
@@ -295,17 +295,17 @@ impl crate::kat_tests::TestableKem for XWing {
 /// (as it is inside X-Wing), the implementation **MAY** abort if the all-zero value
 /// is produced as a shared secret. X-Wing, as initially specified, used the X25519
 /// function without making any mention of this **MAY**, meaning that implementations
-/// inherited whatever behaviour their underlying X25519 ECDH implementation provided.
+/// inherited whatever behavior their underlying X25519 ECDH implementation provided.
 ///
-/// This crate initially did not check for non-contributory behaviour, which meant it
+/// This crate initially did not check for non-contributory behavior, which meant it
 /// was incompatible with other implementations that did (in that it would accept
 /// ciphertexts that other implementations reject).
 ///
-/// [CFRG have decided] that they will pick a single behaviour for the IETF X-Wing
+/// [CFRG have decided] that they will pick a single behavior for the IETF X-Wing
 /// standard. Until the corresponding RFC is published, this crate supports both
-/// behaviours: [`XWing`] accepts non-contributory behaviour for backwards-compatibility
+/// behaviors: [`XWing`] accepts non-contributory behavior for backwards-compatibility
 /// with existing usages, and this struct can be used to instead reject non-contributory
-/// behaviour. Once the RFC is published, `XWing` will be altered to match it.
+/// behavior. Once the RFC is published, `XWing` will be altered to match it.
 ///
 /// [RFC 7748]: https://www.rfc-editor.org/info/rfc7748/#section-5
 /// [specifies]: https://www.rfc-editor.org/info/rfc7748/#section-6.1

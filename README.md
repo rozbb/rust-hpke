@@ -21,7 +21,7 @@ Here are all the primitives listed in the spec. The primitives with checked boxe
 * Post-quantum and hybrid KEMs
     - [X] ML-KEM-768
     - [X] ML-KEM-1024
-    - [X] MLKEM768-X25519, aka X-Wing
+    - [X] MLKEM768-X25519, aka X-Wing (also `XWingRejectNonContrib`, a variant which refuses to decapsulate when the X25519 shared secret is all zeros)
     - [X] MLKEM768-P256
     - [X] MLKEM1024-P384
 * KDFs
@@ -73,7 +73,7 @@ See the [client-server](examples/client_server.rs) example for an idea of how to
 
 # Breaking Changes
 
-All changes in the last few versions can be found in [CHANGELOG.md](CHANGELOG.md). We highlight recent ones below. This crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html) for all modules except for `danger`. We reserve the right to break the `danger` API with patch version updates. So **if you are using the `danger` API, pin `hpke` to the patch version, e.g., by specifying `=0.15.1`.**
+All changes in the last few versions can be found in [CHANGELOG.md](CHANGELOG.md). We highlight recent ones below. This crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html) for all modules except for `danger`. We reserve the right to break the `danger` API with patch version updates. So **if you are using the `danger` API, pin `hpke` to the patch version, e.g., by specifying `=0.15.2`.**
 
 ## Important Breaking Changes Since v0.12.0
 
