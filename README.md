@@ -21,7 +21,7 @@ Here are all the primitives listed in the spec. The primitives with checked boxe
 * Post-quantum and hybrid KEMs
     - [X] ML-KEM-768
     - [X] ML-KEM-1024
-    - [X] MLKEM768-X25519, aka X-Wing
+    - [X] MLKEM768-X25519, aka X-Wing (also `XWingRejectNonContrib`, a variant which refuses to decapsulate when the X25519 shared secret is all zeros)
     - [X] MLKEM768-P256
     - [X] MLKEM1024-P384
 * KDFs
