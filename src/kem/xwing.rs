@@ -163,8 +163,9 @@ impl Deserializable for EncappedKey {
 
 /// X-Wing (a.k.a ML-KEM 768 + X25519) hybrid post-quantum KEM.
 ///
-/// This KEM implementation accepts "non-contributory behaviour" in the X25519 component.
-/// To reject instead, use [`XWingRejectNonContrib`].
+/// This KEM implementation accepts "non-contributory behaviour" in the X25519 component. That is, a
+/// decapsulator will allow the X25519 shared secret to be all-zeros. To reject instead, use
+/// [`XWingRejectNonContrib`].
 pub struct XWing;
 
 impl XWing {
@@ -284,10 +285,11 @@ impl crate::kat_tests::TestableKem for XWing {
 
 /// X-Wing (a.k.a ML-KEM 768 + X25519) hybrid post-quantum KEM.
 ///
-/// This KEM implementation rejects "non-contributory behaviour" in the X25519 component.
-/// To accept instead, use [`XWing`].
+/// This KEM implementation rejects "non-contributory behaviour" in the X25519 component. That is, a
+/// decapsulator will reject a X25519 shared secret that is all zeros. To accept instead, use
+/// [`XWing`].
 ///
-/// # Backstory
+/// # Why does this exist?
 ///
 /// [RFC 7748] defines the `X25519` function, and [specifies] that when used for ECDH
 /// (as it is inside X-Wing), the implementation **MAY** abort if the all-zero value
@@ -331,6 +333,10 @@ impl KemTrait for XWingRejectNonContrib {
 
     /// Decapsulate the encapsulated key using the recipient's private key. This DOES NOT support
     /// authenticated encapsulation, i.e., `pk_sender_id` MUST be `None`.
+    ///
+    /// # Errors
+    /// Returns an error iff the encapsulated key was "non-contributory", i.e., the X25519 component
+    /// of the shared secret was all zeros.
     ///
     /// # Panics
     /// Panics if `pk_sender_id` is `Some`.
