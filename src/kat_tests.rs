@@ -361,7 +361,7 @@ fn classical_pq_and_hybrid() {
         serde_json::from_reader(file).unwrap()
     };
 
-    for tv in ref_tvs.into_iter().chain(pq_tvs.into_iter()) {
+    for tv in ref_tvs.iter().chain(pq_tvs.iter()) {
         // Ignore everything that doesn't use X25519, P256, P384, P521, XWing,
         // MLKEM768-P256, MLKEM1024-P384, or MLKEM768/1024 since that's all we support right now
         if ![
@@ -405,6 +405,15 @@ fn classical_pq_and_hybrid() {
                 MlKem1024
             )
         );
+        // Also make sure that XWingRejectNonContrib passes KATs. These are the only ciphersuites
+        // that it appears with right now. Also the KATs do not exercise the non-contributory path,
+        // so XWingRejectNonContrib passes all of them
+        dispatch_testcase!(
+            tv,
+            (ChaCha20Poly1305),
+            (HkdfSha256, KdfShake256),
+            (XWingRejectNonContrib)
+        );
 
         // The above macro has a `continue` in every branch. We only get to this line if it failed
         // to match every combination of the above primitives.
@@ -413,6 +422,26 @@ fn classical_pq_and_hybrid() {
             tv.aead_id, tv.kdf_id, tv.kem_id
         );
     }
+
+    // Also make sure that XWingRejectNonContrib passes KATs
+    let mut skipped = 0;
+    for tv in ref_tvs.iter().chain(pq_tvs.iter()) {
+        // These are the only ciphersuites that it appears with right now. Also the KATs do not
+        // exercise the non-contributory path, so XWingRejectNonContrib passes all of them
+        dispatch_testcase!(
+            tv,
+            (ChaCha20Poly1305),
+            (HkdfSha256, KdfShake256),
+            (XWingRejectNonContrib)
+        );
+        // The above does a `continue` on succesful ciphersuite match, so the below line is only
+        // reached on match failure
+        skipped += 1;
+    }
+
+    // We know that XWingRejectNonContrib was used in a nonzero number of tests if `skipped` is less
+    // than the total number of test vectors
+    assert!(skipped < ref_tvs.len() + pq_tvs.len());
 }
 
 //
