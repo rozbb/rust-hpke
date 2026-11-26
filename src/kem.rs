@@ -78,12 +78,12 @@ pub trait Kem: Sized {
 
     /// Generates a random keypair using the given RNG
     // Implementation note: This simply does DeriveKeyPair(random(Nsk)). This does not
-    // match the definition of GenerateKeyPair in the PQ and and XWing implementations
+    // match the definition of GenerateKeyPair in the PQ and XWing implementations
     //   <https://www.ietf.org/archive/id/draft-ietf-hpke-pq-04.html#section-3-7>
     // and
     //   <https://www.ietf.org/archive/id/draft-connolly-cfrg-xwing-kem-10.html#section-5.2-2>
     // In reality, though, we don't care. The goal of this function is to produce a random
-    // keypair, and it guarantees no cross-compatiblity. There are no test vectors for it,
+    // keypair, and it guarantees no cross-compatibility. There are no test vectors for it,
     // and the original RFC doesn't even define it (merely uses "can be defined")
     //   <https://datatracker.ietf.org/doc/html/rfc9180#section-4-7>
     // Thus, for us it suffices to just keep this definition in place. More discussion here

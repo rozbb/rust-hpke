@@ -210,7 +210,7 @@ macro_rules! define_mlkem {
                 }
 
 
-                /// Encapsulates a secret to the recipients public key. This DOES NOT support
+                /// Encapsulates a secret to the recipient's public key. This DOES NOT support
                 /// authenticated encapsulation, i.e., `sender_id_keypair` MUST be `None`.
                 ///
                 /// # Panics

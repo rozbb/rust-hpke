@@ -164,7 +164,7 @@ impl Deserializable for EncappedKey {
 /// X-Wing (a.k.a ML-KEM 768 + X25519) hybrid post-quantum KEM.
 ///
 /// This KEM implementation accepts "non-contributory behaviour" in the X25519 component. That is, a
-/// decapsulator will allow the X25519 shared secret to be all-zeros. To reject instead, use
+/// decapsulator will allow the X25519 shared secret to be all zeros. To reject instead, use
 /// [`XWingRejectNonContrib`].
 pub struct XWing;
 
@@ -233,7 +233,7 @@ impl KemTrait for XWing {
         Ok(SharedSecret(ss))
     }
 
-    /// Encapsulates a secret to the recipients public key. This DOES NOT support authenticated
+    /// Encapsulates a secret to the recipient's public key. This DOES NOT support authenticated
     /// encapsulation, i.e., `sender_id_keypair` MUST be `None`.
     ///
     /// # Panics
@@ -357,7 +357,7 @@ impl KemTrait for XWingRejectNonContrib {
         Ok(SharedSecret(ss))
     }
 
-    /// Encapsulates a secret to the recipients public key. This DOES NOT support authenticated
+    /// Encapsulates a secret to the recipient's public key. This DOES NOT support authenticated
     /// encapsulation, i.e., `sender_id_keypair` MUST be `None`.
     ///
     /// # Panics
