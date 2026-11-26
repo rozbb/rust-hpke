@@ -444,26 +444,29 @@ mod tests {
             shared_secret.0
         );
 
-        for low_order_u in [0, 1] {
+        for (i, low_order_u) in curve25519_dalek::constants::X25519_LOW_ORDER_POINTS
+            .iter()
+            .map(|p| p.as_bytes())
+            .enumerate()
+        {
             let mut encapped_bytes = encapped_key.to_bytes();
             // X-Wing serializes the ML-KEM-768 ciphertext followed by the 32-byte X25519
             // public key. Preserve the ML-KEM component and replace only the X25519 key
             // with a low-order point, which produces an all-zero X25519 shared secret.
             let x25519_offset = encapped_bytes.len() - 32;
-            encapped_bytes[x25519_offset..].fill(0);
-            encapped_bytes[x25519_offset] = low_order_u;
+            encapped_bytes[x25519_offset..].copy_from_slice(low_order_u);
             let non_contributory = EncappedKey::from_bytes(&encapped_bytes).unwrap();
 
             assert!(
                 XWing::decap(&sk, None, &non_contributory).is_ok(),
-                "XWing didn't accept non-contributory X25519 input {low_order_u}"
+                "XWing didn't accept non-contributory X25519 input {i}"
             );
             assert!(
                 matches!(
                     XWingRejectNonContrib::decap(&sk_reject, None, &non_contributory),
                     Err(HpkeError::DecapError)
                 ),
-                "XWingRejectNonContrib didn't reject non-contributory X25519 input {low_order_u}"
+                "XWingRejectNonContrib didn't reject non-contributory X25519 input {i}"
             );
         }
     }
