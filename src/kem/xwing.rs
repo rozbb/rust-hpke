@@ -214,7 +214,7 @@ impl KemTrait for XWing {
         (sk, pk)
     }
 
-    /// Decapsulate the encapsulated key using the recipient's private key. This DOES NOT support
+    /// Decapsulates the encapsulated key using the recipient's private key. This DOES NOT support
     /// authenticated encapsulation, i.e., `pk_sender_id` MUST be `None`.
     ///
     /// # Panics
@@ -233,8 +233,8 @@ impl KemTrait for XWing {
         Ok(SharedSecret(ss))
     }
 
-    /// Decapsulate the encapsulated key using the recipient's private key. This DOES NOT support
-    /// authenticated encapsulation, i.e., `sender_id_keypair` MUST be `None`.
+    /// Encapsulates a secret to the recipients public key. This DOES NOT support authenticated
+    /// encapsulation, i.e., `sender_id_keypair` MUST be `None`.
     ///
     /// # Panics
     /// Panics if `sender_id_keypair` is `Some`.
@@ -331,7 +331,7 @@ impl KemTrait for XWingRejectNonContrib {
         (sk, pk)
     }
 
-    /// Decapsulate the encapsulated key using the recipient's private key. This DOES NOT support
+    /// Decapsulates the encapsulated key using the recipient's private key. This DOES NOT support
     /// authenticated encapsulation, i.e., `pk_sender_id` MUST be `None`.
     ///
     /// # Errors
@@ -357,8 +357,8 @@ impl KemTrait for XWingRejectNonContrib {
         Ok(SharedSecret(ss))
     }
 
-    /// Decapsulate the encapsulated key using the recipient's private key. This DOES NOT support
-    /// authenticated encapsulation, i.e., `sender_id_keypair` MUST be `None`.
+    /// Encapsulates a secret to the recipients public key. This DOES NOT support authenticated
+    /// encapsulation, i.e., `sender_id_keypair` MUST be `None`.
     ///
     /// # Panics
     /// Panics if `sender_id_keypair` is `Some`.

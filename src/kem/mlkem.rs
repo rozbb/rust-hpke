@@ -182,7 +182,7 @@ macro_rules! define_mlkem {
                     (PrivateKey(dk), PublicKey(ek))
                 }
 
-                /// Decapsulate the encapsulated key using the recipient's private key. This DOES
+                /// Decapsulates the encapsulated key using the recipient's private key. This DOES
                 /// NOT support authenticated encapsulation, i.e., `pk_sender_id` MUST be `None`.
                 ///
                 /// # Panics
@@ -209,9 +209,9 @@ macro_rules! define_mlkem {
                     Ok(SharedSecret(ss))
                 }
 
-                /// Derives a shared secret and an ephemeral pubkey that the owner of the
-                /// recipient's pubkey can use to derive the same shared secret. This DOES NOT
-                /// support authenticated encapsulation, i.e., `sender_id_keypair` MUST be `None`.
+
+                /// Encapsulates a secret to the recipients public key. This DOES NOT support
+                /// authenticated encapsulation, i.e., `sender_id_keypair` MUST be `None`.
                 ///
                 /// # Panics
                 /// Panics if `sender_id_keypair` is `Some`.
