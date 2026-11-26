@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Additions
+
+* Added `kem::XWingRejectNonContrib` ([#114](https://github.com/rozbb/rust-hpke/pull/114))
+
 ## [0.15.1] — 2026-10-27
 
 * Fixed typo in docs
@@ -36,7 +42,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Other Changes
 
 * Added XWing KEM and SHAKE KDFs ([#81](https://github.com/rozbb/rust-hpke/pull/81))
-* Added MLKEM-NISP KEMs ([#105](https://github.com/rozbb/rust-hpke/pull/105))
+* Added MLKEM-NISTP KEMs ([#105](https://github.com/rozbb/rust-hpke/pull/105))
 * Added pure-MLKEM KEMs and TurboSHAKE KDF ([#105](https://github.com/rozbb/rust-hpke/pull/105))
 * Added `danger::streaming_enc` module for creating streaming encryption contexts
 ([#87](https://github.com/rozbb/rust-hpke/pull/87), [#107](https://github.com/rozbb/rust-hpke/pull/107))
